@@ -8,6 +8,7 @@ import com.google.ar.core.Frame
 import com.google.ar.core.exceptions.NotYetAvailableException
 import io.github.monkut.wallscanner.core.Tuning
 import io.github.monkut.wallscanner.core.VoxelMap
+import io.github.monkut.wallscanner.io.ScanLog
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.ceil
@@ -69,21 +70,46 @@ class DepthFrameProcessor(private val voxelMap: VoxelMap) {
     var depthFrames = 0
         private set
 
+    /** Diagnostics sink; first-frame geometry and rejection counters are reported here. */
+    @Volatile
+    var log: ScanLog? = null
+
+    @Volatile private var samplesSeen = 0L
+    @Volatile private var rejectedNoDepth = 0L
+    @Volatile private var rejectedConfidence = 0L
+    @Volatile private var rejectedRange = 0L
+    @Volatile private var rejectedOutOfImage = 0L
+    @Volatile private var kept = 0L
+    @Volatile private var skippedBusy = 0
+    @Volatile private var skippedStaleDepth = 0
+    @Volatile private var skippedNotAvailable = 0
+    private var loggedFirstFrame = false
+
     fun cameraPositions(): List<FloatArray> = synchronized(cameraPositions) { ArrayList(cameraPositions) }
 
+    fun stats(): String =
+        "depthFrames=$depthFrames samples=$samplesSeen kept=$kept noDepth=$rejectedNoDepth lowConf=$rejectedConfidence " +
+            "range=$rejectedRange outOfImage=$rejectedOutOfImage skipped(busy=$skippedBusy stale=$skippedStaleDepth notReady=$skippedNotAvailable)"
+
     fun process(frame: Frame) {
-        if (busy.get()) return
-        val depth = try { frame.acquireRawDepthImage16Bits() } catch (e: NotYetAvailableException) { return }
-        if (depth.timestamp == lastDepthTimestamp) { depth.close(); return }
+        if (busy.get()) { skippedBusy++; return }
+        val depth = try {
+            frame.acquireRawDepthImage16Bits()
+        } catch (e: NotYetAvailableException) {
+            skippedNotAvailable++; return
+        }
+        if (depth.timestamp == lastDepthTimestamp) { depth.close(); skippedStaleDepth++; return }
         val confidence = try {
             frame.acquireRawDepthConfidenceImage()
         } catch (e: NotYetAvailableException) {
-            depth.close(); return
+            depth.close(); skippedNotAvailable++; return
         }
         val color = try {
             frame.acquireCameraImage()
         } catch (e: Exception) {
-            depth.close(); confidence.close(); return
+            depth.close(); confidence.close(); skippedNotAvailable++
+            log?.log("acquireCameraImage failed: $e")
+            return
         }
         lastDepthTimestamp = depth.timestamp
         val data = try {
@@ -97,6 +123,7 @@ class DepthFrameProcessor(private val voxelMap: VoxelMap) {
                 integrate(data)
             } catch (e: Exception) {
                 Log.e(TAG, "Depth integration failed", e)
+                log?.log("integrate failed: $e")
             } finally {
                 busy.set(false)
             }
@@ -118,17 +145,31 @@ class DepthFrameProcessor(private val voxelMap: VoxelMap) {
         val pointWorld = FloatArray(4)
         var n = 0
 
+        if (!loggedFirstFrame) {
+            loggedFirstFrame = true
+            log?.log(
+                "first depth frame: depth=${w}x$h rowStride=${f.depth.rowStride} pixelStride=${f.depth.pixelStride} " +
+                    "confidence rowStride=${f.confidence.rowStride} step=$step | cpuImage=${f.imgW}x${f.imgH} " +
+                    "y(rs=${f.yPlane.rowStride}) uv(rs=${f.uPlane.rowStride} ps=${f.uPlane.pixelStride}) | " +
+                    "texIntrinsics ${f.texW}x${f.texH} f=(${f.texFx}, ${f.texFy}) c=(${f.texCx}, ${f.texCy}) | " +
+                    "imgIntrinsics f=(${f.imgFx}, ${f.imgFy}) c=(${f.imgCx}, ${f.imgCy}) | " +
+                    "camPos=(${f.cameraPosition[0]}, ${f.cameraPosition[1]}, ${f.cameraPosition[2]})"
+            )
+        }
+
+        var seen = 0; var noDepth = 0; var lowConf = 0; var range = 0; var outOfImage = 0
         for (y in 0 until h step step) {
             for (x in 0 until w step step) {
                 val di = y * f.depth.rowStride + x * f.depth.pixelStride
                 if (di + 1 >= f.depth.bytes.size) continue
+                seen++
                 val mm = (f.depth.bytes[di].toInt() and 0xff) or ((f.depth.bytes[di + 1].toInt() and 0xff) shl 8)
-                if (mm == 0) continue
+                if (mm == 0) { noDepth++; continue }
                 val ci = y * f.confidence.rowStride + x * f.confidence.pixelStride
                 if (ci >= f.confidence.bytes.size) continue
-                if ((f.confidence.bytes[ci].toInt() and 0xff) < Tuning.MIN_DEPTH_CONFIDENCE) continue
+                if ((f.confidence.bytes[ci].toInt() and 0xff) < Tuning.MIN_DEPTH_CONFIDENCE) { lowConf++; continue }
                 val d = mm / 1000f
-                if (d > Tuning.MAX_DEPTH_RANGE) continue
+                if (d > Tuning.MAX_DEPTH_RANGE) { range++; continue }
 
                 // Camera space: +X right, +Y up, -Z forward.
                 val xc = d * (x - cx) / fx
@@ -138,10 +179,10 @@ class DepthFrameProcessor(private val voxelMap: VoxelMap) {
                 // Color from the CPU image via its own intrinsics (handles differing aspect ratios).
                 val u = (f.imgFx * xc / d + f.imgCx).toInt()
                 val v = (f.imgCy - f.imgFy * yc / d).toInt()
-                if (u < 0 || v < 0 || u >= f.imgW || v >= f.imgH) continue
+                if (u < 0 || v < 0 || u >= f.imgW || v >= f.imgH) { outOfImage++; continue }
                 val yi = v * f.yPlane.rowStride + u * f.yPlane.pixelStride
                 val uvi = (v shr 1) * f.uPlane.rowStride + (u shr 1) * f.uPlane.pixelStride
-                if (yi >= f.yPlane.bytes.size || uvi >= f.uPlane.bytes.size || uvi >= f.vPlane.bytes.size) continue
+                if (yi >= f.yPlane.bytes.size || uvi >= f.uPlane.bytes.size || uvi >= f.vPlane.bytes.size) { outOfImage++; continue }
                 val yv = (f.yPlane.bytes[yi].toInt() and 0xff) - 16
                 val uu = (f.uPlane.bytes[uvi].toInt() and 0xff) - 128
                 val vv = (f.vPlane.bytes[uvi].toInt() and 0xff) - 128
@@ -162,6 +203,8 @@ class DepthFrameProcessor(private val voxelMap: VoxelMap) {
 
         voxelMap.addAll(xyz, rgb, n)
         synchronized(cameraPositions) { cameraPositions.add(f.cameraPosition) }
+        samplesSeen += seen; rejectedNoDepth += noDepth; rejectedConfidence += lowConf
+        rejectedRange += range; rejectedOutOfImage += outOfImage; kept += n
         depthFrames++
     }
 

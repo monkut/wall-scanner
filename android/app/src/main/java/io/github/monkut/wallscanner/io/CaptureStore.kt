@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import io.github.monkut.wallscanner.CrashLog
 import io.github.monkut.wallscanner.core.PlyWriter
 import io.github.monkut.wallscanner.core.VoxelCloud
 import java.io.BufferedOutputStream
@@ -15,7 +16,10 @@ import java.time.format.DateTimeFormatter
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-/** One capture = one directory under files/captures/<timestamp>/ holding scene.json and points.ply. */
+/**
+ * One capture = one directory under files/captures/<JST timestamp>/ holding scan.log (always),
+ * points.ply (once scanning produced points) and scene.json (once processing succeeded).
+ */
 object CaptureStore {
     const val SCENE_FILE = "scene.json"
     const val PLY_FILE = "points.ply"
@@ -24,20 +28,25 @@ object CaptureStore {
 
     fun capturesDir(context: Context): File = File(context.filesDir, "captures").apply { mkdirs() }
 
+    fun timestamp(): String = ZonedDateTime.now(JST).format(DIR_FORMAT)
+
+    fun nowIso(): String = ZonedDateTime.now(JST).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+
+    /** Captures with a scene, plus incomplete ones that still hold diagnostics. Newest first. */
     fun list(context: Context): List<File> =
-        capturesDir(context).listFiles { f -> f.isDirectory && File(f, SCENE_FILE).exists() }
+        capturesDir(context).listFiles { f -> f.isDirectory && (hasScene(f) || File(f, ScanLog.FILE).exists()) }
             ?.sortedByDescending { it.name } ?: emptyList()
 
+    fun hasScene(dir: File): Boolean = File(dir, SCENE_FILE).exists()
+
     fun create(context: Context): File {
-        val base = ZonedDateTime.now(JST).format(DIR_FORMAT)
+        val base = timestamp()
         var dir = File(capturesDir(context), base)
         var suffix = 1
         while (dir.exists()) dir = File(capturesDir(context), "$base-${suffix++}")
         dir.mkdirs()
         return dir
     }
-
-    fun nowIso(): String = ZonedDateTime.now(JST).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
     fun writePly(dir: File, cloud: VoxelCloud) =
         BufferedOutputStream(FileOutputStream(File(dir, PLY_FILE))).use { PlyWriter.write(cloud, it) }
@@ -48,13 +57,15 @@ object CaptureStore {
 
     fun delete(dir: File) = dir.deleteRecursively()
 
-    /** Zips the capture and opens the system share sheet. */
+    /** Zips the capture (plus any crash traces) and opens the system share sheet. */
     fun share(activity: Activity, dir: File) {
         val shareDir = File(activity.cacheDir, "share").apply { mkdirs() }
         val zip = File(shareDir, "${dir.name}.zip")
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zip))).use { out ->
-            dir.listFiles()?.filter { it.isFile }?.forEach { file ->
-                out.putNextEntry(ZipEntry("${dir.name}/${file.name}"))
+            val entries = (dir.listFiles()?.filter { it.isFile }?.map { "${dir.name}/${it.name}" to it } ?: emptyList()) +
+                CrashLog.files(activity).map { "crashes/${it.name}" to it }
+            for ((name, file) in entries) {
+                out.putNextEntry(ZipEntry(name))
                 file.inputStream().use { it.copyTo(out) }
                 out.closeEntry()
             }

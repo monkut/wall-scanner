@@ -6,6 +6,7 @@ import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.ListView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import org.json.JSONObject
@@ -28,7 +29,12 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, ScanActivity::class.java))
         }
         list.setOnItemClickListener { _, _, position, _ ->
-            startActivity(ViewerActivity.intent(this, captures[position].name))
+            val dir = captures[position]
+            if (CaptureStore.hasScene(dir)) {
+                startActivity(ViewerActivity.intent(this, dir.name))
+            } else {
+                Toast.makeText(this, R.string.no_scene_hint, Toast.LENGTH_LONG).show()
+            }
         }
         list.setOnItemLongClickListener { _, _, position, _ ->
             handleCaptureMenu(captures[position])
@@ -47,14 +53,17 @@ class MainActivity : AppCompatActivity() {
         list.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, captures.map { label(it) })
     }
 
-    private fun label(dir: File): String = try {
-        val scene = JSONObject(CaptureStore.readScene(dir))
-        val holds = scene.getJSONArray("holds").length()
-        val routes = scene.getJSONArray("routes").length()
-        val sends = scene.optJSONArray("sends")?.length() ?: 0
-        "${dir.name} · $holds holds · $routes routes · $sends sends"
-    } catch (e: Exception) {
-        dir.name
+    private fun label(dir: File): String {
+        if (!CaptureStore.hasScene(dir)) return "${dir.name} · ${getString(R.string.incomplete_capture)}"
+        return try {
+            val scene = JSONObject(CaptureStore.readScene(dir))
+            val holds = scene.getJSONArray("holds").length()
+            val routes = scene.getJSONArray("routes").length()
+            val sends = scene.optJSONArray("sends")?.length() ?: 0
+            "${dir.name} · $holds holds · $routes routes · $sends sends"
+        } catch (e: Exception) {
+            dir.name
+        }
     }
 
     private fun handleCaptureMenu(dir: File) {
