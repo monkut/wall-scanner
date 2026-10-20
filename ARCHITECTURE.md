@@ -1,0 +1,159 @@
+# Wall Scanner — Initial Architecture (in-house)
+
+Status: draft v0 (2026-10-20 JST). Scope: Android capture app + GPU backend that turns a short capture of a climbing wall into
+(1) a photoreal 3D splat, (2) wall surface geometry, (3) individually segmented holds, and (4) routes defined as sets of holds.
+
+## 1. Problem shape
+
+Properties of climbing walls that drive the design:
+
+| Property | Consequence |
+|---|---|
+| Walls are piecewise planar panels (plus volumes); holds are 5–40 cm protrusions | Fit panel planes first; a hold = geometry above the plane + an image mask |
+| Holds are saturated, distinct colors; routes are usually one color or tag | Color clustering is a strong, cheap route-grouping signal |
+| Bouldering walls ~4–5 m tall, lead walls 12–15 m; capture distance 1–4 m | Metric scale required; drift over long sweeps must be corrected |
+| Bare panels repeat (t-nut grid) | Weak features on blank panels; pose priors (ARCore) prevent mismatches |
+| Glossy resin, spotlights, chalk | View-dependent appearance → splats over textured meshes for display |
+| Walls are static; holds change weekly | Register each new capture to the existing wall frame; diff holds between sets |
+
+## 2. Research landscape (what each family gives us)
+
+| Family | Representative work (2024–2026) | Role here | License for commercial use |
+|---|---|---|---|
+| Classical SfM | COLMAP, GLOMAP (global SfM, "orders of magnitude faster", ECCV 2024) | Accurate pose refinement / bundle adjustment | BSD (COLMAP/GLOMAP) |
+| Feed-forward geometry | VGGT, π³, MapAnything (metric, accepts poses + intrinsics as input), Depth Anything 3 | Seconds-scale poses + dense metric points; init for splat training | MapAnything code + `map-anything-apache` ckpt: Apache 2.0 · VGGT: `VGGT-1B-Commercial` (application, no military) · DA3: Base/Small/Metric-Large/Mono-Large Apache 2.0, Giant/Large CC BY-NC |
+| Pose-free feed-forward splats | AnySplat (TOG 2025), YoNoSplat, 2Xplat | Instant low-fidelity preview | Check per repo |
+| Per-scene optimized splats | gsplat (3DGS, MCMC densification, 2DGS rasterizer, depth/normal rendering), Faster-GS (CVPR 2026, 4.1× faster), FastGS (~100 s) | Final photoreal model | gsplat: Apache 2.0 · Inria reference 3DGS: **non-commercial — do not use** |
+| Surface reconstruction | 2DGS, PGSR, 2D-SuGaR (EG 2026), TSDF fusion of rendered depth | Wall + hold meshes for picking, measuring, planes | Check per repo |
+| 2D segmentation | SAM 3 (concept prompts, e.g. "climbing hold"); YOLO-seg / RF-DETR hold models; Roboflow hold datasets (mostly CC BY 4.0) | Per-image hold instance masks | SAM 3: SAM License (commercial with restrictions) · Ultralytics YOLO: AGPL — avoid or license |
+| 2D→3D mask lifting | Lifting by Gaussians (WACV 2025), MUSplat (training-free, minutes), OP2GS (2026) | Multi-view consistent 3D hold instances | Check per repo |
+| Climbing-specific | PointGrade (per-hold meshes, MoonBoard 2016, data unreleased), The Way Up (2D homography of planar wall), Environment-Scale Fabrication (MVS + climber video), Climbuddy (COLMAP + SAM + YOLO) | Validates the hold-as-unit model and planar-wall shortcut | n/a |
+
+Conclusion: no single model does the job. The proven combination is **metric pose priors → refined poses + dense init → optimized splat → plane-aware hold segmentation lifted to 3D**.
+
+## 3. System overview
+
+```mermaid
+flowchart LR
+  subgraph Android app
+    C[Capture: ARCore poses + 1080p stream + 12MP stills + IMU] --> Q[On-device QA: blur, coverage, tracking]
+    Q --> U[Resumable upload]
+    V[Viewer: Spark.js in WebView] --> A[Route annotation]
+  end
+  subgraph Backend
+    API[API + DB] --> JQ[Job queue]
+    JQ --> W[GPU worker pipeline]
+    W --> S3[(Object storage)]
+  end
+  U --> S3
+  U --> API
+  S3 --> V
+  A --> API
+```
+
+## 4. Android app (Kotlin)
+
+| Module | Responsibility | Key tech |
+|---|---|---|
+| `capture` | ARCore session in Shared Camera mode; per-frame pose, intrinsics, timestamp, tracking state; 1920×1080 GPU stream recorded as frames/video; periodic 12 MP JPEG stills on high-end devices; raw IMU | ARCore `SharedCamera`, `Camera.getPose()`, Camera2 `ImageReader` via `setAppSurfaces()` (no `setRepeatingRequest`) |
+| `guide` | Detect the vertical wall plane; overlay coverage heat-map; prompt passes (close rows, ±30° angled, wide arc, from below); reject blurry frames (Laplacian variance) | ARCore plane detection, OpenGL overlay |
+| `upload` | Chunked resumable upload of a capture bundle; retry on bad gym Wi-Fi | tus or S3 multipart |
+| `viewer` | Load splat (SPZ/SOG) + scene manifest; highlight holds of a route; tap-to-pick holds | WebView + Spark.js (proven in `viewer/index.html`); native renderer later if needed |
+| `routes` | Create/edit routes (holds + roles: start, hand, foot, top), color, grade, setter | Room cache + API sync |
+
+Capture bundle (one upload):
+
+```
+capture-<uuid>/
+  manifest.json      # device, ARCore version, intrinsics, stream sizes, wall plane estimate
+  frames/            # 1080p keyframes (JPEG)
+  stills/            # 12 MP stills (JPEG), when supported
+  poses.jsonl        # per image: timestamp, pose (ARCore world-from-camera, meters), tracking state
+  imu.jsonl          # accelerometer + gyroscope samples
+```
+
+## 5. Backend pipeline (GPU worker)
+
+| Stage | Input → Output | Default choice | Fallback / alternative |
+|---|---|---|---|
+| 1. Frame selection | bundle → 150–400 sharp, well-spread images | Blur score + pose-delta spacing + stills preferred | — |
+| 2. Pose refinement | ARCore poses (metric priors) → refined poses + sparse points | MapAnything (Apache ckpt) with pose + intrinsics inputs → metric dense points | SuperPoint/LightGlue matching + COLMAP/GLOMAP bundle adjustment seeded with ARCore poses |
+| 3. Wall frame | dense points → panel planes, wall coordinate frame (up = gravity from ARCore, normal = dominant plane) | RANSAC multi-plane fit | — |
+| 4. Splat training | posed images + dense init → splat | gsplat, MCMC strategy, depth supervision from stage 2, 7–15k iterations | 2DGS rasterizer when surface quality matters more than appearance |
+| 5. Surface | splat → wall + hold meshes | Render depth → TSDF fusion → mesh | PGSR / 2D-SuGaR if TSDF is too noisy |
+| 6. Hold masks (2D) | keyframes → per-image hold instances | Fine-tuned hold segmentation model (permissive license, trained on CC BY datasets + own labels) | SAM 3 with "climbing hold" prompt (bootstraps labeling) |
+| 7. Lift to 3D | masks + poses + mesh/splat → hold instances | Multi-view voting onto mesh faces / Gaussians (Lifting by Gaussians / MUSplat style), constrained to "above panel plane" | — |
+| 8. Hold attributes | instances → centroid, normal, bbox, size, dominant color (CIELAB), mesh crop | Deterministic geometry + color stats | — |
+| 9. Route suggestions | holds → color clusters as candidate routes | Color clustering per hold set | Setter confirms in app |
+| 10. Registration & diff | new capture ↔ previous wall version | Align via wall planes + static features → same wall frame; mark holds added/removed | — |
+| 11. Packaging | → SPZ/SOG splat (+ LoD), meshes (GLB), `scene.json` | Compress, upload, notify app | — |
+
+Quality gates (fail fast, jidoka): stage 2 reprojection error, stage 3 plane residual, stage 4 held-out PSNR, stage 7 holds-per-m² sanity range.
+A failed gate returns a specific recapture hint to the app (e.g. "left third under-covered").
+
+## 6. Backend services
+
+| Component | Choice | Notes |
+|---|---|---|
+| API | Python, FastAPI, uv | Auth, captures, walls, holds, routes, job status |
+| DB | PostgreSQL | Relational model below; `scene.json` generated from it |
+| Storage | S3-compatible object storage | Bundles, intermediate artifacts, published splats |
+| Queue | SQS (or Redis-backed queue on-prem) | One job per capture; stages checkpointed to storage for resume |
+| GPU worker | Container: CUDA, PyTorch, gsplat, MapAnything, COLMAP/GLOMAP, segmentation model | Single 24 GB-class GPU target (L4/4090) |
+
+Data model:
+
+```
+Gym 1─* Wall 1─* WallVersion (one per hold set / reset date)
+WallVersion 1─* Capture        (raw bundles; several may merge)
+WallVersion 1─1 Reconstruction (splat, meshes, wall frame, metrics)
+WallVersion 1─* Hold           (geometry, color, mesh crop, status: new|kept|removed)
+WallVersion 1─* Route 1─* RouteHold (role: start|hand|foot|top, order)
+```
+
+## 7. Delivery phases
+
+| Phase | Goal | Exit criterion |
+|---|---|---|
+| M0 Spike (offline) | Phone video (stock camera) → VGGT/MapAnything → gsplat → `viewer/index.html` | Scorecard ≥ 6/8 (see `CAPTURE.md` §5) on 3 routes |
+| M1 Capture app | ARCore capture bundle + upload; pipeline uses pose priors | Metric scale within ±2% on reference; < 15 min capture-to-view |
+| M2 Holds | Plane fit + 2D masks + 3D lifting + attributes | ≥ 95% of route holds detected as distinct instances on test walls |
+| M3 Routes | Annotation, color suggestions, sharing, wall versions + diff | Setter can publish a route in < 2 min after processing |
+| M4 Optimize | On-device preview (feed-forward), LoD/compression, native viewer if WebView is too slow | Smooth viewing on a mid-tier Android phone |
+
+## 8. Risks and open questions
+
+| Risk | Mitigation |
+|---|---|
+| 1080p ARCore frames too soft for small holds | 12 MP stills on high-end devices; closer capture passes; M0 measures this first |
+| ARCore drift over long walls | Bundle adjustment in stage 2; loop-closing capture path (return to start) |
+| License contamination (Inria 3DGS, AGPL YOLO, NC checkpoints) | Allow-list: gsplat, COLMAP/GLOMAP, MapAnything-apache, DA3 Apache variants, VGGT-Commercial; legal review of SAM License |
+| Hold segmentation on unseen gyms | Own labeled set from M0–M2 captures; SAM 3-assisted labeling |
+| GPU cost per capture | Faster-GS / FastGS-style training budgets; cache stages; batch overnight for full quality |
+| Volumes vs holds ambiguity | Size + plane-residual thresholds; manual override in app |
+
+## TODO
+
+- TODO: Confirm minimum supported Android devices (ARCore + Shared Camera + 12 MP still support).
+- TODO: Legal review of SAM License and VGGT-Commercial terms before shipping.
+- TODO: Decide on-prem GPU vs cloud for M0–M1.
+- TODO: Define `scene.json` schema in M1.
+
+## Sources
+
+- MapAnything: https://github.com/facebookresearch/map-anything · https://arxiv.org/pdf/2509.13414
+- VGGT: https://github.com/facebookresearch/vggt
+- Depth Anything 3: https://github.com/ByteDance-Seed/Depth-Anything-3 · https://arxiv.org/pdf/2511.10647
+- Feed-forward review: https://arxiv.org/pdf/2507.08448
+- AnySplat: https://huggingface.co/papers/2505.23716
+- GLOMAP: https://arxiv.org/abs/2407.20219v1
+- gsplat: https://github.com/nerfstudio-project/gsplat · https://docs.gsplat.studio/main/apis/rasterization.html
+- Faster-GS (CVPR 2026): https://openaccess.thecvf.com/content/CVPR2026/papers/Hahlbohm_Faster-GS_Analyzing_and_Improving_Gaussian_Splatting_Optimization_CVPR_2026_paper.pdf
+- 2DGS: https://arxiv.org/pdf/2403.17888 · 2D Triangle Splatting: https://arxiv.org/pdf/2506.18575
+- SAM 3: https://docs.ultralytics.com/models/sam-3 · license: https://huggingface.co/facebook/sam3/blob/main/LICENSE
+- Mask lifting: https://openaccess.thecvf.com/content/WACV2025/supplemental/Chacko_Lifting_by_Gaussians_WACV_2025_supplemental.pdf · https://www.emergentmind.com/topics/musplat · https://www.alphaxiv.org/abs/2605.20044
+- Inria 3DGS license note: https://cdn.jsdelivr.net/npm/gsplat@1.2.9/README.md
+- ARCore shared camera: https://developers.google.com/ar/develop/java/camera-sharing
+- PointGrade: https://arxiv.org/abs/2609.17770 · The Way Up: https://arxiv.org/pdf/2505.12854
+- Environment-Scale Fabrication: https://web.ics.purdue.edu/~cmousas/papers/conf17-CHI.pdf
+- Climbuddy: https://www.webgpu.com/showcase/climbuddy-3d-climbing-wall-photogrammetry-webgl/

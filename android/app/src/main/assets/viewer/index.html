@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Wall</title>
+<style>
+  :root { --bg: #101418; --fg: #e8ecf0; --panel: rgba(16, 20, 24, 0.92); --line: #2a3138; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  #panel { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); }
+  #toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; }
+  #status { flex: 1; font-size: 13px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button { background: #1e88e5; color: #fff; border: 0; border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+  button.secondary { background: #2a3138; }
+  #routes { max-height: 42vh; overflow-y: auto; padding: 0 12px 12px; display: none; }
+  #panel.open #routes { display: block; }
+  .route { display: flex; gap: 8px; align-items: center; padding: 8px; margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; }
+  .route.selected { border-color: #1e88e5; background: rgba(30, 136, 229, 0.15); }
+  .swatch { width: 24px; height: 24px; border-radius: 50%; flex: none; border: 2px solid #fff3; }
+  .route input { background: #0b0e11; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 6px; min-width: 0; }
+  .route input.name { flex: 1; }
+  .route input.grade { width: 56px; }
+  .count { width: 28px; text-align: center; opacity: 0.8; }
+  .route button { padding: 6px 8px; font-size: 13px; }
+  #hint { padding: 6px 0 0; font-size: 13px; opacity: 0.7; }
+</style>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.js",
+      "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js"
+    }
+  }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <div id="toolbar">
+    <button id="toggle" class="secondary">Routes</button>
+    <span id="status">Loading…</span>
+    <button id="save">Save</button>
+    <button id="share" class="secondary">Share</button>
+  </div>
+  <div id="routes"></div>
+</div>
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+  const captureId = new URLSearchParams(location.search).get('capture');
+  const base = `/files/captures/${encodeURIComponent(captureId)}/`;
+  const statusEl = document.getElementById('status');
+  const routesEl = document.getElementById('routes');
+  const panel = document.getElementById('panel');
+  const canvas = document.getElementById('c');
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const scene3 = new THREE.Scene();
+  scene3.background = new THREE.Color(0x101418);
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.02, 100);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+
+  let scene = null;                 // scene.json, edited in place and saved through WallBridge
+  let pointsMaterial = null;
+  let selectedRouteId = null;
+  const holdMeshes = new Map();     // holdId -> Mesh
+
+  const setStatus = (text) => { statusEl.textContent = text; };
+  const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+  const rgbCss = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+  const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const routeOf = (id) => scene.routes.find((r) => r.id === id) || null;
+  const holdOf = (id) => scene.holds.find((h) => h.id === id);
+  const sendCount = (routeId) => scene.sends.filter((s) => s.routeId === routeId).length;
+  const colorOfHold = (h) => {
+    const r = routeOf(h.routeId);
+    return r ? new THREE.Color(r.color[0] / 255, r.color[1] / 255, r.color[2] / 255) : new THREE.Color(0x8a9199);
+  };
+
+  const resize = () => {
+    renderer.setSize(innerWidth, innerHeight, false);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  };
+  addEventListener('resize', resize);
+  resize();
+
+  // Binary little-endian PLY written by PlyWriter.kt: float x y z, uchar r g b.
+  const parsePly = (buf) => {
+    const bytes = new Uint8Array(buf);
+    const headText = new TextDecoder().decode(bytes.subarray(0, Math.min(bytes.length, 4096)));
+    const marker = 'end_header\n';
+    const headerLen = headText.indexOf(marker) + marker.length;
+    const count = parseInt(/element vertex (\d+)/.exec(headText)[1], 10);
+    const view = new DataView(buf, headerLen);
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const off = i * 15;
+      positions[i * 3] = view.getFloat32(off, true);
+      positions[i * 3 + 1] = view.getFloat32(off + 4, true);
+      positions[i * 3 + 2] = view.getFloat32(off + 8, true);
+      colors[i * 3] = view.getUint8(off + 12) / 255;
+      colors[i * 3 + 1] = view.getUint8(off + 13) / 255;
+      colors[i * 3 + 2] = view.getUint8(off + 14) / 255;
+    }
+    return { positions, colors, count };
+  };
+
+  const buildHolds = () => {
+    for (const m of holdMeshes.values()) scene3.remove(m);
+    holdMeshes.clear();
+    const basis = new THREE.Matrix4().makeBasis(vec(scene.wall.right), vec(scene.wall.up), vec(scene.wall.normal));
+    const q = new THREE.Quaternion().setFromRotationMatrix(basis);
+    for (const h of scene.holds) {
+      const [w, t, d] = h.size.map((s) => Math.max(s, 0.04));
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w, t, d),
+        new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
+      );
+      mesh.position.copy(vec(h.center));
+      mesh.quaternion.copy(q);
+      mesh.userData.holdId = h.id;
+      scene3.add(mesh);
+      holdMeshes.set(h.id, mesh);
+    }
+    restyle();
+  };
+
+  const restyle = () => {
+    for (const h of scene.holds) {
+      const mat = holdMeshes.get(h.id).material;
+      const inSelected = selectedRouteId !== null && h.routeId === selectedRouteId;
+      mat.color.copy(colorOfHold(h));
+      mat.wireframe = !inSelected;
+      mat.opacity = selectedRouteId === null ? 0.9 : (inSelected ? 0.6 : 0.25);
+    }
+    if (pointsMaterial) pointsMaterial.opacity = selectedRouteId === null ? 1 : 0.5;
+  };
+
+  const select = (routeId) => {
+    selectedRouteId = selectedRouteId === routeId ? null : routeId;
+    renderRoutes();
+    restyle();
+  };
+
+  const toggleMembership = (hold, routeId) => {
+    const route = routeOf(routeId);
+    if (hold.routeId === routeId) {
+      hold.routeId = -1;
+      route.holdIds = route.holdIds.filter((id) => id !== hold.id);
+    } else {
+      const prev = routeOf(hold.routeId);
+      if (prev) prev.holdIds = prev.holdIds.filter((id) => id !== hold.id);
+      hold.routeId = routeId;
+      route.holdIds.push(hold.id);
+    }
+  };
+
+  const randomColor = () => {
+    const c = new THREE.Color().setHSL(Math.random(), 0.8, 0.5);
+    return [Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255)];
+  };
+
+  const renderRoutes = () => {
+    routesEl.innerHTML = '';
+    for (const r of scene.routes) {
+      const row = document.createElement('div');
+      row.className = 'route' + (r.id === selectedRouteId ? ' selected' : '');
+      row.innerHTML =
+        `<span class="swatch" style="background:${rgbCss(r.color)}"></span>` +
+        `<input class="name" value="${esc(r.name)}">` +
+        `<input class="grade" placeholder="grade" value="${esc(r.grade || '')}">` +
+        `<span class="count">${r.holdIds.length}</span>` +
+        `<button class="send">✓ ${sendCount(r.id)}</button>` +
+        `<button class="del secondary">✕</button>`;
+      row.querySelector('.swatch').onclick = () => select(r.id);
+      row.querySelector('.count').onclick = () => select(r.id);
+      row.querySelector('.name').oninput = (e) => { r.name = e.target.value; };
+      row.querySelector('.grade').oninput = (e) => { r.grade = e.target.value; };
+      row.querySelector('.send').onclick = () => {
+        scene.sends.push({ routeId: r.id, at: new Date().toISOString() });
+        renderRoutes();
+      };
+      row.querySelector('.del').onclick = () => {
+        for (const id of r.holdIds) holdOf(id).routeId = -1;
+        scene.routes = scene.routes.filter((x) => x !== r);
+        if (selectedRouteId === r.id) selectedRouteId = null;
+        renderRoutes();
+        restyle();
+      };
+      routesEl.appendChild(row);
+    }
+    const add = document.createElement('button');
+    add.textContent = '+ New route';
+    add.onclick = () => {
+      const id = scene.routes.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+      scene.routes.push({ id, name: `Route ${id}`, color: randomColor(), grade: '', holdIds: [] });
+      selectedRouteId = id;
+      renderRoutes();
+      restyle();
+    };
+    routesEl.appendChild(add);
+    const hint = document.createElement('div');
+    hint.id = 'hint';
+    const unassigned = scene.holds.filter((h) => h.routeId === -1).length;
+    hint.textContent = selectedRouteId === null
+      ? `Tap a route swatch to select it, then tap holds to add or remove them. ${unassigned} unassigned holds.`
+      : `Editing "${routeOf(selectedRouteId).name}": tap holds on the wall to toggle them.`;
+    routesEl.appendChild(hint);
+  };
+
+  // Tap (not drag) on a hold box: selects its route, or toggles membership in the selected route.
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let downPos = null;
+  canvas.addEventListener('pointerdown', (e) => { downPos = [e.clientX, e.clientY]; });
+  canvas.addEventListener('pointerup', (e) => {
+    if (!scene || !downPos || Math.hypot(e.clientX - downPos[0], e.clientY - downPos[1]) > 8) return;
+    pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects([...holdMeshes.values()])[0];
+    if (!hit) return;
+    const hold = holdOf(hit.object.userData.holdId);
+    if (selectedRouteId === null) {
+      if (hold.routeId !== -1) { selectedRouteId = hold.routeId; panel.classList.add('open'); }
+    } else {
+      toggleMembership(hold, selectedRouteId);
+    }
+    renderRoutes();
+    restyle();
+  });
+
+  document.getElementById('toggle').onclick = () => panel.classList.toggle('open');
+  document.getElementById('save').onclick = () => {
+    if (window.WallBridge) WallBridge.saveScene(JSON.stringify(scene));
+    else console.log(JSON.stringify(scene));
+  };
+  document.getElementById('share').onclick = () => { if (window.WallBridge) WallBridge.share(); };
+
+  const load = async () => {
+    const [plyBuf, sceneJson] = await Promise.all([
+      fetch(base + 'points.ply').then((r) => r.arrayBuffer()),
+      fetch(base + 'scene.json').then((r) => r.json()),
+    ]);
+    scene = sceneJson;
+    scene.sends = scene.sends || [];
+    const { positions, colors, count } = parsePly(plyBuf);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.computeBoundingSphere();
+    pointsMaterial = new THREE.PointsMaterial({ size: 0.012, vertexColors: true, transparent: true });
+    scene3.add(new THREE.Points(geometry, pointsMaterial));
+
+    const center = geometry.boundingSphere.center;
+    const radius = Math.max(geometry.boundingSphere.radius, 0.5);
+    const normal = vec(scene.wall.normal);
+    camera.up.copy(vec(scene.wall.up));
+    camera.position.copy(center).addScaledVector(normal, radius * 1.6);
+    controls.target.copy(center);
+    controls.update();
+
+    buildHolds();
+    renderRoutes();
+    setStatus(`${count.toLocaleString()} pts · ${scene.holds.length} holds · ${scene.routes.length} routes`);
+  };
+
+  load().catch((err) => setStatus('Failed to load: ' + err.message));
+  renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene3, camera); });
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wall Splat Viewer</title>
+<style>
+  :root { --bg: #111; --fg: #eee; --panel: rgba(0, 0, 0, 0.6); }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px system-ui, sans-serif; overflow: hidden; }
+  #panel { position: fixed; top: 8px; left: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+           padding: 8px; background: var(--panel); border-radius: 6px; }
+  #status { opacity: 0.8; }
+  #drop { position: fixed; inset: 0; display: none; place-items: center; font-size: 20px; background: rgba(0, 0, 0, 0.7); }
+  body.dragging #drop { display: grid; }
+</style>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.1.0/dist/spark.module.js"
+    }
+  }
+</script>
+</head>
+<body>
+<div id="panel">
+  <input id="file" type="file" accept=".ply,.spz,.splat,.ksplat,.sog">
+  <button id="flip">Flip</button>
+  <button id="reset">Reset view</button>
+  <span id="status">Open or drop a splat file (.ply, .spz, .splat, .ksplat, .sog)</span>
+</div>
+<div id="drop">Drop splat file</div>
+<script type="module">
+  import * as THREE from "three";
+  import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+  import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 1000);
+  const renderer = new THREE.WebGLRenderer();
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  document.body.appendChild(renderer.domElement);
+  scene.add(new SparkRenderer({ renderer }));
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+
+  const status = document.getElementById("status");
+  let mesh = null;
+
+  const frameMesh = () => {
+    if (!mesh) return;
+    const box = mesh.getBoundingBox(true).applyMatrix4(mesh.matrixWorld);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3()).length();
+    controls.target.copy(center);
+    camera.position.copy(center).add(new THREE.Vector3(0, 0, size * 0.8));
+    camera.near = size / 1000;
+    camera.far = size * 10;
+    camera.updateProjectionMatrix();
+    controls.update();
+  };
+
+  const loadSplat = async (name, options) => {
+    if (mesh) { scene.remove(mesh); mesh.dispose(); }
+    status.textContent = `Loading ${name}…`;
+    const started = performance.now();
+    mesh = new SplatMesh(options);
+    scene.add(mesh);
+    await mesh.initialized;
+    mesh.updateMatrixWorld();
+    frameMesh();
+    const seconds = ((performance.now() - started) / 1000).toFixed(1);
+    status.textContent = `${name} — loaded in ${seconds}s`;
+  };
+
+  const loadFile = async (file) =>
+    loadSplat(file.name, { fileBytes: await file.arrayBuffer(), fileName: file.name });
+
+  // ?url=../captures/<file>.ply loads a capture served by the local http.server
+  const initialUrl = new URLSearchParams(location.search).get("url");
+  if (initialUrl) loadSplat(initialUrl, { url: initialUrl });
+
+  const handleFlip = () => {
+    if (!mesh) return;
+    mesh.rotateX(Math.PI);
+    mesh.updateMatrixWorld();
+    frameMesh();
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    document.body.classList.remove("dragging");
+    const file = event.dataTransfer.files[0];
+    if (file) loadFile(file);
+  };
+
+  document.getElementById("file").addEventListener("change", (event) => {
+    const file = event.target.files[0];
+    if (file) loadFile(file);
+  });
+  document.getElementById("flip").addEventListener("click", handleFlip);
+  document.getElementById("reset").addEventListener("click", frameMesh);
+  addEventListener("dragover", (event) => { event.preventDefault(); document.body.classList.add("dragging"); });
+  addEventListener("dragleave", () => document.body.classList.remove("dragging"));
+  addEventListener("drop", handleDrop);
+  addEventListener("resize", () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  renderer.setAnimationLoop(() => {
+    controls.update();
+    renderer.render(scene, camera);
+  });
+</script>
+</body>
+</html>

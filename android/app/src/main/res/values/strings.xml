@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wall Scanner</string>
+    <string name="new_scan">New scan</string>
+    <string name="captures">Captures</string>
+    <string name="no_captures">No captures yet. Tap "New scan" to scan a wall.</string>
+    <string name="start_scan">Start scan</string>
+    <string name="pause_scan">Pause</string>
+    <string name="resume_scan">Resume</string>
+    <string name="finish_scan">Finish &amp; process</string>
+    <string name="processing">Processing scan…</string>
+    <string name="status_initializing">Initializing camera…</string>
+    <string name="scan_more">Scan more of the wall before finishing</string>
+    <string name="no_wall_found">No wall plane found. Scan the wall from 1–3 m with slow, overlapping passes.</string>
+    <string name="camera_permission_needed">Camera permission is required to scan</string>
+    <string name="depth_unsupported">This device does not support the ARCore Depth API</string>
+    <string name="arcore_unavailable">ARCore is not available: %1$s</string>
+    <string name="share">Share</string>
+    <string name="delete">Delete</string>
+    <string name="scene_saved">Routes saved</string>
+</resources>
