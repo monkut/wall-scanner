@@ -24,9 +24,23 @@ object Tuning {
     const val MIN_HOLD_EXTENT = 0.02f
     const val MAX_HOLD_EXTENT = 0.8f
 
+    // Segment snap (registration of one tracking segment onto the rest of the scan)
+    const val SNAP_MIN_VOXELS = 2000
+    const val SNAP_CELL = 0.02f // relief-map cell; also the shift resolution
+    const val SNAP_MAX_SHIFT = 0.5f // in-plane search radius
+    const val SNAP_MAX_ROLL_DEG = 3f // ARCore keeps roll gravity-aligned, so only a small search is needed
+    const val SNAP_ROLL_STEP_DEG = 0.5f
+    const val SNAP_MIN_RELIEF = -0.03f // points this far behind the wall are ignored
+    const val SNAP_MAX_RELIEF = 0.30f // points this far in front (people, floor) are ignored
+    const val SNAP_MIN_OVERLAP_CELLS = 500 // 500 × 2 cm² = 0.2 m² of overlap
+    const val SNAP_MIN_SCORE = 0.35f // normalised cross-correlation
+    const val SNAP_MAX_TILT_DEG = 35f // larger plane disagreements are a different surface, not pose error
+    const val SNAP_MAX_DEPTH = 0.6f
+
     // Routes
     const val MIN_ROUTE_SATURATION = 0.3f
     const val MIN_ROUTE_VALUE = 0.15f
     const val HUE_GAP_DEG = 30f
     const val MIN_ROUTE_HOLDS = 2
+    const val MAX_ROUTE_HOLD_GAP = 1.4f // circuit walls: holds of one colour further apart than this are different problems
 }

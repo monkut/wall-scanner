@@ -25,6 +25,9 @@
   .count { width: 28px; text-align: center; opacity: 0.8; }
   .route button { padding: 6px 8px; font-size: 13px; }
   #hint { padding: 6px 0 0; font-size: 13px; opacity: 0.7; }
+  #roles { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  #roles .role { border: 2px solid; background: transparent; color: inherit; padding: 4px 8px; border-radius: 6px; }
+  #roles .role.active { background: rgba(255,255,255,0.18); }
 </style>
 <script type="importmap">
   {
@@ -68,7 +71,14 @@
   let scene = null;                 // scene.json, edited in place and saved through WallBridge
   let pointsMaterial = null;
   let selectedRouteId = null;
+  let roleMode = null;              // null = edit membership; otherwise a HoldRole id applied on tap
   const holdMeshes = new Map();     // holdId -> Mesh
+  const roleMeshes = new Map();     // holdId -> outline Mesh showing the hold role
+  const ROLES = ['any', 'start', 'hand', 'foot', 'zone', 'finish'];
+  const ROLE_COLORS = { start: 0x3ddc84, hand: 0xffffff, foot: 0xffd54f, zone: 0x64b5f6, finish: 0xef5350 };
+  const DEFINITIONS = {
+    mono_color: 'Hold colour', tape: 'Tape', circuit: 'Circuit', tagged: 'Tagged', comp: 'Competition', free: 'Free / spray wall', board: 'System board',
+  };
 
   const setStatus = (text) => { statusEl.textContent = text; };
   const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
@@ -77,8 +87,9 @@
   const routeOf = (id) => scene.routes.find((r) => r.id === id) || null;
   const holdOf = (id) => scene.holds.find((h) => h.id === id);
   const sendCount = (routeId) => scene.sends.filter((s) => s.routeId === routeId).length;
+  const primaryRoute = (h) => { h.routeId = h.routeIds.length ? h.routeIds[0] : -1; return h.routeId; };
   const colorOfHold = (h) => {
-    const r = routeOf(h.routeId);
+    const r = routeOf(primaryRoute(h));
     return r ? new THREE.Color(r.color[0] / 255, r.color[1] / 255, r.color[2] / 255) : new THREE.Color(0x8a9199);
   };
 
@@ -128,6 +139,14 @@
       mesh.userData.holdId = h.id;
       scene3.add(mesh);
       holdMeshes.set(h.id, mesh);
+      const outline = new THREE.Mesh(
+        new THREE.BoxGeometry(w * 1.3, t * 1.3, d * 1.3),
+        new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: 0.9 }),
+      );
+      outline.position.copy(mesh.position);
+      outline.quaternion.copy(q);
+      scene3.add(outline);
+      roleMeshes.set(h.id, outline);
     }
     restyle();
   };
@@ -135,10 +154,13 @@
   const restyle = () => {
     for (const h of scene.holds) {
       const mat = holdMeshes.get(h.id).material;
-      const inSelected = selectedRouteId !== null && h.routeId === selectedRouteId;
+      const inSelected = selectedRouteId !== null && h.routeIds.includes(selectedRouteId);
       mat.color.copy(colorOfHold(h));
       mat.wireframe = !inSelected;
       mat.opacity = selectedRouteId === null ? 0.9 : (inSelected ? 0.6 : 0.25);
+      const outline = roleMeshes.get(h.id);
+      outline.visible = h.role !== 'any' && (selectedRouteId === null || inSelected);
+      if (outline.visible) outline.material.color.setHex(ROLE_COLORS[h.role] || 0xffffff);
     }
     if (pointsMaterial) pointsMaterial.opacity = selectedRouteId === null ? 1 : 0.5;
   };
@@ -149,17 +171,22 @@
     restyle();
   };
 
+  // Holds may belong to several routes (tape, free walls); the first route gives the hold its colour.
   const toggleMembership = (hold, routeId) => {
     const route = routeOf(routeId);
-    if (hold.routeId === routeId) {
-      hold.routeId = -1;
+    if (hold.routeIds.includes(routeId)) {
+      hold.routeIds = hold.routeIds.filter((id) => id !== routeId);
       route.holdIds = route.holdIds.filter((id) => id !== hold.id);
     } else {
-      const prev = routeOf(hold.routeId);
-      if (prev) prev.holdIds = prev.holdIds.filter((id) => id !== hold.id);
-      hold.routeId = routeId;
+      hold.routeIds.push(routeId);
       route.holdIds.push(hold.id);
     }
+    primaryRoute(hold);
+  };
+
+  const setRole = (hold, role) => {
+    hold.role = hold.role === role ? 'any' : role;
+    if (selectedRouteId !== null && !hold.routeIds.includes(selectedRouteId)) toggleMembership(hold, selectedRouteId);
   };
 
   const randomColor = () => {
@@ -188,7 +215,7 @@
         renderRoutes();
       };
       row.querySelector('.del').onclick = () => {
-        for (const id of r.holdIds) holdOf(id).routeId = -1;
+        for (const id of r.holdIds) { const h = holdOf(id); h.routeIds = h.routeIds.filter((x) => x !== r.id); primaryRoute(h); }
         scene.routes = scene.routes.filter((x) => x !== r);
         if (selectedRouteId === r.id) selectedRouteId = null;
         renderRoutes();
@@ -206,12 +233,26 @@
       restyle();
     };
     routesEl.appendChild(add);
+    const roles = document.createElement('div');
+    roles.id = 'roles';
+    for (const role of ROLES.slice(1)) {
+      const b = document.createElement('button');
+      b.textContent = role;
+      b.className = 'role' + (roleMode === role ? ' active' : '');
+      b.style.borderColor = '#' + ROLE_COLORS[role].toString(16).padStart(6, '0');
+      b.onclick = () => { roleMode = roleMode === role ? null : role; renderRoutes(); };
+      roles.appendChild(b);
+    }
+    routesEl.appendChild(roles);
     const hint = document.createElement('div');
     hint.id = 'hint';
-    const unassigned = scene.holds.filter((h) => h.routeId === -1).length;
-    hint.textContent = selectedRouteId === null
-      ? `Tap a route swatch to select it, then tap holds to add or remove them. ${unassigned} unassigned holds.`
-      : `Editing "${routeOf(selectedRouteId).name}": tap holds on the wall to toggle them.`;
+    const unassigned = scene.holds.filter((h) => h.routeIds.length === 0).length;
+    const type = DEFINITIONS[scene.definition?.type] || 'Hold colour';
+    hint.textContent = roleMode !== null
+      ? `Role "${roleMode}": tap holds to mark them (tap again to clear).`
+      : selectedRouteId === null
+        ? `${type} wall. Tap a route swatch to select it, then tap holds to add or remove them. ${unassigned} unassigned holds.`
+        : `Editing "${routeOf(selectedRouteId).name}": tap holds on the wall to toggle them.`;
     routesEl.appendChild(hint);
   };
 
@@ -227,8 +268,10 @@
     const hit = raycaster.intersectObjects([...holdMeshes.values()])[0];
     if (!hit) return;
     const hold = holdOf(hit.object.userData.holdId);
-    if (selectedRouteId === null) {
-      if (hold.routeId !== -1) { selectedRouteId = hold.routeId; panel.classList.add('open'); }
+    if (roleMode !== null) {
+      setRole(hold, roleMode);
+    } else if (selectedRouteId === null) {
+      if (hold.routeIds.length) { selectedRouteId = hold.routeIds[0]; panel.classList.add('open'); }
     } else {
       toggleMembership(hold, selectedRouteId);
     }
@@ -250,6 +293,11 @@
     ]);
     scene = sceneJson;
     scene.sends = scene.sends || [];
+    scene.definition = scene.definition || { type: 'mono_color', rules: { feet: 'follow', volumesOn: true } };
+    for (const h of scene.holds) {            // scene.json v1 compatibility
+      h.routeIds = h.routeIds || (h.routeId !== -1 ? [h.routeId] : []);
+      h.role = h.role || 'any';
+    }
     const { positions, colors, count } = parsePly(plyBuf);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -268,7 +316,7 @@
 
     buildHolds();
     renderRoutes();
-    setStatus(`${count.toLocaleString()} pts · ${scene.holds.length} holds · ${scene.routes.length} routes`);
+    setStatus(`${DEFINITIONS[scene.definition.type]} · ${count.toLocaleString()} pts · ${scene.holds.length} holds · ${scene.routes.length} routes`);
   };
 
   load().catch((err) => setStatus('Failed to load: ' + err.message));

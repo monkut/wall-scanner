@@ -5,7 +5,10 @@ import android.content.pm.PackageManager
 import android.opengl.GLSurfaceView
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.os.SystemClock
 import android.view.View
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -16,14 +19,21 @@ import com.google.ar.core.ArCoreApk
 import com.google.ar.core.CameraConfig
 import com.google.ar.core.CameraConfigFilter
 import com.google.ar.core.Config
+import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingFailureReason
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.UnavailableException
 import com.google.ar.core.exceptions.UnsupportedConfigurationException
 import io.github.monkut.wallscanner.R
+import io.github.monkut.wallscanner.core.Definition
+import io.github.monkut.wallscanner.core.Rigid
+import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.core.SceneBuilder
 import io.github.monkut.wallscanner.core.SceneJson
+import io.github.monkut.wallscanner.core.SegmentSnapper
+import io.github.monkut.wallscanner.core.Thumbnail
+import io.github.monkut.wallscanner.core.Tuning
 import io.github.monkut.wallscanner.core.VoxelMap
 import io.github.monkut.wallscanner.io.CaptureStore
 import io.github.monkut.wallscanner.io.ScanLog
@@ -39,21 +49,26 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
     private lateinit var btnFinish: Button
     private lateinit var processingOverlay: View
 
-    private val voxelMap = VoxelMap()
-    private val processor = DepthFrameProcessor(voxelMap)
+    private val segments = SegmentList()
+    private val processor = DepthFrameProcessor()
     private lateinit var renderer: ArRenderer
     private lateinit var captureDir: File
     private lateinit var log: ScanLog
+    private lateinit var definition: Definition
     private var session: Session? = null
     private var installRequested = false
     private var processing = false
     private var finished = false
-    private var lastTracking: Boolean? = null
+    private var everRecorded = false
     private var statusCalls = 0
+    private var pausedAtMs = 0L
+    private var trackingChangedAtMs = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_scan)
+        // A screen timeout pauses the ARCore session mid-scan and breaks tracking continuity.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         glView = findViewById(R.id.glView)
         statusText = findViewById(R.id.statusText)
         btnRecord = findViewById(R.id.btnRecord)
@@ -64,9 +79,13 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         log = ScanLog(File(captureDir, ScanLog.FILE))
         ScanLog.active = log
         processor.log = log
+        processor.keyframes = KeyframeWriter(captureDir)
+        definition = Definition(RouteDefinition.fromId(intent.getStringExtra(EXTRA_DEFINITION)))
+        CaptureStore.writeMeta(captureDir, definition)
         logEnvironment()
+        log.log("route definition: ${definition.type.id} (${definition.type.label}) · feet=${definition.rules.feet.id} volumesOn=${definition.rules.volumesOn}")
 
-        renderer = ArRenderer(this, voxelMap, processor)
+        renderer = ArRenderer(this, segments, processor)
         glView.preserveEGLContextOnPause = true
         glView.setEGLContextClientVersion(2)
         glView.setEGLConfigChooser(8, 8, 8, 8, 16, 0)
@@ -86,7 +105,11 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         }
         try {
             session?.resume()
-            log.log("session resumed")
+            val pausedFor = if (pausedAtMs == 0L) "n/a" else "${(SystemClock.elapsedRealtime() - pausedAtMs) / 1000.0}s"
+            log.log(
+                "LIFECYCLE onResume · ARCore session resumed · pausedFor=$pausedFor · recording=${renderer.recording} " +
+                    "segments=${segments.size} voxels=${segments.totalVoxels()}"
+            )
         } catch (e: CameraNotAvailableException) {
             log.log("session resume failed: $e")
             toast(getString(R.string.arcore_unavailable, "camera not available"))
@@ -99,8 +122,16 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
     override fun onPause() {
         super.onPause()
         glView.onPause()
+        renderer.endSegment()
         session?.pause()
-        log.log("session paused · voxels=${voxelMap.size} · ${processor.stats()}")
+        pausedAtMs = SystemClock.elapsedRealtime()
+        val screenOn = (getSystemService(POWER_SERVICE) as PowerManager).isInteractive
+        // Not a button in the app: the activity left the foreground (screen off/lock, home, app switch, or finish).
+        log.log(
+            "LIFECYCLE onPause · ARCore session paused · screenOn=$screenOn isFinishing=$isFinishing " +
+                "recording=${renderer.recording} segments=${segments.size} voxels=${segments.totalVoxels()} " +
+                "pose=${fmt(renderer.lastTrackedPose)} · ${processor.stats()}"
+        )
     }
 
     override fun onDestroy() {
@@ -109,8 +140,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         session = null
         processor.shutdown()
         if (!finished) {
-            log.log("scan abandoned · voxels=${voxelMap.size}")
-            if (voxelMap.size == 0) CaptureStore.delete(captureDir)
+            log.log("scan abandoned · segments=${segments.size} voxels=${segments.totalVoxels()}")
+            if (segments.totalVoxels() == 0) CaptureStore.delete(captureDir)
         }
         ScanLog.active = null
         log.close()
@@ -133,20 +164,38 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
     override fun onStatus(tracking: Boolean, reason: TrackingFailureReason, voxels: Int, depthFrames: Int) {
         val text = if (tracking) {
             val mode = if (renderer.recording) "Scanning" else "Ready"
-            "$mode · ${voxels / 1000}k points · $depthFrames depth frames"
+            "$mode · ${voxels / 1000}k points · $depthFrames depth frames · segment ${segments.size}"
         } else {
             "Tracking lost: $reason"
         }
         runOnUiThread { statusText.text = text }
 
-        if (tracking != lastTracking) {
-            lastTracking = tracking
-            log.log("tracking=${if (tracking) "TRACKING" else "LOST ($reason)"} voxels=$voxels")
-        }
         statusCalls++
         if (statusCalls % STATUS_LOG_EVERY_CALLS == 0) {
-            log.log("recording=${renderer.recording} tracking=$tracking voxels=$voxels · ${processor.stats()}")
+            log.log(
+                "STATUS segments=${segments.size} recording=${renderer.recording} tracking=$tracking voxels=$voxels " +
+                    "pos=${fmtTranslation(renderer.lastTrackedPose)} · ${processor.stats()}"
+            )
         }
+    }
+
+    override fun onTrackingChanged(tracking: Boolean, reason: TrackingFailureReason, pose: Pose?) {
+        val now = SystemClock.elapsedRealtime()
+        val first = trackingChangedAtMs == 0L
+        val sinceLast = if (first) "n/a" else "${(now - trackingChangedAtMs) / 1000.0}s"
+        trackingChangedAtMs = now
+        val state = "recording=${renderer.recording} segments=${segments.size} voxels=${segments.totalVoxels()}"
+        if (first && !tracking) {
+            log.log("TRACKING not established yet ($reason) · $state")
+        } else if (tracking) {
+            log.log("TRACKING regained after $sinceLast lost · $state pose=${fmt(pose)}")
+        } else {
+            log.log("TRACKING lost ($reason) after $sinceLast tracked · $state lastPose=${fmt(pose)}")
+        }
+    }
+
+    override fun onSegmentStarted(segment: Segment, cameraPose: Pose) {
+        log.log("SEGMENT ${segment.id} started · anchor at camera pose ${fmt(cameraPose)} · segments=${segments.size}")
     }
 
     // Setup
@@ -246,15 +295,21 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
     // Actions
 
     private fun handleToggleRecording() {
+        val button = if (renderer.recording) "Pause" else if (everRecorded) "Resume" else "Start"
+        everRecorded = true
         renderer.recording = !renderer.recording
         btnRecord.setText(if (renderer.recording) R.string.pause_scan else R.string.resume_scan)
-        log.log("recording=${renderer.recording} voxels=${voxelMap.size}")
+        log.log(
+            "USER tapped $button button · recording=${renderer.recording} segments=${segments.size} " +
+                "voxels=${segments.totalVoxels()} pose=${fmt(renderer.lastTrackedPose)}"
+        )
     }
 
     private fun handleFinish() {
+        log.log("USER tapped Finish button · segments=${segments.size} voxels=${segments.totalVoxels()} pose=${fmt(renderer.lastTrackedPose)}")
         if (processing) return
-        if (voxelMap.size < MIN_VOXELS_TO_FINISH) {
-            log.log("finish refused: voxels=${voxelMap.size} < $MIN_VOXELS_TO_FINISH")
+        if (segments.totalVoxels() < MIN_VOXELS_TO_FINISH) {
+            log.log("finish refused: voxels=${segments.totalVoxels()} < $MIN_VOXELS_TO_FINISH")
             toast(getString(R.string.scan_more))
             return
         }
@@ -263,13 +318,44 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         processingOverlay.visibility = View.VISIBLE
         thread(name = "scene-builder") {
             val t0 = System.currentTimeMillis()
-            val cloud = voxelMap.snapshot()
-            val cameras = processor.cameraPositions()
-            log.log("processing: voxels=${cloud.count} cameraPositions=${cameras.size} · ${processor.stats()}")
+            val all = segments.all()
+            log.log("processing: segments=${all.size} voxels=${segments.totalVoxels()} · ${processor.stats()}")
+            val merged = VoxelMap(maxVoxels = Int.MAX_VALUE)
+            val cameras = ArrayList<FloatArray>()
+            val segmentTransforms = HashMap<Int, Rigid>()
+            var reference = merged.snapshot()
+            for (seg in all) {
+                val matrix = FloatArray(16)
+                seg.anchorPose.toMatrix(matrix, 0)
+                val anchorT = Rigid.fromColumnMajor(matrix)
+                val local = seg.map.snapshot()
+                var world = anchorT.apply(local)
+                CaptureStore.writeSegmentPly(captureDir, seg.id, world)
+                var snap = "skipped(first segment)"
+                var fix = Rigid.IDENTITY
+                if (reference.count > 0 && cameras.isNotEmpty()) {
+                    val toward = mean(cameras)
+                    val result = SegmentSnapper.snap(reference, world, toward)
+                    snap = result?.toString() ?: "skipped(no wall plane or < ${Tuning.SNAP_MIN_VOXELS} voxels)"
+                    if (result != null && result.accepted) {
+                        fix = result.transform
+                        world = fix.apply(world)
+                    }
+                }
+                log.log("SEGMENT ${seg.id}: voxels=${local.count} anchor=${seg.anchorState} anchorPose=${fmt(seg.anchorPose)} snap=$snap")
+                merged.addAll(world.xyz, world.rgb, world.count)
+                for (c in seg.cameraPositions()) cameras.add(fix.apply(anchorT.apply(c)))
+                segmentTransforms[seg.id] = fix.compose(anchorT)
+                reference = merged.snapshot()
+            }
+            val keyframes = processor.keyframes?.resolve(segmentTransforms) ?: 0
+            log.log("keyframes: $keyframes resolved to world poses (${CaptureStore.FRAMES_RESOLVED})")
+            val cloud = reference
+            log.log("merged: voxels=${cloud.count} cameraPositions=${cameras.size} (${System.currentTimeMillis() - t0} ms)")
             CaptureStore.writePly(captureDir, cloud)
             log.log("points.ply written (${File(captureDir, CaptureStore.PLY_FILE).length()} bytes)")
 
-            val result = SceneBuilder.build(cloud, cameras)
+            val result = SceneBuilder.build(cloud, cameras, definition = definition)
             val elapsed = System.currentTimeMillis() - t0
             if (result == null) {
                 log.log("RESULT: no wall plane (${elapsed} ms)")
@@ -287,6 +373,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
                     "routes=${result.routes.joinToString { "${it.name}(${it.holdIds.size})" }} (${elapsed} ms)"
             )
             CaptureStore.writeScene(captureDir, SceneJson.write(result, cloud.count, CaptureStore.nowIso(), Build.MODEL))
+            CaptureStore.writeThumbnail(captureDir, Thumbnail.render(cloud, result.frame))
             finished = true
             runOnUiThread {
                 startActivity(ViewerActivity.intent(this, captureDir.name))
@@ -295,9 +382,29 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         }
     }
 
+    private fun mean(points: List<FloatArray>): FloatArray {
+        val m = FloatArray(3)
+        for (p in points) { m[0] += p[0]; m[1] += p[1]; m[2] += p[2] }
+        for (i in 0 until 3) m[i] /= points.size
+        return m
+    }
+
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
+    /** "t=(x, y, z) q=(qx, qy, qz, qw)" in metres, world frame; "none" before the first tracked frame. */
+    private fun fmt(pose: Pose?): String {
+        if (pose == null) return "none"
+        val q = pose.rotationQuaternion
+        return "${fmtTranslation(pose)} q=(${"%.3f".format(q[0])}, ${"%.3f".format(q[1])}, ${"%.3f".format(q[2])}, ${"%.3f".format(q[3])})"
+    }
+
+    private fun fmtTranslation(pose: Pose?): String {
+        if (pose == null) return "none"
+        return "t=(${"%.3f".format(pose.tx())}, ${"%.3f".format(pose.ty())}, ${"%.3f".format(pose.tz())})"
+    }
+
     companion object {
+        const val EXTRA_DEFINITION = "definition"
         private const val CAMERA_PERMISSION_CODE = 1
         private const val MAX_CPU_IMAGE_WIDTH = 1920
         private const val MIN_VOXELS_TO_FINISH = 2000

@@ -4,9 +4,12 @@ class Route(val id: Int, var name: String, val r: Int, val g: Int, val b: Int, v
     var grade: String = ""
 }
 
-/** Groups holds into candidate routes by color: circular hue clusters for saturated holds, value bands otherwise. */
+/**
+ * Groups holds into candidate routes by color: circular hue clusters for saturated holds, value bands otherwise.
+ * With [splitByPosition] (circuit walls) each colour group is further split into spatially connected problems.
+ */
 object RouteGrouper {
-    fun group(holds: List<Hold>): List<Route> {
+    fun group(holds: List<Hold>, splitByPosition: Boolean = false): List<Route> {
         val chromatic = holds.filter { it.sat >= Tuning.MIN_ROUTE_SATURATION && it.value >= Tuning.MIN_ROUTE_VALUE }
         val achromatic = holds.filter { it !in chromatic }
 
@@ -20,27 +23,44 @@ object RouteGrouper {
         if (gray.isNotEmpty()) groups.add(gray)
 
         val routes = ArrayList<Route>()
-        for (members in groups) {
-            if (members.size < Tuning.MIN_ROUTE_HOLDS) continue
-            val id = routes.size + 1
+        for (colorGroup in groups) {
             val name = when {
-                members === black -> "Black"
-                members === white -> "White"
-                members === gray -> "Gray"
-                else -> ColorUtil.hueName(meanHue(members))
+                colorGroup === black -> "Black"
+                colorGroup === white -> "White"
+                colorGroup === gray -> "Gray"
+                else -> ColorUtil.hueName(meanHue(colorGroup))
             }
-            val route = Route(
-                id, name,
-                members.sumOf { it.r } / members.size,
-                members.sumOf { it.g } / members.size,
-                members.sumOf { it.b } / members.size,
-                members.map { it.id }.toMutableList(),
-            )
-            members.forEach { it.routeId = id }
-            routes.add(route)
+            val problems = if (splitByPosition) connectedProblems(colorGroup) else listOf(colorGroup)
+            for (members in problems) {
+                if (members.size < Tuning.MIN_ROUTE_HOLDS) continue
+                val id = routes.size + 1
+                val route = Route(
+                    id, name,
+                    members.sumOf { it.r } / members.size,
+                    members.sumOf { it.g } / members.size,
+                    members.sumOf { it.b } / members.size,
+                    members.map { it.id }.toMutableList(),
+                )
+                members.forEach { it.routeId = id; it.routeIds.add(id) }
+                routes.add(route)
+            }
         }
         disambiguateNames(routes)
         return routes
+    }
+
+    /** Splits holds into groups whose members chain together within [Tuning.MAX_ROUTE_HOLD_GAP] in the wall plane. */
+    private fun connectedProblems(holds: List<Hold>): List<List<Hold>> {
+        val parent = IntArray(holds.size) { it }
+        fun find(i: Int): Int { var r = i; while (parent[r] != r) r = parent[r]; return r }
+        val maxGap2 = Tuning.MAX_ROUTE_HOLD_GAP * Tuning.MAX_ROUTE_HOLD_GAP
+        for (i in holds.indices) for (j in i + 1 until holds.size) {
+            val du = holds[i].u - holds[j].u; val dv = holds[i].v - holds[j].v
+            if (du * du + dv * dv <= maxGap2) parent[find(i)] = find(j)
+        }
+        return holds.indices.groupBy { find(it) }.values
+            .map { idx -> idx.map { holds[it] } }
+            .sortedBy { members -> members.minOf { it.u } }
     }
 
     /** Sorts by hue, starts after the largest circular gap and splits where consecutive hues differ by more than [Tuning.HUE_GAP_DEG]. */

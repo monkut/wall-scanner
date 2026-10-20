@@ -17,9 +17,12 @@ class PointsRenderer {
     private var positionAttrib = 0
     private var colorAttrib = 0
     private val mvp = FloatArray(16)
+    private val viewModel = FloatArray(16)
     private var buffer: FloatBuffer? = null
 
+    /** Idempotent: safe to call every frame. */
     fun createOnGlThread() {
+        if (program != 0) return
         program = GlUtil.createProgram(VERTEX_SHADER, FRAGMENT_SHADER)
         mvpUniform = GLES20.glGetUniformLocation(program, "u_Mvp")
         pointSizeUniform = GLES20.glGetUniformLocation(program, "u_PointSize")
@@ -53,9 +56,11 @@ class PointsRenderer {
         count = n
     }
 
-    fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray) {
+    /** Draws the cloud placed by [modelMatrix] (world-from-cloud, column-major). */
+    fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, modelMatrix: FloatArray) {
         if (count == 0) return
-        Matrix.multiplyMM(mvp, 0, projectionMatrix, 0, viewMatrix, 0)
+        Matrix.multiplyMM(viewModel, 0, viewMatrix, 0, modelMatrix, 0)
+        Matrix.multiplyMM(mvp, 0, projectionMatrix, 0, viewModel, 0)
         GLES20.glUseProgram(program)
         GLES20.glUniformMatrix4fv(mvpUniform, 1, false, mvp, 0)
         GLES20.glUniform1f(pointSizeUniform, POINT_SIZE_PX)

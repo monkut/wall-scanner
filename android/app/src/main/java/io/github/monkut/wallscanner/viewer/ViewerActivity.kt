@@ -53,7 +53,10 @@ class ViewerActivity : AppCompatActivity() {
         @JavascriptInterface
         fun saveScene(json: String) {
             CaptureStore.writeScene(captureDir, json)
-            runOnUiThread { Toast.makeText(this@ViewerActivity, R.string.scene_saved, Toast.LENGTH_SHORT).show() }
+            runOnUiThread {
+                Toast.makeText(this@ViewerActivity, R.string.scene_saved, Toast.LENGTH_SHORT).show()
+                finish() // back to the capture list / New scan screen
+            }
         }
 
         @JavascriptInterface

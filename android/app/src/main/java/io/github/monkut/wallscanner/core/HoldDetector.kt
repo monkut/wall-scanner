@@ -12,7 +12,11 @@ class Hold(
     val r: Int, val g: Int, val b: Int,
     val voxels: Int,
 ) {
+    /** Primary route (first of [routeIds]); -1 when unassigned. */
     var routeId: Int = -1
+    /** All routes this hold belongs to (tape and free walls share holds between routes). */
+    val routeIds: MutableList<Int> = ArrayList()
+    var role: HoldRole = HoldRole.ANY
     val hsv: FloatArray = ColorUtil.rgbToHsv(r, g, b)
     val hue: Float get() = hsv[0]
     val sat: Float get() = hsv[1]

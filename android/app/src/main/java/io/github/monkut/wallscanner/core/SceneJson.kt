@@ -4,7 +4,7 @@ import java.util.Locale
 
 /** Writes scene.json (hand-rolled so the core stays free of Android/JSON dependencies). */
 object SceneJson {
-    const val VERSION = 1
+    const val VERSION = 2
 
     fun write(result: SceneResult, pointCount: Int, createdAt: String, device: String): String {
         val sb = StringBuilder(64 * 1024)
@@ -14,6 +14,9 @@ object SceneJson {
         sb.append("  \"version\": ").append(VERSION).append(",\n")
         sb.append("  \"createdAt\": ").append(str(createdAt)).append(",\n")
         sb.append("  \"device\": ").append(str(device)).append(",\n")
+        sb.append("  \"definition\": {\"type\": ").append(str(result.definition.type.id))
+            .append(", \"rules\": {\"feet\": ").append(str(result.definition.rules.feet.id))
+            .append(", \"volumesOn\": ").append(result.definition.rules.volumesOn).append("}},\n")
         sb.append("  \"points\": {\"count\": ").append(pointCount)
             .append(", \"voxelSize\": ").append(num(Tuning.VOXEL_SIZE)).append("},\n")
         sb.append("  \"wall\": {")
@@ -33,6 +36,8 @@ object SceneJson {
                 .append(", \"hsv\": ").append(vec(h.hsv[0], h.hsv[1], h.hsv[2]))
                 .append(", \"voxels\": ").append(h.voxels)
                 .append(", \"routeId\": ").append(h.routeId)
+                .append(", \"routeIds\": ").append(h.routeIds.joinToString(", ", "[", "]"))
+                .append(", \"role\": ").append(str(h.role.id))
                 .append("}").append(if (i < result.holds.size - 1) ",\n" else "\n")
         }
         sb.append("  ],\n")

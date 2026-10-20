@@ -132,12 +132,49 @@ WallVersion 1─* Route 1─* RouteHold (role: start|hand|foot|top, order)
 | GPU cost per capture | Faster-GS / FastGS-style training budgets; cache stages; batch overnight for full quality |
 | Volumes vs holds ambiguity | Size + plane-residual thresholds; manual override in app |
 
+## 9. Route definition types and route detection
+
+A gym's marking system decides what "route" means for post-processing. The type is chosen on **New scan**, stored in `capture.json` and copied into `scene.json`, and selects the detection path at Finish.
+
+| ID | Type | Physical marking | Start / finish | Hold sharing | Detection path |
+|---|---|---|---|---|---|
+| `mono_color` | Hold colour | One hold colour per route on a wall section (US default since the 2010s) | Start tag / placard at the base; finish = top hold, tag, or top-out | None; volumes usually on for all | Colour grouping (current `RouteGrouper`) |
+| `tape` | Tape | Tape strip beside each hold; tape colour = route, hold colours mixed | Two strips / "start" label; taped bracket at the top; grade on the start tape | Yes, one hold on several routes | Tape detection in keyframes → holds grouped by tape colour |
+| `circuit` | Circuit | Hold (or tape) colour = grade band; several problems share a colour (FR/UK gyms, Bouldering Project) | Ribbon, start marker or number per problem | Within a colour, separated only by position | Colour grouping, split by position (`MAX_ROUTE_HOLD_GAP`), later by start markers |
+| `tagged` | Tagged | Placard with number, grade, setter (sometimes QR) at the base; holds by colour | Placard marks the start | As `mono_color` | Colour grouping + placard OCR/QR for grade, setter, start |
+| `comp` | Competition | Tape marks start hands/feet, zone(s), top | Explicit start, zone, top | None | Tape detection with role classification |
+| `free` | Free / spray wall | No set routes; dense mixed holds; climbers define problems (Stōkt-style) | Chosen by the climber | Every hold, any number of problems | No automatic routes; manual editing in the viewer |
+| `board` | System board | Fixed layout lit by LEDs (Kilter, MoonBoard, Tension); colour = role | Lit start / hand / foot / finish | Full sharing | No detection; layout known |
+
+Rule modifiers (stored in `definition.rules`, orthogonal to the type): feet policy (`follow` = feet follow hands, `open`, `chips` = foot chips only), volumes on/off, start rule (matched, two-hand, hand+foot), finish rule (match top, touch tag, top-out), hold roles and eliminates.
+
+### scene.json v2 schema additions
+
+```
+definition: { type: <id above>, rules: { feet: follow|open|chips, volumesOn: bool } }
+holds[]:    { ..., routeId: <primary or -1>, routeIds: [..], role: any|start|hand|foot|zone|finish }
+routes[]:   { id, name, color, grade, holdIds: [..] }   # a hold may appear in several routes
+```
+
+`capture.json` (written at New scan, before any data): `{ version, createdAt, definition }`.
+
+### Keyframes for image-based detection
+
+The depth cloud cannot resolve tape (≈ 2 cm wide) or placard text, so the scanner saves sparse colour keyframes during the scan: `frames/frame-NNNN.jpg` (1080p, every ≥ 0.7 s when the camera moved ≥ 0.25 m or turned ≥ 15°) and `frames.jsonl` (segment id, segment-local pose, intrinsics). At Finish, after segment snapping, `frames.json` resolves every frame to a world-from-camera pose, so a pixel detection can be lifted onto the wall plane by ray–plane intersection and matched to holds by (u, v).
+
+Detection stages (prototyped in `tools/tape.py`, to be ported on-device once validated):
+1. Tape candidates per keyframe: saturated, thin, elongated blobs (HSV threshold, connected components, aspect ratio and area limits), excluding pixels inside projected hold footprints.
+2. Lift each candidate centroid to the wall plane; cluster across frames (2 cm cells); keep clusters seen in ≥ 2 frames.
+3. Assign clusters to the nearest hold within `TAPE_HOLD_RADIUS`; group holds by tape hue → routes (`tape`, `comp`); tape pairs / labelled tape → `start`, bracket at the top → `finish`.
+4. Placards (`tagged`, `mono_color`): bright rectangular regions near the wall base; OCR (ML Kit on-device, Tesseract offline) for grade and number; QR via ML Kit barcode.
+
 ## TODO
 
 - TODO: Confirm minimum supported Android devices (ARCore + Shared Camera + 12 MP still support).
 - TODO: Legal review of SAM License and VGGT-Commercial terms before shipping.
 - TODO: Decide on-prem GPU vs cloud for M0–M1.
-- TODO: Define `scene.json` schema in M1.
+- TODO: Validate tape detection thresholds on real keyframes; port `tools/tape.py` to Kotlin.
+- TODO: Placard OCR/QR (ML Kit) for `tagged` walls.
 
 ## Sources
 
