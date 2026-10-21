@@ -2,6 +2,8 @@ package io.github.monkut.wallscanner.core
 
 class Route(val id: Int, var name: String, val r: Int, val g: Int, val b: Int, val holdIds: MutableList<Int>) {
     var grade: String = ""
+    /** Identification is done: the route is a record that sends can be logged against (sends.json). */
+    var confirmed: Boolean = false
 }
 
 /**

@@ -34,6 +34,10 @@
             android:name=".viewer.ViewerActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".routes.RouteActivity"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

@@ -4,7 +4,7 @@ import java.util.Locale
 
 /** Writes scene.json (hand-rolled so the core stays free of Android/JSON dependencies). */
 object SceneJson {
-    const val VERSION = 2
+    const val VERSION = 3 // 3: routes[].confirmed; sends moved to sends.json
 
     fun write(result: SceneResult, pointCount: Int, createdAt: String, device: String): String {
         val sb = StringBuilder(64 * 1024)
@@ -48,10 +48,10 @@ object SceneJson {
                 .append(", \"color\": [").append(r.r).append(", ").append(r.g).append(", ").append(r.b).append("]")
                 .append(", \"grade\": ").append(str(r.grade))
                 .append(", \"holdIds\": ").append(r.holdIds.joinToString(", ", "[", "]"))
+                .append(", \"confirmed\": ").append(r.confirmed)
                 .append("}").append(if (i < result.routes.size - 1) ",\n" else "\n")
         }
-        sb.append("  ],\n")
-        sb.append("  \"sends\": []\n")
+        sb.append("  ]\n")
         sb.append("}\n")
         return sb.toString()
     }

@@ -24,6 +24,8 @@
   .route input.grade { width: 56px; }
   .count { width: 28px; text-align: center; opacity: 0.8; }
   .route button { padding: 6px 8px; font-size: 13px; }
+  .route button.confirm { background: #2a3138; }
+  .route button.confirm.on { background: #2e7d32; }
   #hint { padding: 6px 0 0; font-size: 13px; opacity: 0.7; }
   #roles { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   #roles .role { border: 2px solid; background: transparent; color: inherit; padding: 4px 8px; border-radius: 6px; }
@@ -86,7 +88,6 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const routeOf = (id) => scene.routes.find((r) => r.id === id) || null;
   const holdOf = (id) => scene.holds.find((h) => h.id === id);
-  const sendCount = (routeId) => scene.sends.filter((s) => s.routeId === routeId).length;
   const primaryRoute = (h) => { h.routeId = h.routeIds.length ? h.routeIds[0] : -1; return h.routeId; };
   const colorOfHold = (h) => {
     const r = routeOf(primaryRoute(h));
@@ -204,16 +205,13 @@
         `<input class="name" value="${esc(r.name)}">` +
         `<input class="grade" placeholder="grade" value="${esc(r.grade || '')}">` +
         `<span class="count">${r.holdIds.length}</span>` +
-        `<button class="send">✓ ${sendCount(r.id)}</button>` +
+        `<button class="confirm${r.confirmed ? ' on' : ''}">${r.confirmed ? '✓ Confirmed' : 'Confirm'}</button>` +
         `<button class="del secondary">✕</button>`;
       row.querySelector('.swatch').onclick = () => select(r.id);
       row.querySelector('.count').onclick = () => select(r.id);
       row.querySelector('.name').oninput = (e) => { r.name = e.target.value; };
       row.querySelector('.grade').oninput = (e) => { r.grade = e.target.value; };
-      row.querySelector('.send').onclick = () => {
-        scene.sends.push({ routeId: r.id, at: new Date().toISOString() });
-        renderRoutes();
-      };
+      row.querySelector('.confirm').onclick = () => { r.confirmed = !r.confirmed; renderRoutes(); };
       row.querySelector('.del').onclick = () => {
         for (const id of r.holdIds) { const h = holdOf(id); h.routeIds = h.routeIds.filter((x) => x !== r.id); primaryRoute(h); }
         scene.routes = scene.routes.filter((x) => x !== r);
@@ -227,7 +225,7 @@
     add.textContent = '+ New route';
     add.onclick = () => {
       const id = scene.routes.reduce((m, r) => Math.max(m, r.id), 0) + 1;
-      scene.routes.push({ id, name: `Route ${id}`, color: randomColor(), grade: '', holdIds: [] });
+      scene.routes.push({ id, name: `Route ${id}`, color: randomColor(), grade: '', holdIds: [], confirmed: false });
       selectedRouteId = id;
       renderRoutes();
       restyle();
@@ -251,7 +249,7 @@
     hint.textContent = roleMode !== null
       ? `Role "${roleMode}": tap holds to mark them (tap again to clear).`
       : selectedRouteId === null
-        ? `${type}. Tap a route swatch to select it, then tap holds to add or remove them. ${unassigned} unassigned holds.`
+        ? `${type}. Tap a swatch to select a route, tap holds to add or remove them, then Confirm it. Sends are logged from the Routes tab. ${unassigned} unassigned holds.`
         : `Editing "${routeOf(selectedRouteId).name}": tap holds on the wall to toggle them.`;
     routesEl.appendChild(hint);
   };
@@ -292,7 +290,8 @@
       fetch(base + 'scene.json').then((r) => r.json()),
     ]);
     scene = sceneJson;
-    scene.sends = scene.sends || [];
+    delete scene.sends;                      // sends live in sends.json (RouteStore) since scene.json v3
+    for (const r of scene.routes) r.confirmed = !!r.confirmed;
     scene.definition = scene.definition || { type: 'mono_color', rules: { feet: 'follow', volumesOn: true } };
     for (const h of scene.holds) {            // scene.json v1 compatibility
       h.routeIds = h.routeIds || (h.routeId !== -1 ? [h.routeId] : []);
@@ -316,7 +315,7 @@
 
     buildHolds();
     renderRoutes();
-    setStatus(`${DEFINITIONS[scene.definition.type]} · ${count.toLocaleString()} pts · ${scene.holds.length} holds · ${scene.routes.length} routes`);
+    setStatus(`${DEFINITIONS[scene.definition.type]} · ${count.toLocaleString()} pts · ${scene.holds.length} holds · ${scene.routes.length} routes · ${scene.routes.filter((r) => r.confirmed).length} confirmed`);
   };
 
   load().catch((err) => setStatus('Failed to load: ' + err.message));

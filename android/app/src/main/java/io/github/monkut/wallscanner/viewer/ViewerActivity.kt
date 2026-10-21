@@ -16,6 +16,7 @@ import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import io.github.monkut.wallscanner.R
 import io.github.monkut.wallscanner.io.CaptureStore
+import io.github.monkut.wallscanner.io.RouteStore
 import java.io.File
 
 /** Shows a capture in the bundled three.js viewer (assets/viewer) and persists route edits made there. */
@@ -52,6 +53,7 @@ class ViewerActivity : AppCompatActivity() {
     inner class Bridge {
         @JavascriptInterface
         fun saveScene(json: String) {
+            RouteStore.sends(captureDir) // moves any legacy scene.sends into sends.json before they are overwritten
             CaptureStore.writeScene(captureDir, json)
             runOnUiThread {
                 Toast.makeText(this@ViewerActivity, R.string.scene_saved, Toast.LENGTH_SHORT).show()

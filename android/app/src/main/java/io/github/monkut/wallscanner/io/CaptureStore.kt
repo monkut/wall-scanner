@@ -78,15 +78,26 @@ object CaptureStore {
 
     fun writeScene(dir: File, json: String) = File(dir, SCENE_FILE).writeText(json)
 
-    /** capture.json: the route definition chosen at New scan, written before scanning so post-processing can use it. */
-    fun writeMeta(dir: File, definition: Definition) {
+    /** capture.json: location and route definition chosen at New scan, written before scanning so post-processing can use them. */
+    fun writeMeta(dir: File, definition: Definition, locationId: String) {
         val json = JSONObject()
-            .put("version", 1)
+            .put("version", 2)
             .put("createdAt", nowIso())
+            .put("location", locationId)
             .put("definition", JSONObject()
                 .put("type", definition.type.id)
                 .put("rules", JSONObject().put("feet", definition.rules.feet.id).put("volumesOn", definition.rules.volumesOn)))
         File(dir, META_FILE).writeText(json.toString(2))
+    }
+
+    fun readLocationId(dir: File): String =
+        runCatching { JSONObject(File(dir, META_FILE).readText()).optString("location") }.getOrDefault("")
+
+    /** Re-assigns an existing capture (older ones have no location) without touching the rest of capture.json. */
+    fun setLocation(dir: File, locationId: String) {
+        val file = File(dir, META_FILE)
+        val json = runCatching { JSONObject(file.readText()) }.getOrDefault(JSONObject().put("version", 2))
+        file.writeText(json.put("location", locationId).toString(2))
     }
 
     fun readDefinition(dir: File): Definition {

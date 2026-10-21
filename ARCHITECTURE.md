@@ -149,15 +149,19 @@ A gym's marking system decides what "route" means for post-processing. The type 
 
 Rule modifiers (stored in `definition.rules`, orthogonal to the type): feet policy (`follow` = feet follow hands, `open`, `chips` = foot chips only), volumes on/off, start rule (matched, two-hand, hand+foot), finish rule (match top, touch tag, top-out), hold roles and eliminates.
 
-### scene.json v2 schema additions
+### scene.json v3 schema additions
 
 ```
 definition: { type: <id above>, rules: { feet: follow|open|chips, volumesOn: bool } }
 holds[]:    { ..., routeId: <primary or -1>, routeIds: [..], role: any|start|hand|foot|zone|finish }
-routes[]:   { id, name, color, grade, holdIds: [..] }   # a hold may appear in several routes
+routes[]:   { id, name, color, grade, holdIds: [..], confirmed: bool }   # a hold may appear in several routes
 ```
 
 `capture.json` (written at New scan, before any data): `{ version, createdAt, definition }`.
+
+### Captures, routes and sends
+
+A capture is the identification workspace: its viewer edits holds, routes and roles and ends with **Confirm** per route. Confirmed routes are the records the app lists under **Routes**, and only they take send data, which lives beside the capture in `sends.json` (`{ version, sends: [{ id, routeId, at, result: flash|send|attempt, attempts, note }] }`) so that re-editing the identification never touches the log. Earlier `scene.sends` entries are migrated into `sends.json` on first read.
 
 ### Keyframes for image-based detection
 

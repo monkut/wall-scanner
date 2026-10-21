@@ -14,6 +14,13 @@
         android:background="#202020"
         android:contentDescription="@string/thumbnail" />
 
+    <View
+        android:id="@+id/swatch"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginStart="12dp"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/label"
         android:layout_width="0dp"
