@@ -82,8 +82,10 @@ the routes with a colour swatch, name, grade dropdown, hold count, **Confirm** a
 
 Shows the route's swatch, name, grade, location, wall type, source capture and hold count with the capture
 thumbnail. **Log send** records a result (Flash / Send / Attempt), the number of tries and a note, timestamped
-in JST. Sends are listed newest first; long-press one to delete it. **Capture** opens the source capture in the
-viewer for re-editing; the send log is kept separately and is not affected.
+in JST. Sends are listed newest first; long-press one to delete it. The star row rates the climb 0–5
+(optional: "Not rated" until set, **Clear** removes it; the rating shows as "★ n" in the logbook route row).
+**Capture** opens the source capture in the viewer for re-editing; the send log and rating are kept separately
+and are not affected.
 
 ### Segments and snapping
 
@@ -140,7 +142,7 @@ files/captures/<JST timestamp>/
   frames.json                             keyframes with world poses (after snapping)
   points.ply                              merged cloud (binary little-endian: float x y z, uchar r g b)
   scene.json                              wall frame, holds, routes (schema: ARCHITECTURE.md §9)
-  sends.json                              { version, sends: [{ id, routeId, at, result, attempts, note }] }
+  sends.json                              { version, sends: [{ id, routeId, at, result, attempts, note }], ratings: { "<routeId>": 0..5 } }
   thumbnail.png                           front view used in the lists
 ```
 

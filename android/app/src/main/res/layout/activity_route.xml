@@ -64,6 +64,45 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Optional 0–5 star rating of the climb; the label says "Not rated" until one is set. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <RatingBar
+            android:id="@+id/rating"
+            style="?android:attr/ratingBarStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:stepSize="1"
+            android:rating="0"
+            android:progressTint="@color/tape"
+            android:progressBackgroundTint="@color/hairline"
+            android:secondaryProgressTint="@android:color/transparent"
+            android:contentDescription="@string/rating" />
+
+        <TextView
+            android:id="@+id/ratingLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:textAppearance="?attr/textAppearanceBody2" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnClearRating"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:paddingHorizontal="12dp"
+            android:text="@string/clear_rating"
+            android:visibility="gone" />
+    </LinearLayout>
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

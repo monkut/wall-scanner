@@ -99,6 +99,11 @@
     <string name="camera_permission_needed">Camera permission is needed to scan</string>
     <string name="location_permission_denied">Location permission denied, so the coordinates of this location were not recorded</string>
     <string name="location_has_coords">GPS</string>
+    <string name="rating">Rating</string>
+    <string name="not_rated">Not rated</string>
+    <string name="rating_value">%1$d of %2$d</string>
+    <string name="star_rating">★ %d</string>
+    <string name="clear_rating">Clear</string>
     <string name="locations">Locations</string>
     <string name="no_locations">No locations yet. Register one from New scan in Capture mode.</string>
     <string name="edit">Edit</string>

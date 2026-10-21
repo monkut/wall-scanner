@@ -278,7 +278,7 @@
     add.className = 'secondary';
     add.textContent = '+ ' + T.newRoute;
     add.onclick = () => {
-      const id = scene.routes.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+      const id = scene.nextRouteId++; // never reissued: sends and ratings in sends.json are keyed by route id
       scene.routes.push({ id, name: `${T.route} ${id}`, color: randomColor(), grade: '', gradeSystem: null, holdIds: [], confirmed: false });
       selectedRouteId = id;
       renderRoutes();
@@ -352,6 +352,7 @@
       if (r.grade && !r.gradeSystem) r.grade = '';
     }
     scene.definition = scene.definition || { type: 'mono_color', rules: { feet: 'follow', volumesOn: true } };
+    scene.nextRouteId = Math.max(scene.nextRouteId || 0, scene.routes.reduce((m, r) => Math.max(m, r.id), 0) + 1);
     for (const h of scene.holds) {            // scene.json v1 compatibility
       h.routeIds = h.routeIds || (h.routeId !== -1 ? [h.routeId] : []);
       h.role = h.role || 'any';

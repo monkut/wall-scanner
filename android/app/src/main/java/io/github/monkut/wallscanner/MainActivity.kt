@@ -31,6 +31,7 @@ import io.github.monkut.wallscanner.io.LocationKind
 import io.github.monkut.wallscanner.io.LocationStore
 import io.github.monkut.wallscanner.io.RouteRecord
 import io.github.monkut.wallscanner.io.RouteStore
+import io.github.monkut.wallscanner.io.SendLog
 import io.github.monkut.wallscanner.io.SendResult
 import io.github.monkut.wallscanner.routes.RouteActivity
 import io.github.monkut.wallscanner.scan.GpsFix
@@ -59,6 +60,8 @@ class MainActivity : AppCompatActivity() {
     private var routeRows: List<RouteRow> = emptyList()
     private var locationRows: List<Location> = emptyList()
     private var confirmedRoutes: List<RouteRecord> = emptyList()
+    /** sends.json per capture, read once per refresh for the logbook rows. */
+    private val logs = HashMap<String, SendLog>()
     private var locations: Map<String, Location> = emptyMap()
     private val thumbnails = HashMap<String, Bitmap>()
     /** Logbook drill-down: null lists the locations, otherwise the routes of this location ("" = no location). */
@@ -135,6 +138,7 @@ class MainActivity : AppCompatActivity() {
     private fun refresh() {
         locations = LocationStore.list(this).associateBy { it.id }
         captures = CaptureStore.list(this)
+        logs.clear()
         val confirmed = if (logbook) RouteStore.confirmedRoutes(this) else emptyList()
         confirmedRoutes = confirmed
         val selected = selectedLocationId?.takeIf { logbook && (it.isEmpty() || it in locations) }
@@ -178,7 +182,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun capturesAt(id: String): List<File> = captures.filter { CaptureStore.readLocationId(it) == id }
 
-    private fun sendsOf(route: RouteRecord) = RouteStore.sendsFor(File(CaptureStore.capturesDir(this), route.captureId), route.routeId)
+    private fun logOf(captureId: String): SendLog =
+        logs.getOrPut(captureId) { RouteStore.log(File(CaptureStore.capturesDir(this), captureId)) }
+
+    private fun sendsOf(route: RouteRecord) = logOf(route.captureId).sends.filter { it.routeId == route.routeId }
 
     /** "3 routes, 5 sends, 2 flashes[, 2 locations]" over [routes]. */
     private fun progressSummary(routes: List<RouteRecord>, countLocations: Boolean): String {
@@ -462,9 +469,11 @@ class MainActivity : AppCompatActivity() {
             val sends = sendsOf(route)
             val last = sends.maxByOrNull { it.at }
             val title = if (route.grade.isBlank()) route.name else "${route.name} ${route.grade}"
+            val rating = logOf(route.captureId).ratings[route.routeId]
             val meta = Labels.join(
                 c, Labels.plural(c, R.plurals.sends_count, sends.size),
                 last?.let { getString(R.string.last_send, Labels.result(c, it.result).lowercase(), Labels.isoDate(c, it.at)) } ?: "",
+                rating?.let { getString(R.string.star_rating, it) } ?: "",
             )
             val subtitle = Labels.join(c, Labels.definition(c, route.type), getString(R.string.from_capture, Labels.captureDay(c, route.captureId)))
             bindRow(view, title, subtitle, meta, thumbnails[route.captureId], route.color)

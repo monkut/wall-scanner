@@ -98,6 +98,11 @@
     <string name="camera_permission_needed">スキャンにはカメラの権限が必要です</string>
     <string name="location_permission_denied">位置情報の権限が拒否されたため、場所の座標は記録されませんでした</string>
     <string name="location_has_coords">GPS</string>
+    <string name="rating">評価</string>
+    <string name="not_rated">未評価</string>
+    <string name="rating_value">%2$d 点中 %1$d</string>
+    <string name="star_rating">★ %d</string>
+    <string name="clear_rating">クリア</string>
     <string name="locations">場所</string>
     <string name="no_locations">場所がまだありません。キャプチャモードの「新しいスキャン」から登録してください。</string>
     <string name="edit">編集</string>

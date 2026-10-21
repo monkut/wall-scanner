@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,6 +14,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ListView
 import android.widget.RadioGroup
+import android.widget.RatingBar
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -33,6 +35,9 @@ class RouteActivity : AppCompatActivity() {
     private lateinit var route: RouteRecord
     private lateinit var sendList: ListView
     private lateinit var emptyText: TextView
+    private lateinit var ratingBar: RatingBar
+    private lateinit var ratingLabel: TextView
+    private lateinit var btnClearRating: View
     private var sends: List<Send> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,6 +65,20 @@ class RouteActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnOpenCapture).setOnClickListener { startActivity(ViewerActivity.intent(this, route.captureId)) }
         sendList = findViewById(R.id.sendList)
         emptyText = findViewById(R.id.emptyText)
+        ratingBar = findViewById(R.id.rating)
+        ratingLabel = findViewById(R.id.ratingLabel)
+        btnClearRating = findViewById(R.id.btnClearRating)
+        ratingBar.numStars = RouteStore.MAX_RATING
+        // The label follows the finger; the rating is written once, when the finger lifts.
+        ratingBar.setOnRatingBarChangeListener { _, stars, fromUser -> if (fromUser) showRating(stars.toInt()) }
+        ratingBar.setOnTouchListener { v, event ->
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                v.performClick()
+                handleRate(ratingBar.rating.toInt())
+            }
+            false
+        }
+        btnClearRating.setOnClickListener { handleRate(null) }
         sendList.setOnItemLongClickListener { _, _, position, _ -> handleDeleteSend(sends[position]); true }
     }
 
@@ -73,6 +92,25 @@ class RouteActivity : AppCompatActivity() {
         sends = RouteStore.sendsFor(captureDir, route.routeId).sortedByDescending { it.at }
         emptyText.visibility = if (sends.isEmpty()) View.VISIBLE else View.GONE
         sendList.adapter = SendAdapter(sends)
+        refreshRating()
+    }
+
+    private fun refreshRating() {
+        val rating = RouteStore.rating(captureDir, route.routeId)
+        ratingBar.rating = (rating ?: 0).toFloat()
+        showRating(rating)
+    }
+
+    private fun showRating(rating: Int?) {
+        ratingLabel.text = if (rating == null) getString(R.string.not_rated) else getString(R.string.rating_value, rating, RouteStore.MAX_RATING)
+        btnClearRating.visibility = if (rating == null) View.GONE else View.VISIBLE
+    }
+
+    /** Stores [stars] (0–5) as the climb's rating, or clears it with null. */
+    private fun handleRate(stars: Int?) {
+        if (stars == RouteStore.rating(captureDir, route.routeId)) return
+        RouteStore.setRating(captureDir, route.routeId, stars)
+        refreshRating()
     }
 
     private fun handleLogSend() {
