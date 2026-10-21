@@ -21,7 +21,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ### Home screen: Capture and Logbook modes
 
-A **Capture | Logbook** switch at the top selects the mode; the choice is remembered.
+A **Capture | Logbook** switch at the top selects the mode; the choice is remembered. The button to its right
+shows the app language (EN-US, EN-UK or JA) and opens the language picker.
 
 - **Capture** mode is for scanning and identifying routes: the **New scan** button and the list of captures
   (thumbnail, timestamp, location, wall type, hold / route / confirmed counts). Tap a capture to open it in the
@@ -30,6 +31,14 @@ A **Capture | Logbook** switch at the top selects the mode; the choice is rememb
 - **Logbook** mode is for recording progress: a summary line (routes · sends · flashes · locations) and the
   confirmed routes grouped under a header per location (name, kind, grade scale, route and send counts).
   Tap a route to open its record.
+
+### Language
+
+The app has its own language setting, independent of the device language: English (US) is the default on
+first launch, English (UK) differs only in spelling (colour, initialising), and Japanese translates every
+screen including the capture viewer. Dates and times follow the chosen language (Oct 20, 2026, 2:31 PM /
+20 Oct 2026, 14:31 / 2026/10/20 14:31) and are always JST. The choice is stored by AppCompat's per-app
+locale support (`Language.kt`) and applied to the viewer page through its `lang` query parameter.
 
 ### New scan
 
@@ -138,6 +147,17 @@ files/captures/<JST timestamp>/
   and groups holds by tape colour into `tape.json` with annotated `tape-debug/*.jpg`; `--apply` rewrites the
   scene's routes from the result; `--selftest` checks the pixel → wall lifting on a synthetic frame.
 
+## Design
+
+Tokens live in `res/values/colors.xml` and `themes.xml` and are mirrored in the viewer's CSS: a dark wall
+(`#15191D`) with panel (`#212830`) and hairline (`#303A44`) surfaces, chalk (`#EFEBE3`) and dust (`#9AA4AD`)
+text, one tape-yellow accent (`#F2C14E`) reserved for the primary action and the selected mode, and send
+green (`#5DB974`) for confirmed state. Route colours come from the data (swatches, hold boxes) and are the only
+other colour on screen. The typeface is Atkinson Hyperlegible (bundled in `res/font/` and `assets/viewer/fonts/`,
+SIL Open Font License in `android/fonts/`), chosen for legibility in dim gyms and bright sun; Japanese text falls
+back to the system CJK font. Buttons are sentence case, lists use hairline dividers instead of cards, and
+counts are written out with locale plurals ("1 try", "2 tries", "記録 2 件").
+
 ## Layout
 
 | Path | Role |
@@ -148,7 +168,9 @@ files/captures/<JST timestamp>/
 | `routes/RouteActivity.kt` | Route record screen: send log for one confirmed route. |
 | `io/CaptureStore.kt` | Capture directories, `capture.json`, PLY / scene / thumbnail files, share zip. |
 | `io/RouteStore.kt`, `io/LocationStore.kt` | Confirmed routes read from `scene.json`; sends in `sends.json`; locations in `locations.json`. |
-| `MainActivity.kt` | Home screen: mode switch, capture list, logbook, New scan dialogs. |
+| `MainActivity.kt` | Home screen: mode switch, language button, capture list, logbook, New scan dialogs. |
+| `Labels.kt`, `Language.kt` | Localized names for the core enums, dates in the app language; per-app locale handling. |
+| `res/values*/strings.xml` | English (US) defaults, `values-en-rGB` spellings, `values-ja` translations. |
 
 ## Known limits (v0.1)
 

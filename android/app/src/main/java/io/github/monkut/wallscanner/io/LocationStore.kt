@@ -6,8 +6,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-enum class LocationKind(val id: String, val label: String) {
-    GYM("gym", "Gym"), OUTDOOR("outdoor", "Outdoor area");
+enum class LocationKind(val id: String) {
+    GYM("gym"), OUTDOOR("outdoor");
 
     companion object {
         fun fromId(id: String?): LocationKind = entries.firstOrNull { it.id == id } ?: GYM
@@ -15,16 +15,14 @@ enum class LocationKind(val id: String, val label: String) {
 }
 
 /** A gym or outdoor area. Captures (and so routes) belong to one location. */
-class Location(val id: String, val name: String, val kind: LocationKind, val gradeSystem: GradeSystem = GradeSystem.DEFAULT) {
-    val label: String get() = if (id.isEmpty()) name else "$name · ${kind.label}"
-}
+class Location(val id: String, val name: String, val kind: LocationKind, val gradeSystem: GradeSystem = GradeSystem.DEFAULT)
 
 /** files/locations.json: `{ version, locations: [{ id, name, kind }] }`. */
 object LocationStore {
     private const val FILE = "locations.json"
 
     /** Placeholder for captures made before locations existed or whose location was deleted. */
-    val UNKNOWN = Location("", "No location", LocationKind.GYM)
+    val UNKNOWN = Location("", "", LocationKind.GYM)
 
     fun list(context: Context): List<Location> {
         val file = File(context.filesDir, FILE)

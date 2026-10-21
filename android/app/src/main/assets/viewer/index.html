@@ -5,31 +5,37 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Wall</title>
 <style>
-  :root { --bg: #101418; --fg: #e8ecf0; --panel: rgba(16, 20, 24, 0.92); --line: #2a3138; }
+  /* Same tokens as the app theme: wall, panel, hairline, chalk, dust, tape, send. */
+  @font-face { font-family: 'Atkinson'; src: url('./fonts/atkinson-regular.ttf'); font-weight: 400; }
+  @font-face { font-family: 'Atkinson'; src: url('./fonts/atkinson-bold.ttf'); font-weight: 700; }
+  :root { --bg: #15191d; --panel: rgba(33, 40, 48, 0.94); --line: #303a44; --fg: #efebe3; --dust: #9aa4ad; --tape: #f2c14e; --send: #5db974; --field: #15191d; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px system-ui, sans-serif; overflow: hidden; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px/1.35 'Atkinson', system-ui, sans-serif; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
   #panel { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); }
-  #toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; }
-  #status { flex: 1; font-size: 13px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  button { background: #1e88e5; color: #fff; border: 0; border-radius: 6px; padding: 8px 12px; font-size: 14px; }
-  button.secondary { background: #2a3138; }
-  #routes { max-height: 42vh; overflow-y: auto; padding: 0 12px 12px; display: none; }
+  #toolbar { display: flex; gap: 8px; align-items: center; padding: 10px 16px; }
+  #status { flex: 1; font-size: 13px; color: var(--dust); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button { background: var(--tape); color: var(--bg); border: 0; border-radius: 8px; padding: 10px 14px; font: inherit; font-weight: 700; }
+  button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); font-weight: 400; }
+  button:focus-visible { outline: 2px solid var(--tape); outline-offset: 2px; }
+  #routes { max-height: 42vh; overflow-y: auto; padding: 0 16px 14px; display: none; }
   #panel.open #routes { display: block; }
-  .route { display: flex; gap: 8px; align-items: center; padding: 8px; margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; }
-  .route.selected { border-color: #1e88e5; background: rgba(30, 136, 229, 0.15); }
-  .swatch { width: 24px; height: 24px; border-radius: 50%; flex: none; border: 2px solid #fff3; }
-  .route input { background: #0b0e11; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 6px; min-width: 0; }
+  .route { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+  .route.selected { border-left: 3px solid var(--tape); padding-left: 8px; margin-left: -11px; }
+  .swatch { width: 22px; height: 22px; border-radius: 50%; flex: none; border: 2px solid rgba(239, 235, 227, 0.4); }
+  .route input, .route select { background: var(--field); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; min-width: 0; font: inherit; }
   .route input.name { flex: 1; }
-  .route select.grade { width: 84px; background: #0b0e11; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 2px; }
-  .count { width: 28px; text-align: center; opacity: 0.8; }
-  .route button { padding: 6px 8px; font-size: 13px; }
-  .route button.confirm { background: #2a3138; }
-  .route button.confirm.on { background: #2e7d32; }
-  #hint { padding: 6px 0 0; font-size: 13px; opacity: 0.7; }
-  #roles { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  #roles .role { border: 2px solid; background: transparent; color: inherit; padding: 4px 8px; border-radius: 6px; }
-  #roles .role.active { background: rgba(255,255,255,0.18); }
+  .route select.grade { width: 88px; padding: 7px 4px; }
+  .count { width: 26px; text-align: center; color: var(--dust); }
+  .route button { padding: 7px 10px; font-size: 13px; }
+  .route button.confirm { background: transparent; color: var(--fg); border: 1px solid var(--line); font-weight: 400; }
+  .route button.confirm.on { background: var(--send); color: var(--bg); border-color: var(--send); font-weight: 700; }
+  #add { margin-top: 10px; }
+  #hint { padding: 10px 0 0; font-size: 13px; color: var(--dust); }
+  #roles { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  #roles .role { border: 2px solid; background: transparent; color: inherit; padding: 5px 10px; border-radius: 6px; font-weight: 400; }
+  #roles .role.active { background: rgba(239, 235, 227, 0.16); }
+  @media (prefers-reduced-motion: no-preference) { #routes { transition: max-height 150ms ease; } }
 </style>
 <script type="importmap">
   {
@@ -58,6 +64,39 @@
   const params = new URLSearchParams(location.search);
   const captureId = params.get('capture');
   const defaultGrades = params.get('grades') || 'kyu_dan';
+  // App language (en-US default, en-GB spellings, ja); mirrors res/values*/strings.xml.
+  const STRINGS = {
+    'en-US': {
+      routes: 'Routes', loading: 'Loading…', save: 'Save', share: 'Share', confirm: 'Confirm', confirmed: 'Confirmed',
+      newRoute: 'New route', route: 'Route', grade: 'grade', pts: 'points', holds: 'holds', routesN: 'routes', confirmedN: 'confirmed',
+      roles: { start: 'start', hand: 'hand', foot: 'foot', zone: 'zone', finish: 'finish' },
+      hintRole: (r) => `Marking "${r}": tap holds to mark them, tap again to clear.`,
+      hintSelect: (type, n) => `${type}. Tap a swatch to select a route, tap holds to add or remove them, then confirm it. Sends are logged from the Logbook. ${n} unassigned holds.`,
+      hintEditing: (name) => `Editing "${name}": tap holds on the wall to add or remove them.`,
+      definitions: { mono_color: 'Hold color', tape: 'Tape', circuit: 'Circuit', tagged: 'Tagged', comp: 'Competition', free: 'Free / spray wall', board: 'System board', outdoor: 'Outdoor rock' },
+      grades: { kyu_dan: 'Japanese (Q/D)', v: 'V-scale', font: 'Font', yds: 'YDS' },
+      failed: 'Could not load the capture: ',
+    },
+    ja: {
+      routes: 'ルート', loading: '読み込み中…', save: '保存', share: '共有', confirm: '確定', confirmed: '確定済み',
+      newRoute: '新しいルート', route: 'ルート', grade: 'グレード', pts: '点', holds: 'ホールド', routesN: 'ルート', confirmedN: '確定',
+      roles: { start: 'スタート', hand: '手', foot: '足', zone: 'ゾーン', finish: 'トップ' },
+      hintRole: (r) => `「${r}」をマーク中: ホールドをタップして設定、もう一度タップで解除。`,
+      hintSelect: (type, n) => `${type}。スウォッチをタップしてルートを選び、ホールドをタップして追加・削除し、確定してください。記録はログブックから。未割り当てのホールド ${n}。`,
+      hintEditing: (name) => `「${name}」を編集中: 壁のホールドをタップして追加・削除します。`,
+      definitions: { mono_color: 'ホールドの色', tape: 'テープ', circuit: 'サーキット', tagged: 'タグ付き', comp: 'コンペ形式', free: 'フリー／スプレーウォール', board: 'システムボード', outdoor: '外岩' },
+      grades: { kyu_dan: '日本式（級/段）', v: 'V スケール', font: 'Font', yds: 'YDS' },
+      failed: 'キャプチャを読み込めませんでした: ',
+    },
+  };
+  STRINGS['en-GB'] = { ...STRINGS['en-US'], definitions: { ...STRINGS['en-US'].definitions, mono_color: 'Hold colour' } };
+  const lang = params.get('lang') || 'en-US';
+  const T = STRINGS[lang] || STRINGS[lang.split('-')[0]] || STRINGS['en-US'];
+  document.documentElement.lang = lang;
+  document.getElementById('toggle').textContent = T.routes;
+  document.getElementById('save').textContent = T.save;
+  document.getElementById('share').textContent = T.share;
+  document.getElementById('status').textContent = T.loading;
   const base = `/files/captures/${encodeURIComponent(captureId)}/`;
   const statusEl = document.getElementById('status');
   const routesEl = document.getElementById('routes');
@@ -67,7 +106,7 @@
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   const scene3 = new THREE.Scene();
-  scene3.background = new THREE.Color(0x101418);
+  scene3.background = new THREE.Color(0x15191d);
   const camera = new THREE.PerspectiveCamera(60, 1, 0.02, 100);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
@@ -88,12 +127,9 @@
     yds: { label: 'YDS', values: ['5.5', '5.6', '5.7', '5.8', '5.9', ...[10, 11, 12, 13, 14, 15].flatMap((n) => ['a', 'b', 'c', 'd'].map((s) => `5.${n}${s}`))] },
   };
   const gradeOrder = [defaultGrades, ...Object.keys(GRADES).filter((k) => k !== defaultGrades)].filter((k) => GRADES[k]);
-  const gradeOptions = (r) => '<option value="">grade</option>' + gradeOrder.map((k) =>
-    `<optgroup label="${GRADES[k].label}">` + GRADES[k].values.map((g) =>
+  const gradeOptions = (r) => `<option value="">${T.grade}</option>` + gradeOrder.map((k) =>
+    `<optgroup label="${T.grades[k] || GRADES[k].label}">` + GRADES[k].values.map((g) =>
       `<option value="${k}:${g}"${r.gradeSystem === k && r.grade === g ? ' selected' : ''}>${g}</option>`).join('') + '</optgroup>').join('');
-  const DEFINITIONS = {
-    mono_color: 'Hold colour', tape: 'Tape', circuit: 'Circuit', tagged: 'Tagged', comp: 'Competition', free: 'Free / spray wall', board: 'System board', outdoor: 'Outdoor rock',
-  };
 
   const setStatus = (text) => { statusEl.textContent = text; };
   const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
@@ -218,7 +254,7 @@
         `<input class="name" value="${esc(r.name)}">` +
         `<select class="grade">${gradeOptions(r)}</select>` +
         `<span class="count">${r.holdIds.length}</span>` +
-        `<button class="confirm${r.confirmed ? ' on' : ''}">${r.confirmed ? '✓ Confirmed' : 'Confirm'}</button>` +
+        `<button class="confirm${r.confirmed ? ' on' : ''}">${r.confirmed ? '✓ ' + T.confirmed : T.confirm}</button>` +
         `<button class="del secondary">✕</button>`;
       row.querySelector('.swatch').onclick = () => select(r.id);
       row.querySelector('.count').onclick = () => select(r.id);
@@ -238,10 +274,12 @@
       routesEl.appendChild(row);
     }
     const add = document.createElement('button');
-    add.textContent = '+ New route';
+    add.id = 'add';
+    add.className = 'secondary';
+    add.textContent = '+ ' + T.newRoute;
     add.onclick = () => {
       const id = scene.routes.reduce((m, r) => Math.max(m, r.id), 0) + 1;
-      scene.routes.push({ id, name: `Route ${id}`, color: randomColor(), grade: '', gradeSystem: null, holdIds: [], confirmed: false });
+      scene.routes.push({ id, name: `${T.route} ${id}`, color: randomColor(), grade: '', gradeSystem: null, holdIds: [], confirmed: false });
       selectedRouteId = id;
       renderRoutes();
       restyle();
@@ -251,7 +289,7 @@
     roles.id = 'roles';
     for (const role of ROLES.slice(1)) {
       const b = document.createElement('button');
-      b.textContent = role;
+      b.textContent = T.roles[role];
       b.className = 'role' + (roleMode === role ? ' active' : '');
       b.style.borderColor = '#' + ROLE_COLORS[role].toString(16).padStart(6, '0');
       b.onclick = () => { roleMode = roleMode === role ? null : role; renderRoutes(); };
@@ -261,12 +299,12 @@
     const hint = document.createElement('div');
     hint.id = 'hint';
     const unassigned = scene.holds.filter((h) => h.routeIds.length === 0).length;
-    const type = DEFINITIONS[scene.definition?.type] || 'Hold colour';
+    const type = T.definitions[scene.definition?.type] || T.definitions.mono_color;
     hint.textContent = roleMode !== null
-      ? `Role "${roleMode}": tap holds to mark them (tap again to clear).`
+      ? T.hintRole(T.roles[roleMode])
       : selectedRouteId === null
-        ? `${type}. Tap a swatch to select a route, tap holds to add or remove them, then Confirm it. Sends are logged from the Routes tab. ${unassigned} unassigned holds.`
-        : `Editing "${routeOf(selectedRouteId).name}": tap holds on the wall to toggle them.`;
+        ? T.hintSelect(type, unassigned)
+        : T.hintEditing(routeOf(selectedRouteId).name);
     routesEl.appendChild(hint);
   };
 
@@ -336,10 +374,10 @@
 
     buildHolds();
     renderRoutes();
-    setStatus(`${DEFINITIONS[scene.definition.type]} · ${count.toLocaleString()} pts · ${scene.holds.length} holds · ${scene.routes.length} routes · ${scene.routes.filter((r) => r.confirmed).length} confirmed`);
+    setStatus(`${T.definitions[scene.definition.type] || ''}, ${count.toLocaleString()} ${T.pts}, ${scene.holds.length} ${T.holds}, ${scene.routes.length} ${T.routesN}, ${scene.routes.filter((r) => r.confirmed).length} ${T.confirmedN}`);
   };
 
-  load().catch((err) => setStatus('Failed to load: ' + err.message));
+  load().catch((err) => setStatus(T.failed + err.message));
   renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene3, camera); });
 </script>
 </body>

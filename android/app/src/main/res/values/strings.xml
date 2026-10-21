@@ -1,12 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Default language: English (US). UK spellings in values-en-rGB, Japanese in values-ja. -->
 <resources>
     <string name="app_name">Wall Scanner</string>
-    <string name="new_scan">New scan</string>
-    <string name="captures">Captures</string>
-    <string name="no_captures">No captures yet. Tap "New scan" to scan a wall.</string>
-    <string name="routes">Routes</string>
+
+    <!-- Home -->
     <string name="mode_capture">Capture</string>
     <string name="mode_logbook">Logbook</string>
+    <string name="new_scan">New scan</string>
+    <string name="captures">Captures</string>
+    <string name="routes">Routes</string>
+    <string name="no_captures">No captures yet. Tap "New scan" to scan a wall.</string>
+    <string name="no_routes">No confirmed routes yet. Open a capture, identify its routes and tap Confirm.</string>
+    <string name="incomplete_capture">Incomplete, diagnostics only</string>
+    <string name="no_scene_hint">This capture has no 3D scene. Long-press it to share its diagnostics.</string>
+    <string name="unknown_location">No location</string>
+    <string name="list_separator">", "</string>
+    <string name="last_send">last %1$s %2$s</string>
+    <string name="from_capture">capture %1$s</string>
+
+    <!-- Language -->
+    <string name="language">Language</string>
+    <string name="language_en_us">English (US)</string>
+    <string name="language_en_gb">English (UK)</string>
+    <string name="language_ja">日本語</string>
+    <string name="language_short_en_us">EN-US</string>
+    <string name="language_short_en_gb">EN-UK</string>
+    <string name="language_short_ja">JA</string>
+
+    <!-- Locations -->
     <string name="choose_location">Where are you scanning?</string>
     <string name="new_location">New location…</string>
     <string name="location_name_hint">Name (gym or crag)</string>
@@ -18,39 +39,95 @@
     <string name="grades_v">V</string>
     <string name="grades_font">Font</string>
     <string name="grades_yds">YDS</string>
+    <string name="grade_system_kyu_dan">Japanese (Q/D)</string>
+    <string name="grade_system_v">V-scale</string>
+    <string name="grade_system_font">Font</string>
+    <string name="grade_system_yds">YDS</string>
     <string name="next">Next</string>
-    <string name="no_routes">No confirmed routes yet. Open a capture, identify its routes and tap Confirm.</string>
-    <string name="capture_summary">%1$d holds · %2$d routes · %3$d confirmed</string>
+
+    <!-- Route definition types -->
+    <string name="choose_definition">How are routes marked on this wall or rock?</string>
+    <string name="def_mono_color">Hold color</string>
+    <string name="def_mono_color_desc">One hold color is one route; start tag at the base</string>
+    <string name="def_tape">Tape</string>
+    <string name="def_tape_desc">Tape beside each hold; tape color is the route, hold colors are mixed</string>
+    <string name="def_circuit">Circuit</string>
+    <string name="def_circuit_desc">Hold color is the grade band; several problems per color</string>
+    <string name="def_tagged">Tagged</string>
+    <string name="def_tagged_desc">Placard (number, grade) at the start; holds by color</string>
+    <string name="def_comp">Competition</string>
+    <string name="def_comp_desc">Taped start, zone and top holds</string>
+    <string name="def_free">Free / spray wall</string>
+    <string name="def_free_desc">No set routes; problems are defined by hand</string>
+    <string name="def_board">System board</string>
+    <string name="def_board_desc">LED board with a fixed layout</string>
+    <string name="def_outdoor">Outdoor rock</string>
+    <string name="def_outdoor_desc">Boulder or route on natural rock; no color or tape, the line is marked by hand</string>
+
+    <!-- Route record and sends -->
     <string name="sends">Sends</string>
-    <string name="no_sends">No sends logged yet.</string>
+    <string name="no_sends">No sends logged yet. Tap "Log send" after your next go.</string>
     <string name="log_send">Log send</string>
-    <string name="open_capture">Capture</string>
+    <string name="open_capture">Open capture</string>
     <string name="save">Save</string>
     <string name="no_grade">No grade</string>
-    <string name="route_meta">%1$s · %2$s · %3$s · %4$d holds</string>
+    <string name="route_meta">%1$s, %2$s, %3$s</string>
     <string name="result_flash">Flash</string>
     <string name="result_send">Send</string>
     <string name="result_attempt">Attempt</string>
-    <string name="attempts_hint">Attempts</string>
-    <string name="note_hint">Note (beta, conditions, feeling)</string>
+    <string name="attempts_hint">Tries</string>
+    <string name="note_hint">Note (beta, conditions, how it felt)</string>
     <string name="delete_send">Delete this send?\n%1$s</string>
+    <string name="delete">Delete</string>
+    <string name="share">Share</string>
+
+    <!-- Scan -->
     <string name="start_scan">Start scan</string>
     <string name="pause_scan">Pause</string>
     <string name="resume_scan">Resume</string>
-    <string name="finish_scan">Finish &amp; process</string>
+    <string name="finish_scan">Finish and process</string>
     <string name="processing">Processing scan…</string>
     <string name="status_initializing">Initializing camera…</string>
+    <string name="status_ready">Ready</string>
+    <string name="status_scanning">Scanning</string>
+    <string name="status_line">%1$s: %2$dk points, %3$d depth frames, segment %4$d</string>
+    <string name="tracking_lost">Tracking lost: %1$s</string>
     <string name="scan_more">Scan more of the wall before finishing</string>
     <string name="no_wall_found">No wall plane found. Scan the wall from 1–3 m with slow, overlapping passes.</string>
-    <string name="camera_permission_needed">Camera permission is required to scan</string>
+    <string name="camera_permission_needed">Camera permission is needed to scan</string>
     <string name="depth_unsupported">This device does not support the ARCore Depth API</string>
     <string name="arcore_unavailable">ARCore is not available: %1$s</string>
-    <string name="share">Share</string>
-    <string name="delete">Delete</string>
     <string name="scene_saved">Routes saved</string>
     <string name="thumbnail">Scan thumbnail</string>
-    <string name="choose_definition">How are routes marked on this wall or rock?</string>
-    <string name="incomplete_capture">incomplete · diagnostics only</string>
-    <string name="no_scene_hint">No 3D scene for this capture. Long-press to share its diagnostics.</string>
     <string name="points_saved_no_wall">Points saved for analysis, but no wall or rock face was found. Keep scanning or finish again.</string>
+
+    <!-- Counts -->
+    <plurals name="holds">
+        <item quantity="one">%d hold</item>
+        <item quantity="other">%d holds</item>
+    </plurals>
+    <plurals name="routes_count">
+        <item quantity="one">%d route</item>
+        <item quantity="other">%d routes</item>
+    </plurals>
+    <plurals name="confirmed_count">
+        <item quantity="one">%d confirmed</item>
+        <item quantity="other">%d confirmed</item>
+    </plurals>
+    <plurals name="sends_count">
+        <item quantity="one">%d send</item>
+        <item quantity="other">%d sends</item>
+    </plurals>
+    <plurals name="tries">
+        <item quantity="one">%d try</item>
+        <item quantity="other">%d tries</item>
+    </plurals>
+    <plurals name="flashes">
+        <item quantity="one">%d flash</item>
+        <item quantity="other">%d flashes</item>
+    </plurals>
+    <plurals name="locations_count">
+        <item quantity="one">%d location</item>
+        <item quantity="other">%d locations</item>
+    </plurals>
 </resources>

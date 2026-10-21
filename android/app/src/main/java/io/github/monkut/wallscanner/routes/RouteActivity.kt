@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.ImageView
@@ -15,6 +16,7 @@ import android.widget.RadioGroup
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import io.github.monkut.wallscanner.Labels
 import io.github.monkut.wallscanner.R
 import io.github.monkut.wallscanner.io.CaptureStore
 import io.github.monkut.wallscanner.io.LocationStore
@@ -22,12 +24,8 @@ import io.github.monkut.wallscanner.io.RouteRecord
 import io.github.monkut.wallscanner.io.RouteStore
 import io.github.monkut.wallscanner.io.Send
 import io.github.monkut.wallscanner.io.SendResult
-import io.github.monkut.wallscanner.io.count
 import io.github.monkut.wallscanner.viewer.ViewerActivity
 import java.io.File
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 
 /** Record of one confirmed route: its identification summary and the send log (sends.json of its capture). */
 class RouteActivity : AppCompatActivity() {
@@ -48,7 +46,10 @@ class RouteActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.routeName).text = route.name
         findViewById<TextView>(R.id.routeGrade).text = route.grade.ifBlank { getString(R.string.no_grade) }
         val location = LocationStore.get(this, route.locationId)
-        findViewById<TextView>(R.id.routeMeta).text = getString(R.string.route_meta, location.label, route.type.label, route.captureId, route.holdCount)
+        findViewById<TextView>(R.id.routeMeta).text = getString(
+            R.string.route_meta, Labels.location(this, location), Labels.definition(this, route.type),
+            Labels.plural(this, R.plurals.holds, route.holdCount),
+        )
         findViewById<ImageView>(R.id.thumbnail).setImageBitmap(CaptureStore.readThumbnail(captureDir))
         findViewById<View>(R.id.swatch).background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
@@ -97,24 +98,23 @@ class RouteActivity : AppCompatActivity() {
 
     private fun handleDeleteSend(send: Send) {
         AlertDialog.Builder(this)
-            .setMessage(getString(R.string.delete_send, sendLabel(send)))
+            .setMessage(getString(R.string.delete_send, Labels.join(this, resultLabel(send), Labels.isoDateTime(this, send.at))))
             .setPositiveButton(R.string.delete) { _, _ -> RouteStore.deleteSend(captureDir, send.id); refresh() }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
-    private fun sendLabel(send: Send): String {
-        val at = runCatching { ZonedDateTime.parse(send.at).withZoneSameInstant(JST).format(DATE_FORMAT) }.getOrDefault(send.at)
-        val tries = count(send.attempts, "try", "tries")
-        return "$at · ${send.result.label} · $tries"
-    }
+    /** "Flash, 1 try" */
+    private fun resultLabel(send: Send): String =
+        Labels.join(this, Labels.result(this, send.result), Labels.plural(this, R.plurals.tries, send.attempts))
 
-    private inner class SendAdapter(items: List<Send>) : ArrayAdapter<Send>(this, android.R.layout.simple_list_item_2, android.R.id.text1, items) {
-        override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View {
-            val view = super.getView(position, convertView, parent)
+    private inner class SendAdapter(items: List<Send>) : ArrayAdapter<Send>(this, R.layout.item_send, items) {
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_send, parent, false)
             val send = getItem(position)!!
-            view.findViewById<TextView>(android.R.id.text1).text = sendLabel(send)
-            view.findViewById<TextView>(android.R.id.text2).apply {
+            view.findViewById<TextView>(R.id.result).text = resultLabel(send)
+            view.findViewById<TextView>(R.id.date).text = Labels.isoDateTime(this@RouteActivity, send.at)
+            view.findViewById<TextView>(R.id.note).apply {
                 text = send.note
                 visibility = if (send.note.isBlank()) View.GONE else View.VISIBLE
             }
@@ -125,8 +125,6 @@ class RouteActivity : AppCompatActivity() {
     companion object {
         private const val EXTRA_CAPTURE = "capture"
         private const val EXTRA_ROUTE = "route"
-        private val JST: ZoneId = ZoneId.of("Asia/Tokyo")
-        private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
         fun intent(context: Context, captureId: String, routeId: Int): Intent =
             Intent(context, RouteActivity::class.java).putExtra(EXTRA_CAPTURE, captureId).putExtra(EXTRA_ROUTE, routeId)

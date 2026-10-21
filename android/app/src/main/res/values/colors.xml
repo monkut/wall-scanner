@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#1E88E5</color>
-    <color name="primary_dark">#1565C0</color>
-    <color name="accent">#FF7043</color>
-    <color name="overlay">#99000000</color>
-    <color name="ic_launcher_background">#1565C0</color>
+    <!-- Design tokens: a dark wall with chalk text and one tape-yellow accent; route colours come from the data. -->
+    <color name="wall">#15191D</color>
+    <color name="panel">#212830</color>
+    <color name="hairline">#303A44</color>
+    <color name="chalk">#EFEBE3</color>
+    <color name="dust">#9AA4AD</color>
+    <color name="tape">#F2C14E</color>
+    <color name="tape_wash">#33F2C14E</color>
+    <color name="send">#5DB974</color>
+    <color name="danger">#E05A52</color>
+    <color name="overlay">#B315191D</color>
+    <color name="ic_launcher_background">#15191D</color>
 </resources>

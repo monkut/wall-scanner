@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wall Scanner</string>
+
+    <!-- ホーム -->
+    <string name="mode_capture">キャプチャ</string>
+    <string name="mode_logbook">ログブック</string>
+    <string name="new_scan">新規スキャン</string>
+    <string name="captures">キャプチャ一覧</string>
+    <string name="routes">ルート</string>
+    <string name="no_captures">キャプチャはまだありません。「新規スキャン」をタップして壁をスキャンしてください。</string>
+    <string name="no_routes">確定済みのルートはまだありません。キャプチャを開いてルートを特定し、「確定」をタップしてください。</string>
+    <string name="incomplete_capture">未完了（診断データのみ）</string>
+    <string name="no_scene_hint">このキャプチャには 3D シーンがありません。長押しすると診断データを共有できます。</string>
+    <string name="unknown_location">ロケーション未設定</string>
+    <string name="list_separator">"、"</string>
+    <string name="last_send">最新: %1$s %2$s</string>
+    <string name="from_capture">キャプチャ %1$s</string>
+
+    <!-- 言語 -->
+    <string name="language">言語</string>
+    <string name="language_en_us">English (US)</string>
+    <string name="language_en_gb">English (UK)</string>
+    <string name="language_ja">日本語</string>
+    <string name="language_short_en_us">EN-US</string>
+    <string name="language_short_en_gb">EN-UK</string>
+    <string name="language_short_ja">JA</string>
+
+    <!-- ロケーション -->
+    <string name="choose_location">どこでスキャンしますか？</string>
+    <string name="new_location">新しいロケーション…</string>
+    <string name="location_name_hint">名前（ジムまたは岩場）</string>
+    <string name="kind_gym">ジム</string>
+    <string name="kind_outdoor">外岩エリア</string>
+    <string name="set_location">ロケーションを設定</string>
+    <string name="grade_system">グレード表記</string>
+    <string name="grades_kyu">級/段</string>
+    <string name="grades_v">V</string>
+    <string name="grades_font">Font</string>
+    <string name="grades_yds">YDS</string>
+    <string name="grade_system_kyu_dan">日本式（級/段）</string>
+    <string name="grade_system_v">V スケール</string>
+    <string name="grade_system_font">Font</string>
+    <string name="grade_system_yds">YDS</string>
+    <string name="next">次へ</string>
+
+    <!-- ルートの表示方法 -->
+    <string name="choose_definition">この壁や岩では、ルートはどのように示されていますか？</string>
+    <string name="def_mono_color">ホールドの色</string>
+    <string name="def_mono_color_desc">1 色が 1 ルート。スタートは足元のタグで表示</string>
+    <string name="def_tape">テープ</string>
+    <string name="def_tape_desc">ホールド横のテープの色がルート。ホールドの色は混在</string>
+    <string name="def_circuit">サーキット</string>
+    <string name="def_circuit_desc">ホールドの色がグレード帯。同じ色に複数の課題</string>
+    <string name="def_tagged">タグ付き</string>
+    <string name="def_tagged_desc">スタートにプレート（番号・グレード）。ホールドは色別</string>
+    <string name="def_comp">コンペ形式</string>
+    <string name="def_comp_desc">テープでスタート・ゾーン・トップを表示</string>
+    <string name="def_free">フリー／スプレーウォール</string>
+    <string name="def_free_desc">設定ルートなし。課題は自分で定義</string>
+    <string name="def_board">システムボード</string>
+    <string name="def_board_desc">固定配置の LED ボード</string>
+    <string name="def_outdoor">外岩</string>
+    <string name="def_outdoor_desc">自然の岩のボルダーやルート。色やテープはなく、ラインは手動で指定</string>
+
+    <!-- ルートと記録 -->
+    <string name="sends">記録</string>
+    <string name="no_sends">記録はまだありません。次のトライのあとに「記録する」をタップしてください。</string>
+    <string name="log_send">記録する</string>
+    <string name="open_capture">キャプチャを開く</string>
+    <string name="save">保存</string>
+    <string name="no_grade">グレード未設定</string>
+    <string name="route_meta">%1$s、%2$s、%3$s</string>
+    <string name="result_flash">フラッシュ</string>
+    <string name="result_send">完登</string>
+    <string name="result_attempt">トライ</string>
+    <string name="attempts_hint">トライ数</string>
+    <string name="note_hint">メモ（ムーブ、コンディション、感想）</string>
+    <string name="delete_send">この記録を削除しますか？\n%1$s</string>
+    <string name="delete">削除</string>
+    <string name="share">共有</string>
+
+    <!-- スキャン -->
+    <string name="start_scan">スキャン開始</string>
+    <string name="pause_scan">一時停止</string>
+    <string name="resume_scan">再開</string>
+    <string name="finish_scan">終了して処理</string>
+    <string name="processing">スキャンを処理中…</string>
+    <string name="status_initializing">カメラを初期化中…</string>
+    <string name="status_ready">準備完了</string>
+    <string name="status_scanning">スキャン中</string>
+    <string name="status_line">%1$s: %2$dk 点、深度フレーム %3$d、セグメント %4$d</string>
+    <string name="tracking_lost">トラッキングを喪失: %1$s</string>
+    <string name="scan_more">終了する前に、壁をもっとスキャンしてください</string>
+    <string name="no_wall_found">壁の面が見つかりません。1〜3 m の距離から、ゆっくり重ねながらスキャンしてください。</string>
+    <string name="camera_permission_needed">スキャンにはカメラの権限が必要です</string>
+    <string name="depth_unsupported">この端末は ARCore Depth API に対応していません</string>
+    <string name="arcore_unavailable">ARCore を利用できません: %1$s</string>
+    <string name="scene_saved">ルートを保存しました</string>
+    <string name="thumbnail">スキャンのサムネイル</string>
+    <string name="points_saved_no_wall">点群は保存しましたが、壁や岩の面が見つかりませんでした。スキャンを続けるか、もう一度終了してください。</string>
+
+    <!-- 数量 -->
+    <plurals name="holds">
+        <item quantity="other">ホールド %d</item>
+    </plurals>
+    <plurals name="routes_count">
+        <item quantity="other">ルート %d</item>
+    </plurals>
+    <plurals name="confirmed_count">
+        <item quantity="other">確定 %d</item>
+    </plurals>
+    <plurals name="sends_count">
+        <item quantity="other">記録 %d 件</item>
+    </plurals>
+    <plurals name="tries">
+        <item quantity="other">%d トライ</item>
+    </plurals>
+    <plurals name="flashes">
+        <item quantity="other">フラッシュ %d 回</item>
+    </plurals>
+    <plurals name="locations_count">
+        <item quantity="other">%d か所</item>
+    </plurals>
+</resources>

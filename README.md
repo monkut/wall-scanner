@@ -15,6 +15,7 @@ The longer-term plan (photoreal splats from a GPU backend) is in `ARCHITECTURE.m
 | Processing (on device) | Wall plane fit → hold clusters (relief above the plane, or above the local rock surface for outdoor) → routes by the chosen marking type (colour groups, colour + position for circuits, none for tape / free / board / outdoor). |
 | Capture viewer | 3D point cloud with hold boxes; rename, grade (YDS, Japanese Q/D, V-scale, Font), create or delete routes; tap holds to edit membership; mark roles (start, hand, foot, zone, finish); **Confirm** a route once identified. |
 | Logbook | Confirmed routes grouped by location with a progress line (routes, sends, flashes, locations); per route a send log (flash / send / attempt, tries, note). |
+| Language | English (US) by default, English (UK) and Japanese selectable in the app; dates follow the language and are JST. |
 | Diagnostics | Per-capture `scan.log` with button taps, lifecycle pauses, tracking changes, segment snaps and processing results; crash traces; **Share** zips the whole capture. |
 | Keyframes | Sparse 1080p JPEG keyframes with poses for image-based tape / placard detection (`tools/tape.py`, prototype). |
 
@@ -30,6 +31,7 @@ Usage, screen by screen, is in [`android/README.md`](android/README.md).
 | `tools/tape.py` | Tape detection prototype on a capture's keyframes (`--apply` rewrites the scene's routes). |
 | `BOM.md` | Bill of materials for the RPLIDAR / Raspberry Pi handheld variant (not used by the app). |
 | `CAPTURE.md` | Earlier capture protocol and scorecard for evaluating third-party splat captures. |
+| `android/fonts/` | Licence of the bundled Atkinson Hyperlegible typeface (SIL OFL 1.1). |
 | `captures/` | Local copies of captures pulled from the phone (git-ignored). |
 
 ## Quick start

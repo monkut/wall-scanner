@@ -164,10 +164,10 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
 
     override fun onStatus(tracking: Boolean, reason: TrackingFailureReason, voxels: Int, depthFrames: Int) {
         val text = if (tracking) {
-            val mode = if (renderer.recording) "Scanning" else "Ready"
-            "$mode · ${voxels / 1000}k points · $depthFrames depth frames · segment ${segments.size}"
+            val mode = getString(if (renderer.recording) R.string.status_scanning else R.string.status_ready)
+            getString(R.string.status_line, mode, voxels / 1000, depthFrames, segments.size)
         } else {
-            "Tracking lost: $reason"
+            getString(R.string.tracking_lost, reason.toString())
         }
         runOnUiThread { statusText.text = text }
 

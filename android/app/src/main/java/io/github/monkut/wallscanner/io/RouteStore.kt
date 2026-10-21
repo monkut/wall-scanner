@@ -21,16 +21,13 @@ class RouteRecord(
     val locationId: String,
 )
 
-enum class SendResult(val id: String, val label: String) {
-    FLASH("flash", "Flash"), SEND("send", "Send"), ATTEMPT("attempt", "Attempt");
+enum class SendResult(val id: String) {
+    FLASH("flash"), SEND("send"), ATTEMPT("attempt");
 
     companion object {
         fun fromId(id: String?): SendResult = entries.firstOrNull { it.id == id } ?: SEND
     }
 }
-
-/** "1 send", "2 sends": English count independent of the device locale (plurals resources follow the locale). */
-fun count(n: Int, singular: String, plural: String = singular + "s"): String = "$n " + if (n == 1) singular else plural
 
 class Send(val id: Int, val routeId: Int, val at: String, val result: SendResult, val attempts: Int, val note: String)
 
