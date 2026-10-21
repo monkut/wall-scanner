@@ -84,13 +84,9 @@ object HoldDetector {
             var minV = Float.MAX_VALUE; var maxV = -Float.MAX_VALUE
             var maxD = 0f
             var sx = 0.0; var sy = 0.0; var sz = 0.0
-            var sr = 0L; var sg = 0L; var sb = 0L
             for (k in members) {
                 val i = candidates[k]
                 sx += xyz[i * 3]; sy += xyz[i * 3 + 1]; sz += xyz[i * 3 + 2]
-                sr += cloud.rgb[i * 3].toInt() and 0xff
-                sg += cloud.rgb[i * 3 + 1].toInt() and 0xff
-                sb += cloud.rgb[i * 3 + 2].toInt() and 0xff
                 if (u[k] < minU) minU = u[k]; if (u[k] > maxU) maxU = u[k]
                 if (v[k] < minV) minV = v[k]; if (v[k] > maxV) maxV = v[k]
                 if (d[k] > maxD) maxD = d[k]
@@ -101,13 +97,14 @@ object HoldDetector {
             if (extent < Tuning.MIN_HOLD_EXTENT || extent > Tuning.MAX_HOLD_EXTENT) continue
             val count = members.size
             val cx = (sx / count).toFloat(); val cy = (sy / count).toFloat(); val cz = (sz / count).toFloat()
+            val color = saturatedColor(cloud.rgb, members.map { candidates[it] })
             holds.add(
                 Hold(
                     id = holds.size + 1,
                     cx = cx, cy = cy, cz = cz,
                     u = frame.u(cx, cy, cz), v = frame.v(cx, cy, cz),
                     width = width, tall = tall, height = maxD,
-                    r = (sr / count).toInt(), g = (sg / count).toInt(), b = (sb / count).toInt(),
+                    r = color[0], g = color[1], b = color[2],
                     voxels = count,
                 )
             )
@@ -116,6 +113,30 @@ object HoldDetector {
         return holds.mapIndexed { index, h ->
             Hold(index + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels)
         }
+    }
+
+    /**
+     * Mean colour of the more saturated half of a hold's voxels. The plain mean mixes in shadowed sides and
+     * wall colour bled in at the edges, which pulls a coloured hold toward grey under gym lighting; a grey
+     * hold stays grey under either estimator.
+     */
+    private fun saturatedColor(rgb: ByteArray, indices: List<Int>): IntArray {
+        val sat = FloatArray(indices.size) { k ->
+            val i = indices[k]
+            val r = rgb[i * 3].toInt() and 0xff; val g = rgb[i * 3 + 1].toInt() and 0xff; val b = rgb[i * 3 + 2].toInt() and 0xff
+            val hi = maxOf(r, g, b)
+            if (hi == 0) 0f else (hi - minOf(r, g, b)).toFloat() / hi
+        }
+        val sorted = sat.copyOf(); sorted.sort()
+        val median = sorted[sorted.size / 2]
+        var sr = 0L; var sg = 0L; var sb = 0L; var n = 0
+        for (k in indices.indices) {
+            if (sat[k] < median) continue
+            val i = indices[k]
+            sr += rgb[i * 3].toInt() and 0xff; sg += rgb[i * 3 + 1].toInt() and 0xff; sb += rgb[i * 3 + 2].toInt() and 0xff
+            n++
+        }
+        return intArrayOf((sr / n).toInt(), (sg / n).toInt(), (sb / n).toInt())
     }
 
     /**

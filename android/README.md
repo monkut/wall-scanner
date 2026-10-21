@@ -176,7 +176,7 @@ counts are written out with locale plurals ("1 try", "2 tries", "記録 2 件").
 
 - Single dominant wall plane; multi-panel walls (slab + overhang) get holds only on the dominant panel. Outdoor rock gets one coarse reference plane per scan, so a boulder should be scanned one face at a time; the thumbnail and (u, v) hold layout follow that face.
 - Depth-from-motion resolution limits detection of low-profile holds (< 2 cm) and footchips.
-- Route grouping is colour-only; mixed-colour sets need manual editing in the viewer. Gym lighting often pushes hold saturation below `MIN_ROUTE_SATURATION`, so sets come out as Gray/White/Black.
+- Route grouping is colour-only; mixed-colour sets need manual editing in the viewer. A hold's colour is the mean of the more saturated half of its voxels, which keeps wall bleed and shadow from pulling it under `MIN_ROUTE_SATURATION` (0.3); genuinely grey, white and black holds still group by value only. Clusters of 10–15 voxels at the noise floor can still form small false routes.
 - Snap resolution is one relief cell (2 cm) and one roll step (0.5°); segments without ≥ 0.2 m² of overlap stay on their anchor pose.
 - Raw depth noise smears the wall about 3 voxels thick and fills 60–70% of a scan with off-wall points. The voxel map evicts least-hit voxels past `MAX_VOXELS` (1.5M per segment, logged as `SEGMENT n full`) and Finish drops voxels under `MIN_VOXEL_HITS`; both thresholds are untested on a real wall. Gym scans reject depth beyond `MAX_DEPTH_RANGE` (3.5 m), so the top of a tall wall needs the phone raised or a step back.
 - Locations can be registered and assigned but not renamed or deleted; grades must come from one of the four scales (no free text).

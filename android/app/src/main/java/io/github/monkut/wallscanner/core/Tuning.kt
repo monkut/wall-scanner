@@ -46,7 +46,7 @@ object Tuning {
     const val SNAP_MAX_DEPTH = 0.6f
 
     // Routes
-    const val MIN_ROUTE_SATURATION = 0.3f
+    const val MIN_ROUTE_SATURATION = 0.3f // hold colour is the saturated half of its voxels (HoldDetector); 0.25 only added noise routes
     const val MIN_ROUTE_VALUE = 0.15f
     const val HUE_GAP_DEG = 30f
     const val MIN_ROUTE_HOLDS = 2
