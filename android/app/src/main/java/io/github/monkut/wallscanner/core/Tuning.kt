@@ -16,6 +16,12 @@ object Tuning {
     const val MAX_WALL_NORMAL_Y = 0.7f // rejects near-horizontal planes (floor, roof)
     const val PLANE_REFINE_ITERATIONS = 100
 
+    // Outdoor rock (RouteDefinition.outdoor): the reference plane is a coarse fit of the whole face, and hold
+    // relief is measured against the local rock surface (per-cell median) instead of that plane.
+    const val OUTDOOR_PLANE_INLIER_DIST = 0.10f
+    const val OUTDOOR_MAX_WALL_NORMAL_Y = 0.95f // slabs down to ~18° above horizontal; ground still rejected
+    const val OUTDOOR_RELIEF_CELL = 0.20f // larger than a hold, smaller than the rock's curvature
+
     // Holds
     const val MIN_HOLD_HEIGHT = 0.02f
     const val MAX_HOLD_HEIGHT = 0.5f

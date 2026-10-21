@@ -25,14 +25,19 @@ class Hold(
 
 /** Clusters voxels that protrude from the wall plane into holds (26-connected cells of [Tuning.CLUSTER_CELL]). */
 object HoldDetector {
-    fun detect(cloud: VoxelCloud, frame: WallFrame): List<Hold> {
+    /**
+     * [localRelief] measures hold height against the local rock surface (per-cell median of the plane
+     * distance, bilinearly interpolated) instead of the plane itself; used for outdoor rock, which is not flat.
+     */
+    fun detect(cloud: VoxelCloud, frame: WallFrame, localRelief: Boolean = false): List<Hold> {
         val n = cloud.count
         val xyz = cloud.xyz
+        val relief = FloatArray(n) { frame.d(xyz[it * 3], xyz[it * 3 + 1], xyz[it * 3 + 2]) }
+        if (localRelief) subtractLocalSurface(relief, cloud, frame)
         val candidates = IntArray(n)
         var m = 0
         for (i in 0 until n) {
-            val d = frame.d(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])
-            if (d >= Tuning.MIN_HOLD_HEIGHT && d <= Tuning.MAX_HOLD_HEIGHT) candidates[m++] = i
+            if (relief[i] >= Tuning.MIN_HOLD_HEIGHT && relief[i] <= Tuning.MAX_HOLD_HEIGHT) candidates[m++] = i
         }
         if (m == 0) return emptyList()
 
@@ -55,7 +60,7 @@ object HoldDetector {
         for (k in 0 until m) {
             val i = candidates[k]
             val x = xyz[i * 3]; val y = xyz[i * 3 + 1]; val z = xyz[i * 3 + 2]
-            u[k] = frame.u(x, y, z); v[k] = frame.v(x, y, z); d[k] = frame.d(x, y, z)
+            u[k] = frame.u(x, y, z); v[k] = frame.v(x, y, z); d[k] = relief[i]
             cu[k] = floor(u[k] * inv).toInt(); cv[k] = floor(v[k] * inv).toInt(); cd[k] = floor(d[k] * inv).toInt()
             val key = VoxelKey.pack(cu[k], cv[k], cd[k])
             val rep = cellRep[key]
@@ -110,6 +115,42 @@ object HoldDetector {
         holds.sortWith(compareBy({ it.v }, { it.u }))
         return holds.mapIndexed { index, h ->
             Hold(index + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels)
+        }
+    }
+
+    /**
+     * Replaces each plane distance in [relief] with its height above the local surface: the median plane
+     * distance of each [Tuning.OUTDOOR_RELIEF_CELL] cell in (u, v), interpolated between cell centres.
+     */
+    private fun subtractLocalSurface(relief: FloatArray, cloud: VoxelCloud, frame: WallFrame) {
+        val n = cloud.count
+        val xyz = cloud.xyz
+        val cell = Tuning.OUTDOOR_RELIEF_CELL
+        val u = FloatArray(n); val v = FloatArray(n)
+        val members = HashMap<Long, MutableList<Int>>()
+        for (i in 0 until n) {
+            u[i] = frame.u(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])
+            v[i] = frame.v(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])
+            members.getOrPut(VoxelKey.pack(floor(u[i] / cell).toInt(), floor(v[i] / cell).toInt(), 0)) { ArrayList() }.add(i)
+        }
+        val medians = HashMap<Long, Float>(members.size * 2)
+        for ((key, list) in members) {
+            val sorted = FloatArray(list.size) { relief[list[it]] }
+            sorted.sort()
+            medians[key] = sorted[sorted.size / 2]
+        }
+        for (i in 0 until n) {
+            // Bilinear blend of the four nearest cell medians; missing cells drop out of the weighting.
+            val fu = u[i] / cell - 0.5f; val fv = v[i] / cell - 0.5f
+            val i0 = floor(fu).toInt(); val j0 = floor(fv).toInt()
+            val tu = fu - i0; val tv = fv - j0
+            var base = 0f; var weight = 0f
+            for (di in 0..1) for (dj in 0..1) {
+                val w = (if (di == 0) 1f - tu else tu) * (if (dj == 0) 1f - tv else tv)
+                val median = medians[VoxelKey.pack(i0 + di, j0 + dj, 0)] ?: continue
+                base += w * median; weight += w
+            }
+            if (weight > 1e-6f) relief[i] -= base / weight
         }
     }
 }

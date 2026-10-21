@@ -14,7 +14,8 @@ class SceneResult(
  * Full offline pipeline: voxel cloud -> wall plane -> holds -> routes.
  * Route detection depends on [Definition.type]: colour grouping where hold colour identifies the route
  * (split by position on circuit walls); no automatic routes for tape, competition, free and board walls,
- * whose routes come from tape/placard detection or manual editing.
+ * whose routes come from tape/placard detection or manual editing. Outdoor rock gets a coarse reference
+ * plane and holds measured against the local rock surface; lines are marked by hand.
  */
 object SceneBuilder {
     fun build(
@@ -29,10 +30,13 @@ object SceneBuilder {
             for (p in cameraPositions) { tx += p[0]; ty += p[1]; tz += p[2] }
             tx /= cameraPositions.size; ty /= cameraPositions.size; tz /= cameraPositions.size
         }
-        val fit = PlaneFitter.fit(cloud, random, tx, ty, tz) ?: return null
-        val frame = WallFrame(fit.plane)
-        val holds = HoldDetector.detect(cloud, frame)
         val type = definition.type
+        val fit = (
+            if (type.outdoor) PlaneFitter.fit(cloud, random, tx, ty, tz, Tuning.OUTDOOR_PLANE_INLIER_DIST, Tuning.OUTDOOR_MAX_WALL_NORMAL_Y)
+            else PlaneFitter.fit(cloud, random, tx, ty, tz)
+            ) ?: return null
+        val frame = WallFrame(fit.plane)
+        val holds = HoldDetector.detect(cloud, frame, localRelief = type.outdoor)
         val routes = if (type.colorIsRoute) RouteGrouper.group(holds, type.splitByPosition) else emptyList()
         return SceneResult(frame, fit.inliers, holds, routes, definition)
     }

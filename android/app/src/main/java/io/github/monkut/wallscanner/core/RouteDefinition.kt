@@ -12,6 +12,8 @@ enum class RouteDefinition(
     val colorIsRoute: Boolean,
     /** Several problems share one colour on a wall, so colour groups must be split by position. */
     val splitByPosition: Boolean,
+    /** Natural rock: no flat wall, so holds are measured against the local rock surface and lines are marked by hand. */
+    val outdoor: Boolean = false,
 ) {
     MONO_COLOR("mono_color", "Hold colour", "One hold colour = one route; start tag at the base", true, false),
     TAPE("tape", "Tape", "Tape beside each hold; tape colour = route, holds mixed", false, false),
@@ -19,7 +21,8 @@ enum class RouteDefinition(
     TAGGED("tagged", "Tagged", "Placard (number, grade) at the start; holds by colour", true, false),
     COMP("comp", "Competition", "Taped start, zone and top holds", false, false),
     FREE("free", "Free / spray wall", "No set routes; problems are defined by hand", false, false),
-    BOARD("board", "System board", "LED board with a fixed layout", false, false);
+    BOARD("board", "System board", "LED board with a fixed layout", false, false),
+    OUTDOOR("outdoor", "Outdoor rock", "Boulder or route on natural rock; no colour or tape, the line is marked by hand", false, false, outdoor = true);
 
     companion object {
         val DEFAULT = MONO_COLOR

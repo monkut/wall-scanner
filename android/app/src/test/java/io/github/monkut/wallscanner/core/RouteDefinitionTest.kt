@@ -3,6 +3,7 @@ package io.github.monkut.wallscanner.core
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 import kotlin.random.Random
 
 class RouteDefinitionTest {
@@ -28,11 +29,40 @@ class RouteDefinitionTest {
 
     @Test
     fun tapeAndFreeWallsGetNoAutomaticRoutes() {
-        for (type in listOf(RouteDefinition.TAPE, RouteDefinition.COMP, RouteDefinition.FREE, RouteDefinition.BOARD)) {
+        for (type in listOf(RouteDefinition.TAPE, RouteDefinition.COMP, RouteDefinition.FREE, RouteDefinition.BOARD, RouteDefinition.OUTDOOR)) {
             val result = SceneBuilder.build(SyntheticWall.cloud(), cameras, Random(7), Definition(type))!!
             assertTrue("$type should not auto-group", result.routes.isEmpty())
-            assertEquals(9, result.holds.size)
+            assertEquals("$type hold count", 9, result.holds.size)
         }
+    }
+
+    @Test
+    fun outdoorMeasuresHoldsAgainstTheLocalRockSurface() {
+        val cloud = SyntheticRock.cloud()
+        val result = SceneBuilder.build(cloud, listOf(floatArrayOf(1.5f, 1.2f, 2f)), Random(7), Definition(RouteDefinition.OUTDOOR))!!
+        assertTrue("coarse plane should cover the face, inliers=${result.planeInliers}/${cloud.count}", result.planeInliers > cloud.count * 0.9)
+        assertEquals("bumps found: ${result.holds.map { "(${it.cx}, ${it.cy}, h=${it.height})" }}", SyntheticRock.bumps.size, result.holds.size)
+        for ((bx, by) in SyntheticRock.bumps) {
+            assertTrue("no hold near ($bx, $by)", result.holds.any { abs(it.cx - bx) < 0.03f && abs(it.cy - by) < 0.03f })
+        }
+        for (hold in result.holds) assertTrue("height above local rock ${hold.height}", hold.height in 0.04f..0.08f)
+        assertTrue(result.routes.isEmpty())
+        assertTrue(result.definition.type.outdoor)
+    }
+
+    @Test
+    fun gymPipelineMisreadsRock() {
+        // The same boulder face through the gym pipeline: holds measured against a flat plane are the rock's
+        // own bulges, so the four bumps do not come out as four holds of their own height.
+        val cloud = SyntheticRock.cloud()
+        val result = SceneBuilder.build(cloud, listOf(floatArrayOf(1.5f, 1.2f, 2f)), Random(7), Definition(RouteDefinition.MONO_COLOR))
+        val holds = result?.holds ?: emptyList()
+        val bumpsAsHolds = SyntheticRock.bumps.count { (bx, by) ->
+            holds.any { abs(it.cx - bx) < 0.03f && abs(it.cy - by) < 0.03f && it.height in 0.04f..0.08f }
+        }
+        val detail = "inliers=${result?.planeInliers}/${cloud.count} holds=" +
+            holds.joinToString { "(%.2f, %.2f, h=%.3f, w=%.2f)".format(it.cx, it.cy, it.height, it.width) }
+        assertTrue(detail, bumpsAsHolds < SyntheticRock.bumps.size || holds.size != SyntheticRock.bumps.size)
     }
 
     @Test

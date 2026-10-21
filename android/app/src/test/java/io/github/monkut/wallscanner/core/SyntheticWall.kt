@@ -37,7 +37,11 @@ object SyntheticWall {
         return map.snapshot()
     }
 
-    private fun addHemisphere(map: VoxelMap, cx: Float, cy: Float, r: Float, color: IntArray, noise: () -> Float) {
+    /** Hemisphere of radius [r] centred on (cx, cy), resting on the surface z = [base](x, y). */
+    fun addHemisphere(
+        map: VoxelMap, cx: Float, cy: Float, r: Float, color: IntArray, noise: () -> Float,
+        base: (Float, Float) -> Float = { _, _ -> 0f },
+    ) {
         val step = 0.004 / r
         var theta = 0.0
         while (theta < 2 * PI) {
@@ -45,7 +49,7 @@ object SyntheticWall {
             while (phi <= PI / 2) {
                 val x = cx + r * cos(theta) * cos(phi)
                 val y = cy + r * sin(theta) * cos(phi)
-                val z = r * sin(phi)
+                val z = r * sin(phi) + base(x.toFloat(), y.toFloat())
                 map.add(x.toFloat(), y.toFloat(), z.toFloat() + noise(), color[0], color[1], color[2])
                 phi += step
             }

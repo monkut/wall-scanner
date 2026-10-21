@@ -77,7 +77,7 @@
   const ROLES = ['any', 'start', 'hand', 'foot', 'zone', 'finish'];
   const ROLE_COLORS = { start: 0x3ddc84, hand: 0xffffff, foot: 0xffd54f, zone: 0x64b5f6, finish: 0xef5350 };
   const DEFINITIONS = {
-    mono_color: 'Hold colour', tape: 'Tape', circuit: 'Circuit', tagged: 'Tagged', comp: 'Competition', free: 'Free / spray wall', board: 'System board',
+    mono_color: 'Hold colour', tape: 'Tape', circuit: 'Circuit', tagged: 'Tagged', comp: 'Competition', free: 'Free / spray wall', board: 'System board', outdoor: 'Outdoor rock',
   };
 
   const setStatus = (text) => { statusEl.textContent = text; };
@@ -251,7 +251,7 @@
     hint.textContent = roleMode !== null
       ? `Role "${roleMode}": tap holds to mark them (tap again to clear).`
       : selectedRouteId === null
-        ? `${type} wall. Tap a route swatch to select it, then tap holds to add or remove them. ${unassigned} unassigned holds.`
+        ? `${type}. Tap a route swatch to select it, then tap holds to add or remove them. ${unassigned} unassigned holds.`
         : `Editing "${routeOf(selectedRouteId).name}": tap holds on the wall to toggle them.`;
     routesEl.appendChild(hint);
   };

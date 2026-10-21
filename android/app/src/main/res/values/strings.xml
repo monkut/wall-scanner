@@ -19,8 +19,8 @@
     <string name="delete">Delete</string>
     <string name="scene_saved">Routes saved</string>
     <string name="thumbnail">Scan thumbnail</string>
-    <string name="choose_definition">How are routes marked on this wall?</string>
+    <string name="choose_definition">How are routes marked on this wall or rock?</string>
     <string name="incomplete_capture">incomplete · diagnostics only</string>
     <string name="no_scene_hint">No 3D scene for this capture. Long-press to share its diagnostics.</string>
-    <string name="points_saved_no_wall">Points saved for analysis, but no wall plane was found. Keep scanning or finish again.</string>
+    <string name="points_saved_no_wall">Points saved for analysis, but no wall or rock face was found. Keep scanning or finish again.</string>
 </resources>

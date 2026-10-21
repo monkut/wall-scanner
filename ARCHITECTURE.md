@@ -145,6 +145,7 @@ A gym's marking system decides what "route" means for post-processing. The type 
 | `comp` | Competition | Tape marks start hands/feet, zone(s), top | Explicit start, zone, top | None | Tape detection with role classification |
 | `free` | Free / spray wall | No set routes; dense mixed holds; climbers define problems (Stōkt-style) | Chosen by the climber | Every hold, any number of problems | No automatic routes; manual editing in the viewer |
 | `board` | System board | Fixed layout lit by LEDs (Kilter, MoonBoard, Tension); colour = role | Lit start / hand / foot / finish | Full sharing | No detection; layout known |
+| `outdoor` | Outdoor rock | Boulder or route on natural rock: no colour, tape or placards; the line comes from a guidebook / topo | Sit or stand start on named features; top-out or anchor | Every feature, any number of lines | No automatic routes; the line is marked by hand in the viewer. Processing differs: coarse reference plane (`OUTDOOR_PLANE_INLIER_DIST`, slabs allowed by `OUTDOOR_MAX_WALL_NORMAL_Y`) and hold relief measured against the local rock surface (`OUTDOOR_RELIEF_CELL` median grid) instead of the plane |
 
 Rule modifiers (stored in `definition.rules`, orthogonal to the type): feet policy (`follow` = feet follow hands, `open`, `chips` = foot chips only), volumes on/off, start rule (matched, two-hand, hand+foot), finish rule (match top, touch tag, top-out), hold roles and eliminates.
 
@@ -175,6 +176,7 @@ Detection stages (prototyped in `tools/tape.py`, to be ported on-device once val
 - TODO: Decide on-prem GPU vs cloud for M0–M1.
 - TODO: Validate tape detection thresholds on real keyframes; port `tools/tape.py` to Kotlin.
 - TODO: Placard OCR/QR (ML Kit) for `tagged` walls.
+- TODO: Outdoor: validate the local-relief grid on a real boulder (ARCore depth in sunlight, ground and vegetation in front of the face); multi-face boulders still get one reference plane, so the thumbnail and (u, v) layout follow the dominant face.
 
 ## Sources
 
