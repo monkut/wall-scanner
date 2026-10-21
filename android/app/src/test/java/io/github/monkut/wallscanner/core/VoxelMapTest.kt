@@ -85,6 +85,29 @@ class VoxelMapTest {
     }
 
     @Test
+    fun capFitsTheIntendedTableSize() {
+        // Tuning.MAX_VOXELS is chosen so a full segment stays in a 2^21-slot table (~75 MB); growing to 2^22
+        // doubles that. Distinct voxels over a 4 × 4 × 1 m box at 1 cm.
+        val map = VoxelMap()
+        val rnd = Random(2)
+        while (map.size < Tuning.MAX_VOXELS) {
+            map.add(rnd.nextInt(400) * 0.01f + 0.005f, rnd.nextInt(400) * 0.01f + 0.005f, rnd.nextInt(100) * 0.01f + 0.005f, 0, 0, 0)
+        }
+        assertEquals(1 shl 21, map.tableSlots)
+        map.add(9f, 9f, 9f, 0, 0, 0) // first eviction at the cap must not grow the table either
+        assertEquals(1 shl 21, map.tableSlots)
+    }
+
+    @Test
+    fun evictionWhenEveryVoxelIsHeavilyHitStillEnforcesTheCap() {
+        val map = VoxelMap(voxelSize = 0.01f, maxVoxels = 20)
+        repeat(2000) { for (i in 0 until 20) map.add(i * 0.01f + 0.005f, 0.005f, 0.005f, 0, 0, 0) }
+        map.add(5f, 5f, 5f, 0, 0, 0)
+        assertTrue("size ${map.size} over cap", map.size <= 20)
+        assertTrue("new voxel kept", VoxelKey.pack(500, 500, 500) in map.snapshot().keys())
+    }
+
+    @Test
     fun clearResetsEverything() {
         val map = VoxelMap(voxelSize = 0.01f, maxVoxels = 10)
         for (i in 0 until 20) map.add(i * 0.01f + 0.005f, 0.005f, 0.005f, 0, 0, 0)

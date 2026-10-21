@@ -97,7 +97,7 @@ object HoldDetector {
             if (extent < Tuning.MIN_HOLD_EXTENT || extent > Tuning.MAX_HOLD_EXTENT) continue
             val count = members.size
             val cx = (sx / count).toFloat(); val cy = (sy / count).toFloat(); val cz = (sz / count).toFloat()
-            val color = saturatedColor(cloud.rgb, members.map { candidates[it] })
+            val color = saturatedColor(cloud.rgb, candidates, members)
             holds.add(
                 Hold(
                     id = holds.size + 1,
@@ -120,9 +120,9 @@ object HoldDetector {
      * wall colour bled in at the edges, which pulls a coloured hold toward grey under gym lighting; a grey
      * hold stays grey under either estimator.
      */
-    private fun saturatedColor(rgb: ByteArray, indices: List<Int>): IntArray {
-        val sat = FloatArray(indices.size) { k ->
-            val i = indices[k]
+    private fun saturatedColor(rgb: ByteArray, candidates: IntArray, members: List<Int>): IntArray {
+        val sat = FloatArray(members.size) { k ->
+            val i = candidates[members[k]]
             val r = rgb[i * 3].toInt() and 0xff; val g = rgb[i * 3 + 1].toInt() and 0xff; val b = rgb[i * 3 + 2].toInt() and 0xff
             val hi = maxOf(r, g, b)
             if (hi == 0) 0f else (hi - minOf(r, g, b)).toFloat() / hi
@@ -130,9 +130,9 @@ object HoldDetector {
         val sorted = sat.copyOf(); sorted.sort()
         val median = sorted[sorted.size / 2]
         var sr = 0L; var sg = 0L; var sb = 0L; var n = 0
-        for (k in indices.indices) {
+        for (k in members.indices) {
             if (sat[k] < median) continue
-            val i = indices[k]
+            val i = candidates[members[k]]
             sr += rgb[i * 3].toInt() and 0xff; sg += rgb[i * 3 + 1].toInt() and 0xff; sb += rgb[i * 3 + 2].toInt() and 0xff
             n++
         }

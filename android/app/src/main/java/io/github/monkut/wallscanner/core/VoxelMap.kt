@@ -32,6 +32,9 @@ class VoxelMap(
 
     val size: Int get() = synchronized(lock) { count }
 
+    /** Hash-table slots currently allocated (power of two); each slot is about 36 bytes. */
+    val tableSlots: Int get() = synchronized(lock) { capacity }
+
     /** Voxels removed so far to stay under [maxVoxels]; non-zero means the cap was reached at least once. */
     val evictions: Int get() = synchronized(lock) { evicted }
     private var evicted = 0
@@ -108,20 +111,24 @@ class VoxelMap(
      * [EVICT_FRACTION] of the map is freed so eviction does not run on every subsequent point.
      */
     private fun evictLeastHit() {
+        // Hit counts are clamped to the last bin both when counting and when keeping, so the bar always frees
+        // exactly what it counted; if even the last bin is needed, everything goes and the cap still holds.
+        val last = HISTOGRAM_BINS - 1
         val histogram = IntArray(HISTOGRAM_BINS)
-        for (i in 0 until capacity) if (keys[i] != EMPTY) histogram[hits[i].coerceAtMost(HISTOGRAM_BINS - 1)]++
+        for (i in 0 until capacity) if (keys[i] != EMPTY) histogram[hits[i].coerceAtMost(last)]++
         val target = (count * EVICT_FRACTION).toInt().coerceAtLeast(1)
         var bar = 0
         var freed = 0
-        while (freed < target && bar < HISTOGRAM_BINS - 1) {
+        while (freed < target && bar < last) {
             bar++
             freed += histogram[bar]
         }
         val oldHits = hits
-        rebuild(capacity) { i -> oldHits[i] > bar }
+        rebuild(capacity) { i -> oldHits[i].coerceAtMost(last) > bar }
         evicted += freed
     }
 
+    /** Allocates a fresh table and re-inserts the kept voxels; both tables exist until this returns. */
     private inline fun rebuild(newCapacity: Int, keep: (Int) -> Boolean) {
         val oldCapacity = capacity
         val oKeys = keys; val oSx = sx; val oSy = sy; val oSz = sz
@@ -158,6 +165,6 @@ class VoxelMap(
         const val INITIAL_CAPACITY = 1 shl 12
         const val MAX_LOAD = 0.7f
         const val EVICT_FRACTION = 0.1f
-        const val HISTOGRAM_BINS = 256 // hit counts at or above the last bin are never evicted
+        const val HISTOGRAM_BINS = 1024 // hit counts at or above the last bin share it
     }
 }

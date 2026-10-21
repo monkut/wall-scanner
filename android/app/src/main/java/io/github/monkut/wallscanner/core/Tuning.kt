@@ -4,7 +4,9 @@ package io.github.monkut.wallscanner.core
 object Tuning {
     // Capture
     const val VOXEL_SIZE = 0.01f
-    const val MAX_VOXELS = 1_500_000 // per segment; least-hit voxels are evicted beyond this (VoxelMap)
+    // Per segment; least-hit voxels are evicted beyond this (VoxelMap). Sized to fit a 2^21-slot table at
+    // VoxelMap.MAX_LOAD (~75 MB; a rebuild briefly holds two tables, ~150 MB). VoxelMapTest pins the slot count.
+    const val MAX_VOXELS = 1_400_000
     const val MIN_VOXEL_HITS = 2 // at Finish, voxels with fewer points are dropped as depth noise
     const val MAX_DEPTH_RANGE = 3.5f // gym walls; raw depth noise thickens the surface beyond this
     const val OUTDOOR_MAX_DEPTH_RANGE = 5f
