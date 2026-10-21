@@ -2,6 +2,8 @@ package io.github.monkut.wallscanner.core
 
 class Route(val id: Int, var name: String, val r: Int, val g: Int, val b: Int, val holdIds: MutableList<Int>) {
     var grade: String = ""
+    /** Scale [grade] is expressed in; null until a grade is chosen (the viewer defaults to the location's scale). */
+    var gradeSystem: GradeSystem? = null
     /** Identification is done: the route is a record that sends can be logged against (sends.json). */
     var confirmed: Boolean = false
 }

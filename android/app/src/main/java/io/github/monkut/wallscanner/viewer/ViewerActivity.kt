@@ -16,6 +16,7 @@ import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import io.github.monkut.wallscanner.R
 import io.github.monkut.wallscanner.io.CaptureStore
+import io.github.monkut.wallscanner.io.LocationStore
 import io.github.monkut.wallscanner.io.RouteStore
 import java.io.File
 
@@ -47,7 +48,8 @@ class ViewerActivity : AppCompatActivity() {
                 loader.shouldInterceptRequest(request.url)
         }
         webView.addJavascriptInterface(Bridge(), "WallBridge")
-        webView.loadUrl("$BASE_URL/assets/viewer/index.html?capture=" + Uri.encode(captureId))
+        val grades = LocationStore.get(this, CaptureStore.readLocationId(captureDir)).gradeSystem
+        webView.loadUrl("$BASE_URL/assets/viewer/index.html?capture=" + Uri.encode(captureId) + "&grades=" + grades.id)
     }
 
     inner class Bridge {

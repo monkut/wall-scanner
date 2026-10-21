@@ -47,6 +47,7 @@ object SceneJson {
                 .append(", \"name\": ").append(str(r.name))
                 .append(", \"color\": [").append(r.r).append(", ").append(r.g).append(", ").append(r.b).append("]")
                 .append(", \"grade\": ").append(str(r.grade))
+                .append(", \"gradeSystem\": ").append(r.gradeSystem?.let { str(it.id) } ?: "null")
                 .append(", \"holdIds\": ").append(r.holdIds.joinToString(", ", "[", "]"))
                 .append(", \"confirmed\": ").append(r.confirmed)
                 .append("}").append(if (i < result.routes.size - 1) ",\n" else "\n")

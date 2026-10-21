@@ -21,7 +21,7 @@
   .swatch { width: 24px; height: 24px; border-radius: 50%; flex: none; border: 2px solid #fff3; }
   .route input { background: #0b0e11; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 6px; min-width: 0; }
   .route input.name { flex: 1; }
-  .route input.grade { width: 56px; }
+  .route select.grade { width: 84px; background: #0b0e11; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 2px; }
   .count { width: 28px; text-align: center; opacity: 0.8; }
   .route button { padding: 6px 8px; font-size: 13px; }
   .route button.confirm { background: #2a3138; }
@@ -55,7 +55,9 @@
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-  const captureId = new URLSearchParams(location.search).get('capture');
+  const params = new URLSearchParams(location.search);
+  const captureId = params.get('capture');
+  const defaultGrades = params.get('grades') || 'kyu_dan';
   const base = `/files/captures/${encodeURIComponent(captureId)}/`;
   const statusEl = document.getElementById('status');
   const routesEl = document.getElementById('routes');
@@ -78,6 +80,17 @@
   const roleMeshes = new Map();     // holdId -> outline Mesh showing the hold role
   const ROLES = ['any', 'start', 'hand', 'foot', 'zone', 'finish'];
   const ROLE_COLORS = { start: 0x3ddc84, hand: 0xffffff, foot: 0xffd54f, zone: 0x64b5f6, finish: 0xef5350 };
+  // Grade scales (mirrors core/GradeSystem.kt); the location's scale is listed first.
+  const GRADES = {
+    kyu_dan: { label: 'Japanese (Q/D)', values: [...Array.from({ length: 10 }, (_, i) => `${10 - i}Q`), ...Array.from({ length: 6 }, (_, i) => `${i + 1}D`)] },
+    v: { label: 'V-scale', values: ['VB', ...Array.from({ length: 18 }, (_, i) => `V${i}`)] },
+    font: { label: 'Font', values: ['3', '4', '4+', '5', '5+', ...[6, 7, 8].flatMap((n) => ['A', 'A+', 'B', 'B+', 'C', 'C+'].map((s) => `${n}${s}`)), '9A'] },
+    yds: { label: 'YDS', values: ['5.5', '5.6', '5.7', '5.8', '5.9', ...[10, 11, 12, 13, 14, 15].flatMap((n) => ['a', 'b', 'c', 'd'].map((s) => `5.${n}${s}`))] },
+  };
+  const gradeOrder = [defaultGrades, ...Object.keys(GRADES).filter((k) => k !== defaultGrades)].filter((k) => GRADES[k]);
+  const gradeOptions = (r) => '<option value="">grade</option>' + gradeOrder.map((k) =>
+    `<optgroup label="${GRADES[k].label}">` + GRADES[k].values.map((g) =>
+      `<option value="${k}:${g}"${r.gradeSystem === k && r.grade === g ? ' selected' : ''}>${g}</option>`).join('') + '</optgroup>').join('');
   const DEFINITIONS = {
     mono_color: 'Hold colour', tape: 'Tape', circuit: 'Circuit', tagged: 'Tagged', comp: 'Competition', free: 'Free / spray wall', board: 'System board', outdoor: 'Outdoor rock',
   };
@@ -203,14 +216,17 @@
       row.innerHTML =
         `<span class="swatch" style="background:${rgbCss(r.color)}"></span>` +
         `<input class="name" value="${esc(r.name)}">` +
-        `<input class="grade" placeholder="grade" value="${esc(r.grade || '')}">` +
+        `<select class="grade">${gradeOptions(r)}</select>` +
         `<span class="count">${r.holdIds.length}</span>` +
         `<button class="confirm${r.confirmed ? ' on' : ''}">${r.confirmed ? '✓ Confirmed' : 'Confirm'}</button>` +
         `<button class="del secondary">✕</button>`;
       row.querySelector('.swatch').onclick = () => select(r.id);
       row.querySelector('.count').onclick = () => select(r.id);
       row.querySelector('.name').oninput = (e) => { r.name = e.target.value; };
-      row.querySelector('.grade').oninput = (e) => { r.grade = e.target.value; };
+      row.querySelector('.grade').onchange = (e) => {
+        const [system, grade] = e.target.value ? e.target.value.split(':') : [null, ''];
+        r.gradeSystem = system; r.grade = grade;
+      };
       row.querySelector('.confirm').onclick = () => { r.confirmed = !r.confirmed; renderRoutes(); };
       row.querySelector('.del').onclick = () => {
         for (const id of r.holdIds) { const h = holdOf(id); h.routeIds = h.routeIds.filter((x) => x !== r.id); primaryRoute(h); }
@@ -225,7 +241,7 @@
     add.textContent = '+ New route';
     add.onclick = () => {
       const id = scene.routes.reduce((m, r) => Math.max(m, r.id), 0) + 1;
-      scene.routes.push({ id, name: `Route ${id}`, color: randomColor(), grade: '', holdIds: [], confirmed: false });
+      scene.routes.push({ id, name: `Route ${id}`, color: randomColor(), grade: '', gradeSystem: null, holdIds: [], confirmed: false });
       selectedRouteId = id;
       renderRoutes();
       restyle();
@@ -291,7 +307,12 @@
     ]);
     scene = sceneJson;
     delete scene.sends;                      // sends live in sends.json (RouteStore) since scene.json v3
-    for (const r of scene.routes) r.confirmed = !!r.confirmed;
+    for (const r of scene.routes) {
+      r.confirmed = !!r.confirmed;
+      // Free-text grades from scene.json v2: keep them if they match a known scale value, else clear.
+      if (r.grade && !r.gradeSystem) r.gradeSystem = Object.keys(GRADES).find((k) => GRADES[k].values.includes(r.grade)) || null;
+      if (r.grade && !r.gradeSystem) r.grade = '';
+    }
     scene.definition = scene.definition || { type: 'mono_color', rules: { feet: 'follow', volumesOn: true } };
     for (const h of scene.holds) {            // scene.json v1 compatibility
       h.routeIds = h.routeIds || (h.routeId !== -1 ? [h.routeId] : []);

@@ -35,4 +35,46 @@
             android:layout_weight="1"
             android:text="@string/kind_outdoor" />
     </RadioGroup>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/grade_system" />
+
+    <RadioGroup
+        android:id="@+id/gradeSystem"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:checkedButton="@id/gradesKyu">
+
+        <RadioButton
+            android:id="@+id/gradesKyu"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/grades_kyu" />
+
+        <RadioButton
+            android:id="@+id/gradesV"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/grades_v" />
+
+        <RadioButton
+            android:id="@+id/gradesFont"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/grades_font" />
+
+        <RadioButton
+            android:id="@+id/gradesYds"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/grades_yds" />
+    </RadioGroup>
 </LinearLayout>

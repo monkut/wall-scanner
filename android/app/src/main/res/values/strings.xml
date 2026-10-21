@@ -13,6 +13,11 @@
     <string name="kind_gym">Gym</string>
     <string name="kind_outdoor">Outdoor area</string>
     <string name="set_location">Set location</string>
+    <string name="grade_system">Grade scale</string>
+    <string name="grades_kyu">Q/D</string>
+    <string name="grades_v">V</string>
+    <string name="grades_font">Font</string>
+    <string name="grades_yds">YDS</string>
     <string name="next">Next</string>
     <string name="no_routes">No confirmed routes yet. Open a capture, identify its routes and tap Confirm.</string>
     <string name="capture_summary">%1$d holds · %2$d routes · %3$d confirmed</string>

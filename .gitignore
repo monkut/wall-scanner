@@ -11,3 +11,6 @@ captures/
 
 # OS
 .DS_Store
+
+# Session state
+CHECKPOINT.md

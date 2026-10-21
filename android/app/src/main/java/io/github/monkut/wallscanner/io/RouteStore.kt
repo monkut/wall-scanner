@@ -1,6 +1,7 @@
 package io.github.monkut.wallscanner.io
 
 import android.content.Context
+import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.RouteDefinition
 import org.json.JSONArray
 import org.json.JSONObject
@@ -12,6 +13,7 @@ class RouteRecord(
     val routeId: Int,
     val name: String,
     val grade: String,
+    val gradeSystem: GradeSystem?,
     val color: IntArray,
     val holdCount: Int,
     val confirmed: Boolean,
@@ -51,6 +53,7 @@ object RouteStore {
                 val c = r.getJSONArray("color")
                 RouteRecord(
                     dir.name, r.getInt("id"), r.optString("name"), r.optString("grade"),
+                    GradeSystem.fromId(r.optString("gradeSystem")),
                     intArrayOf(c.getInt(0), c.getInt(1), c.getInt(2)),
                     r.getJSONArray("holdIds").length(), r.optBoolean("confirmed", false), type, locationId,
                 )

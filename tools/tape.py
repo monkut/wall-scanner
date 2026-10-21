@@ -175,7 +175,7 @@ def run(capture: Path, apply: bool) -> int:
             if len(r["holdIds"]) < 2:
                 continue
             bgr = cv2.cvtColor(np.uint8([[[r["hue"] / 2, 220, 220]]]), cv2.COLOR_HSV2RGB)[0, 0].tolist()
-            scene["routes"].append({"id": i, "name": r["name"], "color": bgr, "grade": "", "holdIds": r["holdIds"]})
+            scene["routes"].append({"id": i, "name": r["name"], "color": bgr, "grade": "", "gradeSystem": None, "holdIds": r["holdIds"], "confirmed": False})
             for h in holds:
                 if h["id"] in r["holdIds"]:
                     h["routeIds"].append(i)

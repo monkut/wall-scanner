@@ -18,6 +18,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButtonToggleGroup
+import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.io.CaptureStore
 import io.github.monkut.wallscanner.io.Location
@@ -145,7 +146,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun headerLabel(location: Location, routes: List<RouteRecord>): String {
         val sends = routes.sumOf { sendsOf(it).size }
-        return "${location.label} · ${count(routes.size, "route")} · ${count(sends, "send")}"
+        return "${location.label} · ${location.gradeSystem.label} · ${count(routes.size, "route")} · ${count(sends, "send")}"
     }
 
     private fun handleOpenCapture(dir: File) {
@@ -193,6 +194,7 @@ class MainActivity : AppCompatActivity() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_location, null)
         val name = view.findViewById<EditText>(R.id.locationName)
         val kind = view.findViewById<RadioGroup>(R.id.kind)
+        val grades = view.findViewById<RadioGroup>(R.id.gradeSystem)
         AlertDialog.Builder(this)
             .setTitle(R.string.new_location)
             .setView(view)
@@ -200,7 +202,13 @@ class MainActivity : AppCompatActivity() {
                 val text = name.text.toString().trim()
                 if (text.isEmpty()) { handleNewLocation(onPicked); return@setPositiveButton }
                 val chosenKind = if (kind.checkedRadioButtonId == R.id.kindOutdoor) LocationKind.OUTDOOR else LocationKind.GYM
-                onPicked(LocationStore.add(this, text, chosenKind))
+                val chosenGrades = when (grades.checkedRadioButtonId) {
+                    R.id.gradesYds -> GradeSystem.YDS
+                    R.id.gradesV -> GradeSystem.V_SCALE
+                    R.id.gradesFont -> GradeSystem.FONT
+                    else -> GradeSystem.KYU_DAN
+                }
+                onPicked(LocationStore.add(this, text, chosenKind, chosenGrades))
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()

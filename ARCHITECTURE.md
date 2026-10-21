@@ -154,7 +154,7 @@ Rule modifiers (stored in `definition.rules`, orthogonal to the type): feet poli
 ```
 definition: { type: <id above>, rules: { feet: follow|open|chips, volumesOn: bool } }
 holds[]:    { ..., routeId: <primary or -1>, routeIds: [..], role: any|start|hand|foot|zone|finish }
-routes[]:   { id, name, color, grade, holdIds: [..], confirmed: bool }   # a hold may appear in several routes
+routes[]:   { id, name, color, grade, gradeSystem: yds|kyu_dan|v|font|null, holdIds: [..], confirmed: bool }   # a hold may appear in several routes
 ```
 
 `capture.json` (written at New scan, before any data): `{ version, createdAt, definition }`.
@@ -162,6 +162,8 @@ routes[]:   { id, name, color, grade, holdIds: [..], confirmed: bool }   # a hol
 ### Captures, routes and sends
 
 A capture is the identification workspace: its viewer edits holds, routes and roles and ends with **Confirm** per route. Confirmed routes are the records the app lists under **Routes**, and only they take send data, which lives beside the capture in `sends.json` (`{ version, sends: [{ id, routeId, at, result: flash|send|attempt, attempts, note }] }`) so that re-editing the identification never touches the log. Earlier `scene.sends` entries are migrated into `sends.json` on first read.
+
+Grades are chosen from a scale (`core/GradeSystem.kt`): YDS (5.5–5.15d), Japanese Q/D (10Q … 1Q, 1D … 6D), V-scale (VB–V17) or Font (3–9A). A location carries its default scale (`locations.json`, `gradeSystem`), the viewer lists that scale first and stores the choice per route as `grade` + `gradeSystem`.
 
 ### Keyframes for image-based detection
 

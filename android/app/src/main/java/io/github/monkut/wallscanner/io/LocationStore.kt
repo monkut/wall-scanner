@@ -1,6 +1,7 @@
 package io.github.monkut.wallscanner.io
 
 import android.content.Context
+import io.github.monkut.wallscanner.core.GradeSystem
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -14,7 +15,7 @@ enum class LocationKind(val id: String, val label: String) {
 }
 
 /** A gym or outdoor area. Captures (and so routes) belong to one location. */
-class Location(val id: String, val name: String, val kind: LocationKind) {
+class Location(val id: String, val name: String, val kind: LocationKind, val gradeSystem: GradeSystem = GradeSystem.DEFAULT) {
     val label: String get() = if (id.isEmpty()) name else "$name · ${kind.label}"
 }
 
@@ -32,23 +33,27 @@ object LocationStore {
             val arr = JSONObject(file.readText()).getJSONArray("locations")
             (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
-                Location(o.getString("id"), o.getString("name"), LocationKind.fromId(o.optString("kind")))
+                Location(
+                    o.getString("id"), o.getString("name"), LocationKind.fromId(o.optString("kind")),
+                    GradeSystem.fromId(o.optString("gradeSystem")) ?: GradeSystem.DEFAULT,
+                )
             }
         }.getOrDefault(emptyList())
     }
 
     fun get(context: Context, id: String?): Location = list(context).firstOrNull { it.id == id } ?: UNKNOWN
 
-    fun add(context: Context, name: String, kind: LocationKind): Location {
+    fun add(context: Context, name: String, kind: LocationKind, gradeSystem: GradeSystem): Location {
         val existing = list(context)
-        val location = Location("loc-${(existing.mapNotNull { it.id.removePrefix("loc-").toIntOrNull() }.maxOrNull() ?: 0) + 1}", name.trim(), kind)
+        val id = "loc-${(existing.mapNotNull { it.id.removePrefix("loc-").toIntOrNull() }.maxOrNull() ?: 0) + 1}"
+        val location = Location(id, name.trim(), kind, gradeSystem)
         write(context, existing + location)
         return location
     }
 
     private fun write(context: Context, locations: List<Location>) {
         val arr = JSONArray()
-        for (l in locations) arr.put(JSONObject().put("id", l.id).put("name", l.name).put("kind", l.kind.id))
+        for (l in locations) arr.put(JSONObject().put("id", l.id).put("name", l.name).put("kind", l.kind.id).put("gradeSystem", l.gradeSystem.id))
         File(context.filesDir, FILE).writeText(JSONObject().put("version", 1).put("locations", arr).toString(2))
     }
 }
