@@ -16,12 +16,16 @@ import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.io.CaptureStore
+import androidx.activity.OnBackPressedCallback
+import androidx.annotation.StringRes
+import io.github.monkut.wallscanner.io.GeoPoint
 import io.github.monkut.wallscanner.io.Location
 import io.github.monkut.wallscanner.io.LocationKind
 import io.github.monkut.wallscanner.io.LocationStore
@@ -29,6 +33,7 @@ import io.github.monkut.wallscanner.io.RouteRecord
 import io.github.monkut.wallscanner.io.RouteStore
 import io.github.monkut.wallscanner.io.SendResult
 import io.github.monkut.wallscanner.routes.RouteActivity
+import io.github.monkut.wallscanner.scan.GpsFix
 import io.github.monkut.wallscanner.scan.ScanActivity
 import io.github.monkut.wallscanner.viewer.ViewerActivity
 import org.json.JSONObject
@@ -37,9 +42,10 @@ import kotlin.concurrent.thread
 
 /**
  * Home screen with a mode switch. **Capture** mode: New scan plus the capture list (scan sessions opened in
- * the viewer to identify and confirm routes). **Logbook** mode: progress summary and the confirmed routes
- * grouped by location, opened in [RouteActivity] to log sends. New scan asks for the location (a registered
- * gym or outdoor area, or a new one) and then the wall type. A language button switches the app language.
+ * the viewer to identify and confirm routes). **Logbook** mode: the registered locations with their progress;
+ * tap one to list its confirmed routes (opened in [RouteActivity] to log sends) under a header with **Edit**
+ * (name, kind, grade scale, coordinates, delete). New scan asks for the location (a registered gym or outdoor
+ * area, or a new one) and then the wall type. A language button switches the app language.
  */
 class MainActivity : AppCompatActivity() {
     private lateinit var list: ListView
@@ -51,8 +57,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mode: MaterialButtonToggleGroup
     private var captures: List<File> = emptyList()
     private var routeRows: List<RouteRow> = emptyList()
+    private var locationRows: List<Location> = emptyList()
+    private var confirmedRoutes: List<RouteRecord> = emptyList()
     private var locations: Map<String, Location> = emptyMap()
     private val thumbnails = HashMap<String, Bitmap>()
+    /** Logbook drill-down: null lists the locations, otherwise the routes of this location ("" = no location). */
+    private var selectedLocationId: String? = null
+    private var gps: GpsFix? = null
+    private val backToLocations = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() { selectedLocationId = null; refresh() }
+    }
 
     /** One row of the logbook: a location header or a confirmed route. */
     private class RouteRow(val header: Location?, val route: RouteRecord?)
@@ -85,8 +99,13 @@ class MainActivity : AppCompatActivity() {
             getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_MODE, logbook).apply()
             refresh()
         }
+        onBackPressedDispatcher.addCallback(this, backToLocations)
         list.setOnItemClickListener { _, _, position, _ ->
-            if (logbook) routeRows[position].route?.let { handleOpenRoute(it) } else handleOpenCapture(captures[position])
+            when {
+                !logbook -> handleOpenCapture(captures[position])
+                selectedLocationId == null -> { selectedLocationId = locationRows[position].id; refresh() }
+                else -> routeRows[position].route?.let { handleOpenRoute(it) }
+            }
         }
         list.setOnItemLongClickListener { _, _, position, _ ->
             if (!logbook) handleCaptureMenu(captures[position])
@@ -99,18 +118,43 @@ class MainActivity : AppCompatActivity() {
         refresh()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        // Not in onPause: the location permission prompt pauses the activity while the fix is pending.
+        gps?.stop()
+        gps = null
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != GpsFix.PERMISSION_CODE || grantResults.isEmpty()) return
+        val fix = gps ?: return
+        if (fix.hasPermission()) fix.start() else Toast.makeText(this, R.string.location_permission_denied, Toast.LENGTH_LONG).show()
+    }
+
     private fun refresh() {
         locations = LocationStore.list(this).associateBy { it.id }
         captures = CaptureStore.list(this)
         val confirmed = if (logbook) RouteStore.confirmedRoutes(this) else emptyList()
-        routeRows = groupByLocation(confirmed)
+        confirmedRoutes = confirmed
+        val selected = selectedLocationId?.takeIf { logbook && (it.isEmpty() || it in locations) }
+        selectedLocationId = selected
+        backToLocations.isEnabled = selected != null
+        locationRows = locations.values.toList() + if (confirmed.any { it.locationId !in locations }) listOf(LocationStore.UNKNOWN) else emptyList()
+        val shown = if (selected == null) confirmed else confirmed.filter { keyOf(it) == selected }
+        routeRows = if (selected == null) emptyList() else listOf(RouteRow(locationOf(selected), null)) + shown.map { RouteRow(null, it) }
         btnNewScan.visibility = if (logbook) View.GONE else View.VISIBLE
-        heading.setText(if (logbook) R.string.routes else R.string.captures)
+        heading.setText(if (!logbook) R.string.captures else if (selected == null) R.string.locations else R.string.routes)
         summary.visibility = if (logbook) View.VISIBLE else View.GONE
-        if (logbook) summary.text = progressSummary(confirmed)
-        emptyText.setText(if (logbook) R.string.no_routes else R.string.no_captures)
-        emptyText.visibility = if ((if (logbook) routeRows.isEmpty() else captures.isEmpty())) View.VISIBLE else View.GONE
-        list.adapter = if (logbook) RouteAdapter(routeRows) else CaptureAdapter(captures)
+        if (logbook) summary.text = progressSummary(shown, countLocations = selected == null)
+        emptyText.setText(if (!logbook) R.string.no_captures else if (selected == null) R.string.no_locations else R.string.no_routes)
+        val empty = if (!logbook) captures.isEmpty() else if (selected == null) locationRows.isEmpty() else shown.isEmpty()
+        emptyText.visibility = if (empty) View.VISIBLE else View.GONE
+        list.adapter = when {
+            !logbook -> CaptureAdapter(captures)
+            selected == null -> LocationAdapter(locationRows)
+            else -> RouteAdapter(routeRows)
+        }
         val missing = captures.filter { !thumbnails.containsKey(it.name) }
         if (missing.isEmpty()) return
         thread(name = "thumbnails") {
@@ -127,28 +171,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun locationOf(id: String): Location = locations[id] ?: LocationStore.UNKNOWN
 
+    /** Location id a route is listed under: its own when registered, "" (no location) otherwise. */
+    private fun keyOf(route: RouteRecord): String = if (route.locationId in locations) route.locationId else ""
+
+    private fun routesAt(id: String): List<RouteRecord> = confirmedRoutes.filter { keyOf(it) == id }
+
+    private fun capturesAt(id: String): List<File> = captures.filter { CaptureStore.readLocationId(it) == id }
+
     private fun sendsOf(route: RouteRecord) = RouteStore.sendsFor(File(CaptureStore.capturesDir(this), route.captureId), route.routeId)
 
-    /** Routes under a header per location, registered locations in list order, unknown last. */
-    private fun groupByLocation(routes: List<RouteRecord>): List<RouteRow> {
-        val order = locations.keys.toList() + ""
-        val byLocation = routes.groupBy { if (it.locationId in locations) it.locationId else "" }
-        return order.flatMap { id ->
-            val group = byLocation[id] ?: return@flatMap emptyList()
-            listOf(RouteRow(locationOf(id), null)) + group.map { RouteRow(null, it) }
-        }
-    }
-
-    /** "3 routes, 5 sends, 2 flashes, 2 locations" across every confirmed route. */
-    private fun progressSummary(routes: List<RouteRecord>): String {
+    /** "3 routes, 5 sends, 2 flashes[, 2 locations]" over [routes]. */
+    private fun progressSummary(routes: List<RouteRecord>, countLocations: Boolean): String {
         val sends = routes.flatMap { sendsOf(it) }
-        val places = routes.map { if (it.locationId in locations) it.locationId else "" }.distinct().size
         return Labels.join(
             this,
             Labels.plural(this, R.plurals.routes_count, routes.size),
             Labels.plural(this, R.plurals.sends_count, sends.size),
             Labels.plural(this, R.plurals.flashes, sends.count { it.result == SendResult.FLASH }),
-            Labels.plural(this, R.plurals.locations_count, places),
+            if (countLocations) Labels.plural(this, R.plurals.locations_count, locationRows.size) else "",
         )
     }
 
@@ -206,28 +246,112 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun handleNewLocation(onPicked: (Location) -> Unit) {
+    private fun handleNewLocation(onPicked: (Location) -> Unit) =
+        locationDialog(R.string.new_location, R.string.next, null) { result ->
+            onPicked(LocationStore.add(this, result.name, result.kind, result.gradeSystem, result.coords))
+        }
+
+    /** Edit from the logbook header: name, kind, grade scale and coordinates, or delete. */
+    private fun handleEditLocation(location: Location) =
+        locationDialog(R.string.edit_location, R.string.save, location) { result ->
+            LocationStore.update(this, result)
+            refresh()
+        }
+
+    private fun handleDeleteLocation(location: Location) {
+        val captures = capturesAt(location.id).size
+        AlertDialog.Builder(this)
+            .setTitle(R.string.delete_location)
+            .setMessage(getString(R.string.delete_location_confirm, location.name, Labels.plural(this, R.plurals.captures_count, captures)))
+            .setPositiveButton(R.string.delete) { _, _ ->
+                LocationStore.remove(this, location.id)
+                selectedLocationId = null
+                refresh()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Unsaved form state, carried over when the form re-opens after a validation error. */
+    private class LocationDraft(val name: String, val kind: LocationKind, val gradeSystem: GradeSystem, val coordsText: String, val fixed: GeoPoint?)
+
+    /**
+     * Name, kind, grade scale and coordinates form, prefilled from [draft] (a re-open) or [existing] (editing,
+     * which also offers Delete). An empty name or unparsable coordinates re-opens the form with what was typed.
+     * "Use phone position" fills the coordinates from a fix, asking for location permission first; a fix left
+     * as is keeps its accuracy, typed coordinates are stored as hand-entered.
+     */
+    private fun locationDialog(
+        @StringRes title: Int, @StringRes positive: Int, existing: Location?, draft: LocationDraft? = null,
+        onSave: (Location) -> Unit,
+    ) {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_location, null)
         val name = view.findViewById<EditText>(R.id.locationName)
         val kind = view.findViewById<RadioGroup>(R.id.kind)
         val grades = view.findViewById<RadioGroup>(R.id.gradeSystem)
-        AlertDialog.Builder(this)
-            .setTitle(R.string.new_location)
-            .setView(view)
-            .setPositiveButton(R.string.next) { _, _ ->
-                val text = name.text.toString().trim()
-                if (text.isEmpty()) { handleNewLocation(onPicked); return@setPositiveButton }
-                val chosenKind = if (kind.checkedRadioButtonId == R.id.kindOutdoor) LocationKind.OUTDOOR else LocationKind.GYM
-                val chosenGrades = when (grades.checkedRadioButtonId) {
-                    R.id.gradesYds -> GradeSystem.YDS
-                    R.id.gradesV -> GradeSystem.V_SCALE
-                    R.id.gradesFont -> GradeSystem.FONT
-                    else -> GradeSystem.KYU_DAN
+        val coords = view.findViewById<EditText>(R.id.locationCoords)
+        val initial = draft ?: existing?.let { LocationDraft(it.name, it.kind, it.gradeSystem, it.coords?.text() ?: "", null) }
+        if (initial != null) {
+            name.setText(initial.name)
+            kind.check(if (initial.kind == LocationKind.OUTDOOR) R.id.kindOutdoor else R.id.kindGym)
+            grades.check(
+                when (initial.gradeSystem) {
+                    GradeSystem.YDS -> R.id.gradesYds
+                    GradeSystem.V_SCALE -> R.id.gradesV
+                    GradeSystem.FONT -> R.id.gradesFont
+                    else -> R.id.gradesKyu
                 }
-                onPicked(LocationStore.add(this, text, chosenKind, chosenGrades))
+            )
+            coords.setText(initial.coordsText)
+        }
+        var fixed: GeoPoint? = initial?.fixed // device fix taken in this form; kept with its accuracy when saved as is
+        var fix: GpsFix? = null
+        view.findViewById<View>(R.id.btnUsePosition).setOnClickListener { fix = handleUsePhonePosition(coords) { fixed = it } }
+        val builder = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(view)
+            .setPositiveButton(positive) { _, _ ->
+                val text = name.text.toString().trim()
+                val coordsText = coords.text.toString().trim()
+                val point = if (coordsText.isEmpty()) null else GeoPoint.parse(coordsText, CaptureStore.nowIso())
+                if (text.isEmpty() || (coordsText.isNotEmpty() && point == null)) {
+                    if (coordsText.isNotEmpty() && point == null) Toast.makeText(this, R.string.coordinates_invalid, Toast.LENGTH_LONG).show()
+                    locationDialog(title, positive, existing, LocationDraft(text, chosenKind(kind), chosenGrades(grades), coordsText, fixed), onSave)
+                    return@setPositiveButton
+                }
+                val kept = listOfNotNull(fixed, existing?.coords).firstOrNull { it.text() == coordsText }
+                onSave(Location(existing?.id ?: "", text, chosenKind(kind), chosenGrades(grades), kept ?: point))
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        if (existing != null && existing.id.isNotEmpty()) builder.setNeutralButton(R.string.delete) { _, _ -> handleDeleteLocation(existing) }
+        val dialog = builder.show()
+        // Destructive, so it must not read as a second primary action.
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(ContextCompat.getColor(this, R.color.danger))
+        dialog.setOnDismissListener {
+            fix?.stop()
+            if (gps === fix) gps = null
+        }
+    }
+
+    private fun chosenKind(group: RadioGroup) = if (group.checkedRadioButtonId == R.id.kindOutdoor) LocationKind.OUTDOOR else LocationKind.GYM
+
+    private fun chosenGrades(group: RadioGroup) = when (group.checkedRadioButtonId) {
+        R.id.gradesYds -> GradeSystem.YDS
+        R.id.gradesV -> GradeSystem.V_SCALE
+        R.id.gradesFont -> GradeSystem.FONT
+        else -> GradeSystem.KYU_DAN
+    }
+
+    /** Fills [coords] with the best fix as it arrives and reports it to [onFix]; the field stays editable. */
+    private fun handleUsePhonePosition(coords: EditText, onFix: (GeoPoint) -> Unit): GpsFix {
+        gps?.stop()
+        val fix = GpsFix(
+            this, log = {},
+            onUnavailable = { Toast.makeText(this, R.string.position_unavailable, Toast.LENGTH_LONG).show() },
+        ) { point -> coords.setText(point.text()); onFix(point) }
+        gps = fix
+        if (fix.hasPermission()) fix.start() else fix.requestPermission()
+        return fix
     }
 
     private fun pickDefinition(preselected: RouteDefinition, onPicked: (RouteDefinition) -> Unit) {
@@ -292,6 +416,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun bindLocationHeader(view: View, location: Location, routes: List<RouteRecord>) {
+        val c = this@MainActivity
+        view.findViewById<TextView>(R.id.header).text = Labels.location(c, location)
+        view.findViewById<TextView>(R.id.headerDetail).text = Labels.locationDetail(c, location)
+        view.findViewById<TextView>(R.id.headerCounts).text =
+            Labels.join(c, Labels.plural(c, R.plurals.routes_count, routes.size), Labels.plural(c, R.plurals.sends_count, routes.sumOf { sendsOf(it).size }))
+    }
+
+    /** Logbook top level: one row per registered location (plus "No location" when orphan routes exist). */
+    private inner class LocationAdapter(items: List<Location>) : ArrayAdapter<Location>(this, R.layout.item_header, items) {
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_header, parent, false)
+            val location = getItem(position)!!
+            bindLocationHeader(view, location, routesAt(location.id))
+            view.findViewById<View>(R.id.headerCounts).visibility = View.VISIBLE
+            view.findViewById<View>(R.id.btnEditLocation).visibility = View.GONE
+            view.findViewById<View>(R.id.chevron).visibility = View.VISIBLE
+            return view
+        }
+    }
+
     private inner class RouteAdapter(items: List<RouteRow>) : ArrayAdapter<RouteRow>(this, R.layout.item_capture, items) {
         override fun getViewTypeCount() = 2
         override fun getItemViewType(position: Int) = if (getItem(position)!!.header != null) 0 else 1
@@ -302,12 +447,14 @@ class MainActivity : AppCompatActivity() {
             val c = this@MainActivity
             if (row.header != null) {
                 val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_header, parent, false)
-                val group = routeRows.drop(position + 1).takeWhile { it.route != null }.map { it.route!! }
-                val sends = group.sumOf { sendsOf(it).size }
-                view.findViewById<TextView>(R.id.header).text = Labels.location(c, row.header)
-                view.findViewById<TextView>(R.id.headerDetail).text = Labels.locationDetail(c, row.header)
-                view.findViewById<TextView>(R.id.headerCounts).text =
-                    Labels.join(c, Labels.plural(c, R.plurals.routes_count, group.size), Labels.plural(c, R.plurals.sends_count, sends))
+                bindLocationHeader(view, row.header, routeRows.drop(position + 1).mapNotNull { it.route })
+                // The summary line above already carries this location's counts.
+                view.findViewById<View>(R.id.headerCounts).visibility = View.GONE
+                view.findViewById<View>(R.id.chevron).visibility = View.GONE
+                view.findViewById<View>(R.id.btnEditLocation).apply {
+                    visibility = if (row.header.id.isEmpty()) View.GONE else View.VISIBLE
+                    setOnClickListener { handleEditLocation(row.header) }
+                }
                 return view
             }
             val route = row.route!!

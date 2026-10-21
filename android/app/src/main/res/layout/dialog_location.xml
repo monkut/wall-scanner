@@ -6,6 +6,11 @@
     android:paddingHorizontal="24dp"
     android:paddingTop="8dp">
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/location_name_label" />
+
     <EditText
         android:id="@+id/locationName"
         android:layout_width="match_parent"
@@ -13,6 +18,12 @@
         android:hint="@string/location_name_hint"
         android:inputType="textCapWords"
         android:importantForAutofill="no" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/location_kind" />
 
     <RadioGroup
         android:id="@+id/kind"
@@ -77,4 +88,27 @@
             android:layout_weight="1"
             android:text="@string/grades_yds" />
     </RadioGroup>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/coordinates" />
+
+    <EditText
+        android:id="@+id/locationCoords"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/coordinates_hint"
+        android:inputType="text"
+        android:importantForAutofill="no" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnUsePosition"
+        style="?attr/materialButtonOutlinedStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_marginTop="4dp"
+        android:text="@string/use_phone_position" />
 </LinearLayout>

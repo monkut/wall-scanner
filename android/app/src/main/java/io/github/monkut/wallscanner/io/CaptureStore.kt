@@ -100,6 +100,13 @@ object CaptureStore {
         file.writeText(json.put("location", locationId).toString(2))
     }
 
+    /** Records the scan's position fix in capture.json (`gps`); later, more accurate fixes overwrite it. */
+    fun writeGps(dir: File, point: GeoPoint) {
+        val file = File(dir, META_FILE)
+        val json = runCatching { JSONObject(file.readText()) }.getOrDefault(JSONObject().put("version", 2))
+        file.writeText(json.put("gps", point.toJson()).toString(2))
+    }
+
     fun readDefinition(dir: File): Definition {
         val file = File(dir, META_FILE)
         if (!file.exists()) return Definition()

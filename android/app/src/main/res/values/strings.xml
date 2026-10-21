@@ -49,6 +49,8 @@
     <string name="choose_definition">How are routes marked on this wall or rock?</string>
     <string name="def_mono_color">Hold color</string>
     <string name="def_mono_color_desc">One hold color is one route; start tag at the base</string>
+    <string name="def_color_taped">Hold color, taped start and finish</string>
+    <string name="def_color_taped_desc">One hold color is one route; start and finish holds are marked with tape</string>
     <string name="def_tape">Tape</string>
     <string name="def_tape_desc">Tape beside each hold; tape color is the route, hold colors are mixed</string>
     <string name="def_circuit">Circuit</string>
@@ -95,6 +97,21 @@
     <string name="scan_more">Scan more of the wall before finishing</string>
     <string name="no_wall_found">No wall plane found. Scan the wall from 1–3 m with slow, overlapping passes.</string>
     <string name="camera_permission_needed">Camera permission is needed to scan</string>
+    <string name="location_permission_denied">Location permission denied, so the coordinates of this location were not recorded</string>
+    <string name="location_has_coords">GPS</string>
+    <string name="locations">Locations</string>
+    <string name="no_locations">No locations yet. Register one from New scan in Capture mode.</string>
+    <string name="edit">Edit</string>
+    <string name="edit_location">Edit location</string>
+    <string name="location_name_label">Name</string>
+    <string name="location_kind">Kind</string>
+    <string name="coordinates">Coordinates</string>
+    <string name="coordinates_hint">Latitude, longitude</string>
+    <string name="coordinates_invalid">Coordinates must be latitude, longitude in decimal degrees</string>
+    <string name="use_phone_position">Use phone position</string>
+    <string name="position_unavailable">No position from the phone right now; check that location is on</string>
+    <string name="delete_location">Delete location</string>
+    <string name="delete_location_confirm">Delete %1$s? %2$s will show as No location. Routes and sends are kept.</string>
     <string name="depth_unsupported">This device does not support the ARCore Depth API</string>
     <string name="arcore_unavailable">ARCore is not available: %1$s</string>
     <string name="scene_saved">Routes saved</string>
@@ -125,6 +142,10 @@
     <plurals name="flashes">
         <item quantity="one">%d flash</item>
         <item quantity="other">%d flashes</item>
+    </plurals>
+    <plurals name="captures_count">
+        <item quantity="one">%d capture</item>
+        <item quantity="other">%d captures</item>
     </plurals>
     <plurals name="locations_count">
         <item quantity="one">%d location</item>

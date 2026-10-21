@@ -48,6 +48,8 @@
     <string name="choose_definition">この壁や岩では、ルートはどのように示されていますか？</string>
     <string name="def_mono_color">ホールドの色</string>
     <string name="def_mono_color_desc">1 色が 1 ルート。スタートは足元のタグで表示</string>
+    <string name="def_color_taped">ホールドの色＋スタート/ゴールのテープ</string>
+    <string name="def_color_taped_desc">1 色が 1 ルート。スタートとゴールのホールドにテープ</string>
     <string name="def_tape">テープ</string>
     <string name="def_tape_desc">ホールド横のテープの色がルート。ホールドの色は混在</string>
     <string name="def_circuit">サーキット</string>
@@ -94,6 +96,21 @@
     <string name="scan_more">終了する前に、壁をもっとスキャンしてください</string>
     <string name="no_wall_found">壁の面が見つかりません。1〜3 m の距離から、ゆっくり重ねながらスキャンしてください。</string>
     <string name="camera_permission_needed">スキャンにはカメラの権限が必要です</string>
+    <string name="location_permission_denied">位置情報の権限が拒否されたため、場所の座標は記録されませんでした</string>
+    <string name="location_has_coords">GPS</string>
+    <string name="locations">場所</string>
+    <string name="no_locations">場所がまだありません。キャプチャモードの「新しいスキャン」から登録してください。</string>
+    <string name="edit">編集</string>
+    <string name="edit_location">場所を編集</string>
+    <string name="location_name_label">名前</string>
+    <string name="location_kind">種類</string>
+    <string name="coordinates">座標</string>
+    <string name="coordinates_hint">緯度, 経度</string>
+    <string name="coordinates_invalid">座標は「緯度, 経度」を十進数で入力してください</string>
+    <string name="use_phone_position">端末の位置を使う</string>
+    <string name="position_unavailable">現在、端末の位置情報を取得できません。位置情報がオンか確認してください</string>
+    <string name="delete_location">場所を削除</string>
+    <string name="delete_location_confirm">%1$s を削除しますか？%2$s は「場所なし」と表示されます。ルートと記録は残ります。</string>
     <string name="depth_unsupported">この端末は ARCore Depth API に対応していません</string>
     <string name="arcore_unavailable">ARCore を利用できません: %1$s</string>
     <string name="scene_saved">ルートを保存しました</string>
@@ -118,6 +135,9 @@
     </plurals>
     <plurals name="flashes">
         <item quantity="other">フラッシュ %d 回</item>
+    </plurals>
+    <plurals name="captures_count">
+        <item quantity="other">%d 件のキャプチャ</item>
     </plurals>
     <plurals name="locations_count">
         <item quantity="other">%d か所</item>

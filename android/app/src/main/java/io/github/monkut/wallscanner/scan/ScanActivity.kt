@@ -36,6 +36,7 @@ import io.github.monkut.wallscanner.core.Thumbnail
 import io.github.monkut.wallscanner.core.Tuning
 import io.github.monkut.wallscanner.core.VoxelMap
 import io.github.monkut.wallscanner.io.CaptureStore
+import io.github.monkut.wallscanner.io.LocationStore
 import io.github.monkut.wallscanner.io.ScanLog
 import io.github.monkut.wallscanner.viewer.ViewerActivity
 import java.io.File
@@ -59,6 +60,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
     private var installRequested = false
     private var processing = false
     private var finished = false
+    /** Position fix for the location, requested only while the location has no coordinates yet. */
+    private var gps: GpsFix? = null
     private var everRecorded = false
     private var statusCalls = 0
     private var pausedAtMs = 0L
@@ -84,6 +87,13 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         CaptureStore.writeMeta(captureDir, definition, intent.getStringExtra(EXTRA_LOCATION) ?: "")
         logEnvironment()
         log.log("location: ${intent.getStringExtra(EXTRA_LOCATION) ?: "none"}")
+        val location = LocationStore.get(this, intent.getStringExtra(EXTRA_LOCATION))
+        if (location.id.isNotEmpty() && location.coords == null) {
+            gps = GpsFix(this, log::log) { point ->
+                CaptureStore.writeGps(captureDir, point)
+                if (LocationStore.offerCoords(this, location.id, point)) log.log("gps: location ${location.id} (${location.name}) coordinates set to $point")
+            }
+        }
         log.log("route definition: ${definition.type.id} (${definition.type.label}) · feet=${definition.rules.feet.id} volumesOn=${definition.rules.volumesOn}")
         processor.maxDepth = if (definition.type.outdoor) Tuning.OUTDOOR_MAX_DEPTH_RANGE else Tuning.MAX_DEPTH_RANGE
         log.log("depth range: ${processor.maxDepth} m · voxel cap ${Tuning.MAX_VOXELS} per segment · min hits at finish ${Tuning.MIN_VOXEL_HITS}")
@@ -105,6 +115,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             if (!ensureArCoreAndPermission()) return
             session = createSession() ?: return
             renderer.session = session
+            // Asked after the camera permission and ARCore are settled so the two prompts never overlap.
+            gps?.let { if (it.hasPermission()) it.start() else it.requestPermission() }
         }
         try {
             session?.resume()
@@ -141,6 +153,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         super.onDestroy()
         session?.close()
         session = null
+        gps?.stop()
         processor.shutdown()
         if (!finished) {
             log.log("scan abandoned · segments=${segments.size} voxels=${segments.totalVoxels()}")
@@ -152,6 +165,14 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == GpsFix.PERMISSION_CODE) {
+            // Empty results mean the request was interrupted (Android sends one while the prompt opens
+            // during onResume); the real answer follows in a second callback.
+            if (grantResults.isEmpty()) return
+            val fix = gps ?: return
+            if (fix.hasPermission()) fix.start() else { log.log("gps: location permission denied"); toast(getString(R.string.location_permission_denied)) }
+            return
+        }
         if (!hasCameraPermission()) {
             log.log("camera permission denied")
             toast(getString(R.string.camera_permission_needed))

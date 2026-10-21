@@ -28,9 +28,14 @@ shows the app language (EN-US, EN-UK or JA) and opens the language picker.
   (thumbnail, timestamp, location, wall type, hold / route / confirmed counts). Tap a capture to open it in the
   viewer. Long-press for **Set location**, **Share** (zip of the capture) and **Delete**. Captures without a
   3D scene are listed as "incomplete · diagnostics only" and can still be shared.
-- **Logbook** mode is for recording progress: a summary line (routes · sends · flashes · locations) and the
-  confirmed routes grouped under a header per location (name, kind, grade scale, route and send counts).
-  Tap a route to open its record.
+- **Logbook** mode is for recording progress. It opens on the registered locations (name; kind, grade scale
+  and GPS when coordinates are set; route and send counts) under a summary line (routes · sends · flashes ·
+  locations); a "No location" row appears when confirmed routes belong to no registered location. Tap a
+  location to list its confirmed routes under its header; Back returns to the locations. The header's
+  **Edit** button opens the location form: name, kind, grade scale and coordinates ("latitude, longitude" in
+  decimal degrees, or **Use phone position** for a fix; a hand-entered position is stored with accuracy 0),
+  plus **Delete**, which asks first and leaves captures, routes and sends in place as "No location". The same
+  form registers a new location from New scan. Tap a route to open its record.
 
 ### Language
 
@@ -44,11 +49,11 @@ locale support (`Language.kt`) and applied to the viewer page through its `lang`
 
 1. **Where are you scanning?** Pick a registered location or **New location…** (name, Gym / Outdoor area,
    grade scale Q/D, V, Font or YDS). The last used location is preselected.
-2. **How are routes marked on this wall or rock?** Hold colour, tape, circuit, tagged, competition,
+2. **How are routes marked on this wall or rock?** Hold colour, hold colour with taped start and finish, tape, circuit, tagged, competition,
    free / spray wall, system board, or outdoor rock (preselected for outdoor areas). See `ARCHITECTURE.md` §9
    for what each type means and how it is processed.
 
-Both choices are written to the capture's `capture.json` before any data is recorded.
+Both choices are written to the capture's `capture.json` before any data is recorded. If the location has no coordinates yet, the scan asks for location permission once ARCore is running and records the best position fix (network first, GPS when available) in `capture.json` and on the location; the location list then shows "GPS" in its detail line.
 
 ### Scan screen
 
@@ -111,6 +116,7 @@ Each capture has a `scan.log`. Key lines, all with JST timestamps:
 | `LIFECYCLE onPause … / onResume (pausedFor …)` | Android pauses (screen off, app switch) that interrupt ARCore |
 | `TRACKING lost (…) / regained after …` | ARCore tracking changes with camera poses |
 | `SEGMENT n started …`, `SEGMENT n: voxels=… snap=accepted/rejected/skipped(…)` | Segment anchors and snap outcome |
+| `gps: requesting fix from …`, `gps: lat, lon (±m) from provider`, `gps: location … coordinates set` | Position fix for a location without coordinates (`scan/GpsFix.kt`) |
 | `STATUS segments=… pos=…` | Periodic position and processing counters |
 | `RESULT: plane … holds=… routes=…` or `RESULT: no wall plane` | Processing outcome |
 
@@ -125,9 +131,9 @@ adb exec-out run-as io.github.monkut.wallscanner tar -C files/captures -cf - <id
 ## Files on the device
 
 ```
-files/locations.json                      { version, locations: [{ id, name, kind: gym|outdoor, gradeSystem }] }
+files/locations.json                      { version, nextId, locations: [{ id, name, kind: gym|outdoor, gradeSystem, coords?: { lat, lon, accuracyM, at } }] }
 files/captures/<JST timestamp>/
-  capture.json                            { version, createdAt, location, definition: { type, rules } }
+  capture.json                            { version, createdAt, location, definition: { type, rules }, gps?: { lat, lon, accuracyM, at } }
   scan.log                                diagnostics (always written)
   segments/segment-NN.ply                 per-segment points, world coordinates before snapping
   frames/frame-NNNN.jpg, frames.jsonl     keyframes and segment-local poses

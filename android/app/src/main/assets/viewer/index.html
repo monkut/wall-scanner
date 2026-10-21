@@ -73,7 +73,7 @@
       hintRole: (r) => `Marking "${r}": tap holds to mark them, tap again to clear.`,
       hintSelect: (type, n) => `${type}. Tap a swatch to select a route, tap holds to add or remove them, then confirm it. Sends are logged from the Logbook. ${n} unassigned holds.`,
       hintEditing: (name) => `Editing "${name}": tap holds on the wall to add or remove them.`,
-      definitions: { mono_color: 'Hold color', tape: 'Tape', circuit: 'Circuit', tagged: 'Tagged', comp: 'Competition', free: 'Free / spray wall', board: 'System board', outdoor: 'Outdoor rock' },
+      definitions: { mono_color: 'Hold color', color_taped: 'Hold color, taped start and finish', tape: 'Tape', circuit: 'Circuit', tagged: 'Tagged', comp: 'Competition', free: 'Free / spray wall', board: 'System board', outdoor: 'Outdoor rock' },
       grades: { kyu_dan: 'Japanese (Q/D)', v: 'V-scale', font: 'Font', yds: 'YDS' },
       failed: 'Could not load the capture: ',
     },
@@ -84,12 +84,12 @@
       hintRole: (r) => `「${r}」をマーク中: ホールドをタップして設定、もう一度タップで解除。`,
       hintSelect: (type, n) => `${type}。スウォッチをタップしてルートを選び、ホールドをタップして追加・削除し、確定してください。記録はログブックから。未割り当てのホールド ${n}。`,
       hintEditing: (name) => `「${name}」を編集中: 壁のホールドをタップして追加・削除します。`,
-      definitions: { mono_color: 'ホールドの色', tape: 'テープ', circuit: 'サーキット', tagged: 'タグ付き', comp: 'コンペ形式', free: 'フリー／スプレーウォール', board: 'システムボード', outdoor: '外岩' },
+      definitions: { mono_color: 'ホールドの色', color_taped: 'ホールドの色＋スタート/ゴールのテープ', tape: 'テープ', circuit: 'サーキット', tagged: 'タグ付き', comp: 'コンペ形式', free: 'フリー／スプレーウォール', board: 'システムボード', outdoor: '外岩' },
       grades: { kyu_dan: '日本式（級/段）', v: 'V スケール', font: 'Font', yds: 'YDS' },
       failed: 'キャプチャを読み込めませんでした: ',
     },
   };
-  STRINGS['en-GB'] = { ...STRINGS['en-US'], definitions: { ...STRINGS['en-US'].definitions, mono_color: 'Hold colour' } };
+  STRINGS['en-GB'] = { ...STRINGS['en-US'], definitions: { ...STRINGS['en-US'].definitions, mono_color: 'Hold colour', color_taped: 'Hold colour, taped start and finish' } };
   const lang = params.get('lang') || 'en-US';
   const T = STRINGS[lang] || STRINGS[lang.split('-')[0]] || STRINGS['en-US'];
   document.documentElement.lang = lang;

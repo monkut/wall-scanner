@@ -22,6 +22,7 @@ object Labels {
     fun definition(c: Context, type: RouteDefinition): String = c.getString(
         when (type) {
             RouteDefinition.MONO_COLOR -> R.string.def_mono_color
+            RouteDefinition.COLOR_TAPED -> R.string.def_color_taped
             RouteDefinition.TAPE -> R.string.def_tape
             RouteDefinition.CIRCUIT -> R.string.def_circuit
             RouteDefinition.TAGGED -> R.string.def_tagged
@@ -35,6 +36,7 @@ object Labels {
     fun definitionDescription(c: Context, type: RouteDefinition): String = c.getString(
         when (type) {
             RouteDefinition.MONO_COLOR -> R.string.def_mono_color_desc
+            RouteDefinition.COLOR_TAPED -> R.string.def_color_taped_desc
             RouteDefinition.TAPE -> R.string.def_tape_desc
             RouteDefinition.CIRCUIT -> R.string.def_circuit_desc
             RouteDefinition.TAGGED -> R.string.def_tagged_desc
@@ -70,7 +72,10 @@ object Labels {
 
     /** "Gym, Japanese (Q/D)" for a registered location; empty for the unknown placeholder. */
     fun locationDetail(c: Context, location: Location): String =
-        if (location.id.isEmpty()) "" else join(c, kind(c, location.kind), gradeSystem(c, location.gradeSystem))
+        if (location.id.isEmpty()) "" else join(
+            c, kind(c, location.kind), gradeSystem(c, location.gradeSystem),
+            if (location.coords != null) c.getString(R.string.location_has_coords) else "",
+        )
 
     fun plural(c: Context, @PluralsRes id: Int, n: Int): String = c.resources.getQuantityString(id, n, n)
 

@@ -141,6 +141,7 @@ A gym's marking system decides what "route" means for post-processing. The type 
 | ID | Type | Physical marking | Start / finish | Hold sharing | Detection path |
 |---|---|---|---|---|---|
 | `mono_color` | Hold colour | One hold colour per route on a wall section (US default since the 2010s) | Start tag / placard at the base; finish = top hold, tag, or top-out | None; volumes usually on for all | Colour grouping (current `RouteGrouper`) |
+| `color_taped` | Hold colour, taped start and finish | One hold colour per route; tape on the start hold(s) and the finish hold (common in Japanese gyms) | Taped start and finish holds; grade often on the start tape | None | Colour grouping (as `mono_color`); start / finish roles from tape detection in keyframes later |
 | `tape` | Tape | Tape strip beside each hold; tape colour = route, hold colours mixed | Two strips / "start" label; taped bracket at the top; grade on the start tape | Yes, one hold on several routes | Tape detection in keyframes → holds grouped by tape colour |
 | `circuit` | Circuit | Hold (or tape) colour = grade band; several problems share a colour (FR/UK gyms, Bouldering Project) | Ribbon, start marker or number per problem | Within a colour, separated only by position | Colour grouping, split by position (`MAX_ROUTE_HOLD_GAP`), later by start markers |
 | `tagged` | Tagged | Placard with number, grade, setter (sometimes QR) at the base; holds by colour | Placard marks the start | As `mono_color` | Colour grouping + placard OCR/QR for grade, setter, start |
@@ -159,7 +160,7 @@ holds[]:    { ..., routeId: <primary or -1>, routeIds: [..], role: any|start|han
 routes[]:   { id, name, color, grade, gradeSystem: yds|kyu_dan|v|font|null, holdIds: [..], confirmed: bool }   # a hold may appear in several routes
 ```
 
-`capture.json` (written at New scan, before any data): `{ version, createdAt, location, definition }` where `location` is a `locations.json` id (empty for captures made before locations existed; assignable later from the capture list).
+`capture.json` (written at New scan, before any data): `{ version, createdAt, location, definition, gps? }` where `location` is a `locations.json` id (empty for captures made before locations existed; assignable later from the capture list) and `gps` is `{ lat, lon, accuracyM, at }`, recorded when the scan requested a position fix.
 
 ### Keyframes for image-based detection
 
@@ -177,7 +178,7 @@ Detection stages (prototyped in `tools/tape.py`, to be ported on-device once val
 Location 1─* Capture 1─* Route 1─* Send
 ```
 
-A **location** (`files/locations.json`: `{ version, locations: [{ id, name, kind: gym|outdoor, gradeSystem }] }`) is a gym or an outdoor area; it is picked or registered at New scan and stored in `capture.json`. It is the v0.1 stand-in for `Gym` in the §6 data model; `Wall` / `WallVersion` are not modelled yet, so a route lives with the capture it was identified in.
+A **location** (`files/locations.json`: `{ version, locations: [{ id, name, kind: gym|outdoor, gradeSystem, coords? }] }`) is a gym or an outdoor area; it is picked or registered at New scan and stored in `capture.json`. `coords` (`{ lat, lon, accuracyM, at }`) is filled by scans made there: a location without coordinates makes the scan ask for location permission and take fixes from the network and GPS providers (`scan/GpsFix.kt`); each fix is written to that capture's `gps`, and the location keeps the most accurate device fix (`accuracyM` 0 marks a hand-entered position, which is never replaced). `nextId` in `locations.json` only grows, so a deleted location's id is never reissued. Locations are listed in the Logbook (tap one for its routes) and edited from the header there: name, kind, grade scale, coordinates (typed as decimal degrees, stored with `accuracyM` 0, or taken from the phone with its accuracy) and delete, which leaves captures pointing at the removed id as "No location". It is the v0.1 stand-in for `Gym` in the §6 data model; `Wall` / `WallVersion` are not modelled yet, so a route lives with the capture it was identified in.
 
 A capture is the identification workspace: its viewer edits holds, routes and roles and ends with **Confirm** per route. Confirmed routes are the records the app lists in **Logbook** mode, grouped by location, and only they take send data, which lives beside the capture in `sends.json` (`{ version, sends: [{ id, routeId, at, result: flash|send|attempt, attempts, note }] }`) so that re-editing the identification never touches the log. Earlier `scene.sends` entries are migrated into `sends.json` on first read.
 

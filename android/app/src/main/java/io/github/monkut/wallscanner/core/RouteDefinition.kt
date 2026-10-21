@@ -16,6 +16,7 @@ enum class RouteDefinition(
     val outdoor: Boolean = false,
 ) {
     MONO_COLOR("mono_color", "Hold colour", "One hold colour = one route; start tag at the base", true, false),
+    COLOR_TAPED("color_taped", "Hold colour, taped start and finish", "One hold colour = one route; start and finish holds marked with tape", true, false),
     TAPE("tape", "Tape", "Tape beside each hold; tape colour = route, holds mixed", false, false),
     CIRCUIT("circuit", "Circuit", "Hold colour = grade band; several problems per colour", true, true),
     TAGGED("tagged", "Tagged", "Placard (number, grade) at the start; holds by colour", true, false),
