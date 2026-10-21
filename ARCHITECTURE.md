@@ -53,6 +53,8 @@ flowchart LR
 
 ## 4. Android app (Kotlin)
 
+Target design for the backend-based pipeline. The shipped v0.1 app is an on-device variant of it (ARCore raw depth instead of uploaded frames; see §9–10 and `android/README.md`); the capture bundle below is the planned upload format.
+
 | Module | Responsibility | Key tech |
 |---|---|---|
 | `capture` | ARCore session in Shared Camera mode; per-frame pose, intrinsics, timestamp, tracking state; 1920×1080 GPU stream recorded as frames/video; periodic 12 MP JPEG stills on high-end devices; raw IMU | ARCore `SharedCamera`, `Camera.getPose()`, Camera2 `ImageReader` via `setAppSurfaces()` (no `setRepeatingRequest`) |
@@ -157,13 +159,7 @@ holds[]:    { ..., routeId: <primary or -1>, routeIds: [..], role: any|start|han
 routes[]:   { id, name, color, grade, gradeSystem: yds|kyu_dan|v|font|null, holdIds: [..], confirmed: bool }   # a hold may appear in several routes
 ```
 
-`capture.json` (written at New scan, before any data): `{ version, createdAt, definition }`.
-
-### Captures, routes and sends
-
-A capture is the identification workspace: its viewer edits holds, routes and roles and ends with **Confirm** per route. Confirmed routes are the records the app lists under **Routes**, and only they take send data, which lives beside the capture in `sends.json` (`{ version, sends: [{ id, routeId, at, result: flash|send|attempt, attempts, note }] }`) so that re-editing the identification never touches the log. Earlier `scene.sends` entries are migrated into `sends.json` on first read.
-
-Grades are chosen from a scale (`core/GradeSystem.kt`): YDS (5.5–5.15d), Japanese Q/D (10Q … 1Q, 1D … 6D), V-scale (VB–V17) or Font (3–9A). A location carries its default scale (`locations.json`, `gradeSystem`), the viewer lists that scale first and stores the choice per route as `grade` + `gradeSystem`.
+`capture.json` (written at New scan, before any data): `{ version, createdAt, location, definition }` where `location` is a `locations.json` id (empty for captures made before locations existed; assignable later from the capture list).
 
 ### Keyframes for image-based detection
 
@@ -174,6 +170,18 @@ Detection stages (prototyped in `tools/tape.py`, to be ported on-device once val
 2. Lift each candidate centroid to the wall plane; cluster across frames (2 cm cells); keep clusters seen in ≥ 2 frames.
 3. Assign clusters to the nearest hold within `TAPE_HOLD_RADIUS`; group holds by tape hue → routes (`tape`, `comp`); tape pairs / labelled tape → `start`, bracket at the top → `finish`.
 4. Placards (`tagged`, `mono_color`): bright rectangular regions near the wall base; OCR (ML Kit on-device, Tesseract offline) for grade and number; QR via ML Kit barcode.
+
+## 10. Locations, captures, routes and sends (v0.1 data)
+
+```
+Location 1─* Capture 1─* Route 1─* Send
+```
+
+A **location** (`files/locations.json`: `{ version, locations: [{ id, name, kind: gym|outdoor, gradeSystem }] }`) is a gym or an outdoor area; it is picked or registered at New scan and stored in `capture.json`. It is the v0.1 stand-in for `Gym` in the §6 data model; `Wall` / `WallVersion` are not modelled yet, so a route lives with the capture it was identified in.
+
+A capture is the identification workspace: its viewer edits holds, routes and roles and ends with **Confirm** per route. Confirmed routes are the records the app lists in **Logbook** mode, grouped by location, and only they take send data, which lives beside the capture in `sends.json` (`{ version, sends: [{ id, routeId, at, result: flash|send|attempt, attempts, note }] }`) so that re-editing the identification never touches the log. Earlier `scene.sends` entries are migrated into `sends.json` on first read.
+
+Grades are chosen from a scale (`core/GradeSystem.kt`): YDS (5.5–5.15d), Japanese Q/D (10Q … 1Q, 1D … 6D), V-scale (VB–V17) or Font (3–9A). A location carries its default scale (`locations.json`, `gradeSystem`), the viewer lists that scale first and stores the choice per route as `grade` + `gradeSystem`.
 
 ## TODO
 
