@@ -83,6 +83,10 @@ class DepthFrameProcessor {
     @Volatile
     var keyframes: KeyframeWriter? = null
 
+    /** Points further than this from the camera are rejected (metres); set from the route definition. */
+    @Volatile
+    var maxDepth: Float = Tuning.MAX_DEPTH_RANGE
+
     @Volatile private var samplesSeen = 0L
     @Volatile private var rejectedNoDepth = 0L
     @Volatile private var rejectedConfidence = 0L
@@ -176,7 +180,7 @@ class DepthFrameProcessor {
                 if (ci >= f.confidence.bytes.size) continue
                 if ((f.confidence.bytes[ci].toInt() and 0xff) < Tuning.MIN_DEPTH_CONFIDENCE) { lowConf++; continue }
                 val d = mm / 1000f
-                if (d > Tuning.MAX_DEPTH_RANGE) { range++; continue }
+                if (d > maxDepth) { range++; continue }
 
                 // Camera space: +X right, +Y up, -Z forward.
                 val xc = d * (x - cx) / fx

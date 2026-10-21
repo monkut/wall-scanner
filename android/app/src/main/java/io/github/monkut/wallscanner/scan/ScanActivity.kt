@@ -85,6 +85,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         logEnvironment()
         log.log("location: ${intent.getStringExtra(EXTRA_LOCATION) ?: "none"}")
         log.log("route definition: ${definition.type.id} (${definition.type.label}) · feet=${definition.rules.feet.id} volumesOn=${definition.rules.volumesOn}")
+        processor.maxDepth = if (definition.type.outdoor) Tuning.OUTDOOR_MAX_DEPTH_RANGE else Tuning.MAX_DEPTH_RANGE
+        log.log("depth range: ${processor.maxDepth} m · voxel cap ${Tuning.MAX_VOXELS} per segment · min hits at finish ${Tuning.MIN_VOXEL_HITS}")
 
         renderer = ArRenderer(this, segments, processor)
         glView.preserveEGLContextOnPause = true
@@ -171,11 +173,16 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         }
         runOnUiThread { statusText.text = text }
 
+        for (seg in segments.all()) {
+            if (seg.loggedFull || seg.map.evictions == 0) continue
+            seg.loggedFull = true
+            log.log("SEGMENT ${seg.id} full: ${Tuning.MAX_VOXELS} voxels reached, evicting least-hit voxels · ${processor.stats()}")
+        }
         statusCalls++
         if (statusCalls % STATUS_LOG_EVERY_CALLS == 0) {
             log.log(
                 "STATUS segments=${segments.size} recording=${renderer.recording} tracking=$tracking voxels=$voxels " +
-                    "pos=${fmtTranslation(renderer.lastTrackedPose)} · ${processor.stats()}"
+                    "evicted=${segments.totalEvictions()} pos=${fmtTranslation(renderer.lastTrackedPose)} · ${processor.stats()}"
             )
         }
     }
@@ -329,7 +336,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
                 val matrix = FloatArray(16)
                 seg.anchorPose.toMatrix(matrix, 0)
                 val anchorT = Rigid.fromColumnMajor(matrix)
-                val local = seg.map.snapshot()
+                val local = seg.map.snapshot(minHits = Tuning.MIN_VOXEL_HITS)
                 var world = anchorT.apply(local)
                 CaptureStore.writeSegmentPly(captureDir, seg.id, world)
                 var snap = "skipped(first segment)"
@@ -343,7 +350,11 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
                         world = fix.apply(world)
                     }
                 }
-                log.log("SEGMENT ${seg.id}: voxels=${local.count} anchor=${seg.anchorState} anchorPose=${fmt(seg.anchorPose)} snap=$snap")
+                log.log(
+                    "SEGMENT ${seg.id}: voxels=${local.count} (of ${seg.map.size}, ${seg.map.size - local.count} under " +
+                        "${Tuning.MIN_VOXEL_HITS} hits dropped, ${seg.map.evictions} evicted during scan) " +
+                        "anchor=${seg.anchorState} anchorPose=${fmt(seg.anchorPose)} snap=$snap"
+                )
                 merged.addAll(world.xyz, world.rgb, world.count)
                 for (c in seg.cameraPositions()) cameras.add(fix.apply(anchorT.apply(c)))
                 segmentTransforms[seg.id] = fix.compose(anchorT)

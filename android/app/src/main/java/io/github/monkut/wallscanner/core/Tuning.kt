@@ -4,8 +4,10 @@ package io.github.monkut.wallscanner.core
 object Tuning {
     // Capture
     const val VOXEL_SIZE = 0.01f
-    const val MAX_VOXELS = 400_000
-    const val MAX_DEPTH_RANGE = 5f
+    const val MAX_VOXELS = 1_500_000 // per segment; least-hit voxels are evicted beyond this (VoxelMap)
+    const val MIN_VOXEL_HITS = 2 // at Finish, voxels with fewer points are dropped as depth noise
+    const val MAX_DEPTH_RANGE = 3.5f // gym walls; raw depth noise thickens the surface beyond this
+    const val OUTDOOR_MAX_DEPTH_RANGE = 5f
     const val MIN_DEPTH_CONFIDENCE = 128 // raw depth confidence, 0..255
     const val MAX_SAMPLES_PER_DEPTH_FRAME = 30_000
 

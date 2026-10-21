@@ -28,6 +28,9 @@ class Segment(val id: Int, val anchor: Anchor) {
     val anchorMatrix = FloatArray(16)
     var uploadedVoxels = -1
 
+    /** Set once the first eviction of this segment has been written to the scan log. */
+    var loggedFull = false
+
     init { anchorPose.toMatrix(anchorMatrix, 0) }
 
     /** Refreshes the cached anchor pose; call once per frame on the GL thread. */
@@ -55,4 +58,6 @@ class SegmentList {
     fun add(segment: Segment) = synchronized(items) { items.add(segment) }
 
     fun totalVoxels(): Int = all().sumOf { it.map.size }
+
+    fun totalEvictions(): Int = all().sumOf { it.map.evictions }
 }
