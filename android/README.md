@@ -30,12 +30,14 @@ shows the app language (EN-US, EN-UK or JA) and opens the language picker.
   3D scene are listed as "incomplete · diagnostics only" and can still be shared.
 - **Logbook** mode is for recording progress. It opens on the registered locations (name; kind, grade scale
   and GPS when coordinates are set; route and send counts) under a summary line (routes · sends · flashes ·
-  locations); a "No location" row appears when confirmed routes belong to no registered location. Tap a
-  location to list its confirmed routes under its header; Back returns to the locations. The header's
-  **Edit** button opens the location form: name, kind, grade scale and coordinates ("latitude, longitude" in
-  decimal degrees, or **Use phone position** for a fix; a hand-entered position is stored with accuracy 0),
-  plus **Delete**, which asks first and leaves captures, routes and sends in place as "No location". The same
-  form registers a new location from New scan. Tap a route to open its record.
+  locations); a "No location" row appears when confirmed routes belong to no registered location. **Add
+  location**, the primary button in the slot New scan uses in Capture mode, registers a gym or crag without
+  scanning and remembers it for the next New scan. Tap a location to list its confirmed routes under its
+  header; Back returns to the locations. The header's **Edit** button opens the location form: name (must be
+  unique), kind, grade scale and coordinates ("latitude, longitude" in decimal degrees, or **Use phone
+  position** for a fix; a hand-entered position is stored with accuracy 0), plus **Delete**, which asks first
+  and leaves captures, routes and sends in place as "No location". The same form registers a new location
+  from New scan's "New location…" and from Add location. Tap a route to open its record.
 
 ### Language
 

@@ -53,7 +53,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var emptyText: TextView
     private lateinit var heading: TextView
     private lateinit var summary: TextView
-    private lateinit var btnNewScan: View
+    /** The screen's one primary action: New scan in Capture mode, Add location on the Logbook's locations level. */
+    private lateinit var btnPrimary: MaterialButton
     private lateinit var btnLanguage: MaterialButton
     private lateinit var mode: MaterialButtonToggleGroup
     private var captures: List<File> = emptyList()
@@ -90,10 +91,9 @@ class MainActivity : AppCompatActivity() {
         emptyText = findViewById(R.id.emptyText)
         heading = findViewById(R.id.heading)
         summary = findViewById(R.id.summary)
-        btnNewScan = findViewById(R.id.btnNewScan)
+        btnPrimary = findViewById(R.id.btnPrimary)
         btnLanguage = findViewById(R.id.btnLanguage)
         mode = findViewById(R.id.mode)
-        btnNewScan.setOnClickListener { handleNewScan() }
         btnLanguage.setText(Language.current().short)
         btnLanguage.setOnClickListener { handleLanguage() }
         mode.check(if (getPreferences(MODE_PRIVATE).getBoolean(PREF_MODE, false)) R.id.modeLogbook else R.id.modeCapture)
@@ -147,7 +147,15 @@ class MainActivity : AppCompatActivity() {
         locationRows = locations.values.toList() + if (confirmed.any { it.locationId !in locations }) listOf(LocationStore.UNKNOWN) else emptyList()
         val shown = if (selected == null) confirmed else confirmed.filter { keyOf(it) == selected }
         routeRows = if (selected == null) emptyList() else listOf(RouteRow(locationOf(selected), null)) + shown.map { RouteRow(null, it) }
-        btnNewScan.visibility = if (logbook) View.GONE else View.VISIBLE
+        // One primary action per screen: label and handler decided together.
+        btnPrimary.visibility = if (!logbook || selected == null) View.VISIBLE else View.GONE
+        if (logbook) {
+            btnPrimary.setText(R.string.add_location)
+            btnPrimary.setOnClickListener { handleNewLocation(R.string.add_location, R.string.save) { refresh() } }
+        } else {
+            btnPrimary.setText(R.string.new_scan)
+            btnPrimary.setOnClickListener { handleNewScan() }
+        }
         heading.setText(if (!logbook) R.string.captures else if (selected == null) R.string.locations else R.string.routes)
         summary.visibility = if (logbook) View.VISIBLE else View.GONE
         if (logbook) summary.text = progressSummary(shown, countLocations = selected == null)
@@ -240,27 +248,49 @@ class MainActivity : AppCompatActivity() {
     /** Single-choice list of registered locations plus "New location…"; the last used one is preselected. */
     private fun pickLocation(preselectedId: String?, onPicked: (Location) -> Unit) {
         val registered = LocationStore.list(this)
-        if (registered.isEmpty()) { handleNewLocation(onPicked); return }
+        if (registered.isEmpty()) { handleNewLocation { onPicked(it) }; return }
         val labels = (registered.map { "${it.name}\n${Labels.locationDetail(this, it)}" } + getString(R.string.new_location)).toTypedArray()
         var index = registered.indexOfFirst { it.id == preselectedId }.takeIf { it >= 0 } ?: 0
         AlertDialog.Builder(this)
             .setTitle(R.string.choose_location)
             .setSingleChoiceItems(labels, index) { _, which -> index = which }
             .setPositiveButton(R.string.next) { _, _ ->
-                if (index < registered.size) onPicked(registered[index]) else handleNewLocation(onPicked)
+                if (index < registered.size) onPicked(registered[index]) else handleNewLocation { onPicked(it) }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
-    private fun handleNewLocation(onPicked: (Location) -> Unit) =
-        locationDialog(R.string.new_location, R.string.next, null) { result ->
-            onPicked(LocationStore.add(this, result.name, result.kind, result.gradeSystem, result.coords))
+    /**
+     * Registers a location and remembers it for the next New scan. Inside the scan flow the form is titled
+     * "New location…" with Next; from the Logbook it is "Add location" with Save. A name already registered
+     * (trimmed, case-insensitive) re-opens the form with the draft kept.
+     */
+    private fun handleNewLocation(
+        @StringRes title: Int = R.string.new_location, @StringRes positive: Int = R.string.next, onPicked: (Location) -> Unit,
+    ) {
+        locationDialog(title, positive, null) { result ->
+            if (nameTaken(result.name, exceptId = "")) { reopenWithDraft(title, positive, null, result) { handleNewLocation(title, positive, onPicked) }; return@locationDialog }
+            val location = LocationStore.add(this, result.name, result.kind, result.gradeSystem, result.coords)
+            getPreferences(MODE_PRIVATE).edit().putString(PREF_LOCATION, location.id).apply()
+            onPicked(location)
         }
+    }
+
+    private fun nameTaken(name: String, exceptId: String): Boolean =
+        LocationStore.list(this).any { it.id != exceptId && it.name.equals(name.trim(), ignoreCase = true) }
+
+    /** Tells the user the name is taken and re-opens the form with everything they typed. */
+    private fun reopenWithDraft(@StringRes title: Int, @StringRes positive: Int, existing: Location?, result: Location, onSave: (Location) -> Unit) {
+        Toast.makeText(this, getString(R.string.location_name_taken, result.name), Toast.LENGTH_LONG).show()
+        val draft = LocationDraft(result.name, result.kind, result.gradeSystem, result.coords?.text() ?: "", result.coords?.takeIf { !it.manual })
+        locationDialog(title, positive, existing, draft, onSave)
+    }
 
     /** Edit from the logbook header: name, kind, grade scale and coordinates, or delete. */
     private fun handleEditLocation(location: Location) =
         locationDialog(R.string.edit_location, R.string.save, location) { result ->
+            if (nameTaken(result.name, exceptId = location.id)) { reopenWithDraft(R.string.edit_location, R.string.save, location, result) { LocationStore.update(this, it); refresh() }; return@locationDialog }
             LocationStore.update(this, result)
             refresh()
         }

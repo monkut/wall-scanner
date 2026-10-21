@@ -105,7 +105,9 @@
     <string name="star_rating">★ %d</string>
     <string name="clear_rating">Clear</string>
     <string name="locations">Locations</string>
-    <string name="no_locations">No locations yet. Register one from New scan in Capture mode.</string>
+    <string name="no_locations">No locations yet. Add one here or from New scan.</string>
+    <string name="add_location">Add location</string>
+    <string name="location_name_taken">A location named %1$s already exists</string>
     <string name="edit">Edit</string>
     <string name="edit_location">Edit location</string>
     <string name="location_name_label">Name</string>

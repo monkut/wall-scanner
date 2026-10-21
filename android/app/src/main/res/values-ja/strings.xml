@@ -104,7 +104,9 @@
     <string name="star_rating">★ %d</string>
     <string name="clear_rating">クリア</string>
     <string name="locations">場所</string>
-    <string name="no_locations">場所がまだありません。キャプチャモードの「新しいスキャン」から登録してください。</string>
+    <string name="no_locations">場所がまだありません。ここで追加するか、新規スキャンから登録してください。</string>
+    <string name="add_location">場所を追加</string>
+    <string name="location_name_taken">「%1$s」という場所はすでに登録されています</string>
     <string name="edit">編集</string>
     <string name="edit_location">場所を編集</string>
     <string name="location_name_label">名前</string>
