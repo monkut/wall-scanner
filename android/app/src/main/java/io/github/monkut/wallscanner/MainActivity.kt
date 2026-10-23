@@ -521,7 +521,7 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(R.string.reprocess) { _, _ ->
                 val progress = AlertDialog.Builder(this).setMessage(R.string.processing).setCancelable(false).show()
                 thread(name = "reprocess") {
-                    val summary = runCatching { CaptureStore.reprocess(dir) }.getOrNull()
+                    val summary = runCatching { CaptureStore.reprocess(this, dir) }.getOrNull()
                     runOnUiThread {
                         if (isDestroyed) return@runOnUiThread
                         progress.dismiss()

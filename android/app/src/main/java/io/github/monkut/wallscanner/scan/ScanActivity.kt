@@ -391,7 +391,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             CaptureStore.writePly(captureDir, cloud)
             log.log("points.ply written (${File(captureDir, CaptureStore.PLY_FILE).length()} bytes)")
 
-            val result = ScenePipeline.build(captureDir, cloud, cameras, definition) { log.log(it) }
+            val result = ScenePipeline.build(captureDir, cloud, cameras, definition, assets) { log.log(it) }
             val elapsed = System.currentTimeMillis() - t0
             if (result == null) {
                 log.log("RESULT: no wall plane (${elapsed} ms)")

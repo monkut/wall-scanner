@@ -30,6 +30,10 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    androidResources {
+        noCompress += "tflite" // the hold model is memory-mapped from assets
+    }
 }
 
 dependencies {
@@ -37,6 +41,7 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("com.google.ar:core:1.57.0")
+    implementation("org.tensorflow:tensorflow-lite:2.16.1") // hold detector (assets/holds.tflite, see tools/holds_model)
 
     testImplementation("junit:junit:4.13.2")
 }

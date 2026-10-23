@@ -1,5 +1,6 @@
 package io.github.monkut.wallscanner.io
 
+import android.content.res.AssetManager
 import android.graphics.BitmapFactory
 import io.github.monkut.wallscanner.core.ColorPatches
 import io.github.monkut.wallscanner.core.Coverage
@@ -26,7 +27,7 @@ import kotlin.random.Random
 object ScenePipeline {
     private const val KEYFRAME_SUBSAMPLE = 2 // 960 × 540 is ~1.8 image px per 5 mm wall px at 2 m: enough, half the decode cost
 
-    fun build(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, log: (String) -> Unit): SceneResult? {
+    fun build(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit): SceneResult? {
         var result = SceneBuilder.build(cloud, cameras, Random(42), definition) ?: return null
         result.thinCoverage = Coverage.thinCells(cloud, result.frame, result.extent)
         if (result.thinCoverage.isNotEmpty()) {
@@ -53,7 +54,13 @@ object ScenePipeline {
             .onFailure { log("hold search failed: $it") }
             .getOrDefault(emptyList())
         log("hold search: ${extra.size} image-only holds added from the orthophoto (${System.currentTimeMillis() - t2} ms)")
-        val merged = refined + extra
+        val t3 = System.currentTimeMillis()
+        val model = assets?.let { HoldModel.get(it) }
+        val learned = if (model == null) emptyList() else runCatching { model.find(refined + extra, photo, result.frame) }
+            .onFailure { log("hold model failed: $it") }
+            .getOrDefault(emptyList())
+        log(if (model != null) "hold model: ${learned.size} holds added that no other hold covered (${System.currentTimeMillis() - t3} ms)" else "hold model: ${if (assets == null) "no assets" else HoldModel.loadError}")
+        val merged = refined + extra + learned
         val holds = runCatching { HoldSplit.byColor(merged, photo, patches, result.frame, result.wallColor) }
             .onFailure { log("hold split failed: $it") }
             .getOrDefault(merged)

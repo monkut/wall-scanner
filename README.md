@@ -30,6 +30,7 @@ Usage, screen by screen, is in [`android/README.md`](android/README.md).
 | `tools/snap.py` | Offline mirror of the on-device segment snap, for tuning `SNAP_*` thresholds on exported segments. |
 | `tools/tape.py` | Tape detection prototype on a capture's keyframes (`--apply` rewrites the scene's routes). |
 | `tools/frames_to_ppm.py` | Decodes a pulled capture's keyframes to PPM so the JVM test harness can build its orthophoto. |
+| `tools/holds_model/` | Hold detector training: public datasets + corrected captures → YOLO11-seg → `assets/holds.tflite`; `eval_holds.py` scores any scene against a capture's reference (`HOLD-SEGMENTATION.md`). |
 | `BOM.md` | Bill of materials for the RPLIDAR / Raspberry Pi handheld variant (not used by the app). |
 | `CAPTURE.md` | Earlier capture protocol and scorecard for evaluating third-party splat captures. |
 | `android/fonts/` | Licence of the bundled Atkinson Hyperlegible typeface (SIL OFL 1.1). |

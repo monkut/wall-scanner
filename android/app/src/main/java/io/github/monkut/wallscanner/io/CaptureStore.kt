@@ -194,14 +194,14 @@ object CaptureStore {
      * scene.json are replaced; sends.json is left alone. Returns a summary for the user, or null when the
      * capture has no point cloud or no wall plane. Call off the main thread. Logged as `REPROCESS` in scan.log.
      */
-    fun reprocess(dir: File): String? {
+    fun reprocess(context: Context, dir: File): String? {
         val ply = File(dir, PLY_FILE)
         if (!ply.exists()) return null
         val log = ScanLog(File(dir, ScanLog.FILE))
         try {
             val t0 = System.currentTimeMillis()
             val cloud = ply.inputStream().use { PlyReader.read(it) }
-            val result = ScenePipeline.build(dir, cloud, readCameraPositions(dir), readDefinition(dir)) { log.log("REPROCESS $it") }
+            val result = ScenePipeline.build(dir, cloud, readCameraPositions(dir), readDefinition(dir), context.assets) { log.log("REPROCESS $it") }
                 ?.let { SceneBuilder.withFirstRouteId(it, nextRouteId(dir)) }
             if (result == null) {
                 log.log("REPROCESS: no wall plane (voxels=${cloud.count})")

@@ -19,18 +19,15 @@ object HoldSplit {
     private const val MIN_SIDE = 0.04f
     private const val HUE_TOL = 30f
     private const val MIN_SHARE = 0.04f // and at least MIN_SIDE² of pixels: a small hold beside a big one still counts
-    private const val MAX_POINTS = 96
 
     fun byColor(holds: List<Hold>, photo: Orthophoto, patches: ColorPatches, frame: WallFrame, wall: WallColor?): List<Hold> {
         val w = photo.image.width
         val minSidePx = max(2, (MIN_SIDE / photo.px).toInt())
-        val areas = holds.map { it.width * it.tall }
-        val owner = IntArray(w * photo.image.height) { -1 }
-        for ((hi, hold) in holds.withIndex()) for (i in Raster.fillPolygon(polygon(hold), photo)) if (owner[i] < 0 || areas[hi] < areas[owner[i]]) owner[i] = hi
+        val owner = ImageHold.owners(holds, photo)
         var nextId = (holds.maxOfOrNull { it.id } ?: 0) + 1
         val out = ArrayList<Hold>()
         for ((hi, hold) in holds.withIndex()) {
-            val inside = Raster.fillPolygon(polygon(hold), photo).filter { owner[it] == hi }.toIntArray()
+            val inside = Raster.fillPolygon(ImageHold.polygon(hold), photo).filter { owner[it] == hi }.toIntArray()
             val groups = hueGroups(inside, patches)
             val total = groups.sumOf { it.size }
             val parts = groups.filter { g -> g.size >= MIN_SHARE * total && g.size >= minSidePx * minSidePx && longSide(g, w) >= minSidePx }
@@ -39,42 +36,12 @@ object HoldSplit {
             for (k in 1 until parts.size) others.addAll(parts[k])
             // The largest part keeps its own pixels and the grey, white and dark ones (not the wall showing through the old outline).
             val kept = inside.filter { i -> i !in others && (patches.label[i] != 0 || (wall != null && !wall.matches(patches.hue[i], patches.sat[i], patches.value[i]))) }
-            out.add(partHold(hold.id, kept.toIntArray(), hold.voxels, photo, frame).also { it.role = hold.role; it.tape = hold.tape })
-            for (k in 1 until parts.size) out.add(partHold(nextId++, parts[k].toIntArray(), 0, photo, frame))
+            out.add(ImageHold.fromPixels(hold.id, kept.toIntArray(), hold.voxels, photo, frame).also { it.role = hold.role; it.tape = hold.tape })
+            for (k in 1 until parts.size) out.add(ImageHold.fromPixels(nextId++, parts[k].toIntArray(), 0, photo, frame))
         }
         return out
     }
 
-    private fun polygon(hold: Hold): FloatArray = hold.outline.takeIf { it.size >= 6 } ?: Raster.ellipse(hold.u, hold.v, hold.width, hold.tall)
-
-    /** A hold from [pixels] of the orthophoto: outline traced from them, colour their mean, height the relief under them. */
-    private fun partHold(id: Int, pixels: IntArray, voxels: Int, photo: Orthophoto, frame: WallFrame): Hold {
-        val w = photo.image.width; val h = photo.image.height
-        var su = 0.0; var sv = 0.0; var sr = 0L; var sg = 0L; var sb = 0L
-        var x0 = w; var x1 = -1; var y0 = h; var y1 = -1
-        for (i in pixels) {
-            val x = i % w; val y = i / w
-            su += photo.u(x + 0.5f); sv += photo.v(y + 0.5f)
-            val px = photo.image.pixels[i]
-            sr += px shr 16 and 0xff; sg += px shr 8 and 0xff; sb += px and 0xff
-            if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
-        }
-        val n = pixels.size
-        val cu = (su / n).toFloat(); val cv = (sv / n).toFloat()
-        val rel = FloatArray(n) { photo.relief[pixels[it]] }
-        rel.sort()
-        val height = max(0f, rel[(n * 9) / 10])
-        val pl = frame.plane
-        return Hold(
-            id = id,
-            cx = pl.ox + cu * frame.rx + cv * frame.ux + height * pl.nx,
-            cy = pl.oy + cu * frame.ry + cv * frame.uy + height * pl.ny,
-            cz = pl.oz + cu * frame.rz + cv * frame.uz + height * pl.nz,
-            u = cu, v = cv, width = (x1 - x0 + 1) * photo.px, tall = (y1 - y0 + 1) * photo.px, height = height,
-            r = (sr / n).toInt(), g = (sg / n).toInt(), b = (sb / n).toInt(),
-            voxels = voxels, outline = outlineOf(pixels, photo),
-        )
-    }
 
     /**
      * Pixel index lists, one per hue group, largest first; pixels outside any patch are left out. Groups are
@@ -109,13 +76,5 @@ object HoldSplit {
         var x0 = Int.MAX_VALUE; var x1 = Int.MIN_VALUE; var y0 = Int.MAX_VALUE; var y1 = Int.MIN_VALUE
         for (i in pixels) { val x = i % w; val y = i / w; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
         return max(x1 - x0 + 1, y1 - y0 + 1)
-    }
-
-    private fun outlineOf(pixels: IntArray, photo: Orthophoto): FloatArray {
-        val w = photo.image.width; val h = photo.image.height
-        val cells = IntArray(pixels.size) { it }; val cxs = IntArray(pixels.size) { pixels[it] % w }; val cys = IntArray(pixels.size) { (h - 1) - pixels[it] / w }
-        val outline = HoldOutline.trace(cells, cxs, cys, photo.px, MAX_POINTS, 3)
-        for (i in 0 until outline.size / 2) { outline[i * 2] += photo.minU; outline[i * 2 + 1] += photo.maxV - h * photo.px }
-        return outline
     }
 }

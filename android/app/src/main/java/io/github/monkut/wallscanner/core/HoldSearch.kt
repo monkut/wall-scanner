@@ -17,14 +17,13 @@ object HoldSearch {
     private const val MAX_COVERED = 0.3f // patches already this covered by a hold are that hold
     private const val PAD_RELIEF = 0.12f // crash pads stand this far off the wall …
     private const val PAD_ZONE = 0.35f // … within this height of the wall's bottom edge
-    private const val MAX_POINTS = 96
 
     fun find(holds: List<Hold>, patches: ColorPatches, photo: Orthophoto, frame: WallFrame, extent: FloatArray): List<Hold> {
         val w = photo.image.width; val h = photo.image.height
         val n = w * h
         val pixels = photo.image.pixels
         val covered = BooleanArray(n)
-        for (hold in holds) for (i in Raster.fillPolygon(hold.outline.takeIf { it.size >= 6 } ?: Raster.ellipse(hold.u, hold.v, hold.width, hold.tall), photo)) covered[i] = true
+        for (hold in holds) for (i in Raster.fillPolygon(ImageHold.polygon(hold), photo)) covered[i] = true
         val minSidePx = max(2, (MIN_SIDE / photo.px).toInt())
         val found = ArrayList<Hold>()
         var nextId = (holds.maxOfOrNull { it.id } ?: 0) + 1
@@ -52,21 +51,7 @@ object HoldSearch {
             rel.sort()
             val height = max(0f, rel[(count * 9) / 10])
             if (height > PAD_RELIEF && cv < extent[1] + PAD_ZONE) continue // the top of a crash pad leaning on the wall
-            val cells = IntArray(count) { it }; val cxs = IntArray(count) { members[it] % w }; val cys = IntArray(count) { (h - 1) - members[it] / w }
-            val outline = HoldOutline.trace(cells, cxs, cys, photo.px, MAX_POINTS, 3)
-            for (i in 0 until outline.size / 2) { outline[i * 2] += photo.minU; outline[i * 2 + 1] += photo.maxV - h * photo.px }
-            val pl = frame.plane
-            found.add(
-                Hold(
-                    id = nextId++,
-                    cx = pl.ox + cu * frame.rx + cv * frame.ux + height * pl.nx,
-                    cy = pl.oy + cu * frame.ry + cv * frame.uy + height * pl.ny,
-                    cz = pl.oz + cu * frame.rz + cv * frame.uz + height * pl.nz,
-                    u = cu, v = cv, width = (patches.maxX[p] - patches.minX[p] + 1) * photo.px, tall = (patches.maxY[p] - patches.minY[p] + 1) * photo.px, height = height,
-                    r = (sr / count).toInt(), g = (sg / count).toInt(), b = (sb / count).toInt(),
-                    voxels = 0, outline = outline,
-                )
-            )
+            found.add(ImageHold.fromPixels(nextId++, members, 0, photo, frame))
         }
         return found
     }
@@ -129,7 +114,7 @@ object TapeMarks {
         val n = w * h
         val pixels = photo.image.pixels
         val holdAt = IntArray(n) { -1 }
-        holds.forEachIndexed { k, hold -> for (i in Raster.fillPolygon(polygon(hold), photo)) holdAt[i] = k }
+        holds.forEachIndexed { k, hold -> for (i in Raster.fillPolygon(ImageHold.polygon(hold), photo)) holdAt[i] = k }
         val inHold = BooleanArray(n) { holdAt[it] >= 0 }
         if (patches != null) {
             // Hold-sized along the patch's own axes: a slanted strip of dark tape has a square bounding box.
@@ -357,10 +342,9 @@ object TapeMarks {
         return out
     }
 
-    private fun polygon(hold: Hold): FloatArray = hold.outline.takeIf { it.size >= 6 } ?: Raster.ellipse(hold.u, hold.v, hold.width, hold.tall)
 
     private fun distanceToOutline(hold: Hold, u: Float, v: Float): Float {
-        val poly = polygon(hold)
+        val poly = ImageHold.polygon(hold)
         var best = Float.MAX_VALUE
         for (i in 0 until poly.size / 2) {
             val du = poly[i * 2] - u; val dv = poly[i * 2 + 1] - v
