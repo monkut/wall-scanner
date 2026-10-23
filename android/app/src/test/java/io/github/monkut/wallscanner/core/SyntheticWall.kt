@@ -24,19 +24,26 @@ object SyntheticWall {
         val map = VoxelMap()
         val rnd = Random(1)
         val noise = { (rnd.nextFloat() - 0.5f) * 0.004f }
-        addPanel(map, 3f, 2.5f, noise, xMin, xMax)
+        addPanel(map, 3f, 2.5f, noise, xMin, xMax, holds.map { (hx, hy, _) -> Triple(hx, hy, 0.06f) })
         for ((hx, hy, color) in holds) if (hx in xMin..xMax) addHemisphere(map, hx, hy, 0.06f, color, noise)
         return map.snapshot()
     }
 
-    /** Gray panel [width] × [height] on z = 0 sampled every 5 mm, restricted to x in [xMin, xMax]. */
-    fun addPanel(map: VoxelMap, width: Float, height: Float, noise: () -> Float, xMin: Float = 0f, xMax: Float = width) {
+    /**
+     * Gray panel [width] × [height] on z = 0 sampled every 5 mm, restricted to x in [xMin, xMax]. The wall
+     * under a hold is never seen by a depth camera, so [holes] (cx, cy, radius) are left unsampled.
+     */
+    fun addPanel(
+        map: VoxelMap, width: Float, height: Float, noise: () -> Float, xMin: Float = 0f, xMax: Float = width,
+        holes: List<Triple<Float, Float, Float>> = emptyList(),
+    ) {
         var x = 0f
         while (x <= width) {
             if (x in xMin..xMax) {
                 var y = 0f
                 while (y <= height) {
-                    map.add(x, y, noise(), gray[0], gray[1], gray[2])
+                    val covered = holes.any { (hx, hy, r) -> (x - hx) * (x - hx) + (y - hy) * (y - hy) < r * r }
+                    if (!covered) map.add(x, y, noise(), gray[0], gray[1], gray[2])
                     y += 0.005f
                 }
             }

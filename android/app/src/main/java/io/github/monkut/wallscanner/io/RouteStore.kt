@@ -2,6 +2,7 @@ package io.github.monkut.wallscanner.io
 
 import android.content.Context
 import io.github.monkut.wallscanner.core.GradeSystem
+import io.github.monkut.wallscanner.core.HoldRole
 import io.github.monkut.wallscanner.core.RouteDefinition
 import org.json.JSONArray
 import org.json.JSONObject
@@ -64,6 +65,17 @@ object RouteStore {
     }
 
     fun route(dir: File, routeId: Int): RouteRecord? = routes(dir).firstOrNull { it.routeId == routeId }
+
+    /** Sets a hold's role (start, finish, …) in scene.json; the viewer shows and can change the same roles. */
+    fun setHoldRole(dir: File, holdId: Int, role: HoldRole) {
+        val scene = JSONObject(CaptureStore.readScene(dir))
+        val holds = scene.getJSONArray("holds")
+        for (i in 0 until holds.length()) {
+            val h = holds.getJSONObject(i)
+            if (h.getInt("id") == holdId) h.put("role", role.id)
+        }
+        CaptureStore.writeScene(dir, scene.toString(1))
+    }
 
     /** Confirmed routes of every capture, newest capture first. */
     fun confirmedRoutes(context: Context): List<RouteRecord> =

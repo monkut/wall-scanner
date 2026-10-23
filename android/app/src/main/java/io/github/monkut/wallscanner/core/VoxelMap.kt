@@ -82,6 +82,35 @@ class VoxelMap(
         VoxelCloud(n, xyz, rgb, outHits)
     }
 
+    /**
+     * At most [maxPoints] voxels for the live preview: every k-th occupied slot when the map holds more.
+     * Bounds the per-upload cost on the GL thread, which [snapshot] of a near-full map does not.
+     */
+    fun preview(maxPoints: Int): VoxelCloud = synchronized(lock) {
+        val stride = maxOf(1, (count + maxPoints - 1) / maxPoints)
+        val n = (count + stride - 1) / stride
+        val xyz = FloatArray(n * 3)
+        val rgb = ByteArray(n * 3)
+        val outHits = IntArray(n)
+        var seen = 0
+        var o = 0
+        for (i in 0 until capacity) {
+            if (keys[i] == EMPTY) continue
+            if (seen++ % stride != 0) continue
+            val h = hits[i]
+            val invH = 1f / h
+            xyz[o * 3] = sx[i] * invH
+            xyz[o * 3 + 1] = sy[i] * invH
+            xyz[o * 3 + 2] = sz[i] * invH
+            rgb[o * 3] = (sr[i] / h).toByte()
+            rgb[o * 3 + 1] = (sg[i] / h).toByte()
+            rgb[o * 3 + 2] = (sb[i] / h).toByte()
+            outHits[o] = h
+            o++
+        }
+        VoxelCloud(o, xyz, rgb, outHits)
+    }
+
     private fun addLocked(x: Float, y: Float, z: Float, r: Int, g: Int, b: Int) {
         val key = VoxelKey.pack(floor(x * inv).toInt(), floor(y * inv).toInt(), floor(z * inv).toInt())
         var i = slot(key)

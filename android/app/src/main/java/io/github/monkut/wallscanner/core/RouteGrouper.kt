@@ -11,11 +11,14 @@ class Route(val id: Int, var name: String, val r: Int, val g: Int, val b: Int, v
 /**
  * Groups holds into candidate routes by color: circular hue clusters for saturated holds, value bands otherwise.
  * With [splitByPosition] (circuit walls) each colour group is further split into spatially connected problems.
+ * Holds the colour of the [wall] (depth streaks at mats and edges, or wall seen through a sparse hold) stay
+ * unassigned instead of bridging unrelated hues into one route.
  */
 object RouteGrouper {
-    fun group(holds: List<Hold>, splitByPosition: Boolean = false): List<Route> {
-        val chromatic = holds.filter { it.sat >= Tuning.MIN_ROUTE_SATURATION && it.value >= Tuning.MIN_ROUTE_VALUE }
-        val achromatic = holds.filter { it !in chromatic }
+    fun group(holds: List<Hold>, splitByPosition: Boolean = false, wall: WallColor? = null): List<Route> {
+        val candidates = holds.filter { wall?.matches(it.hsv) != true }
+        val chromatic = candidates.filter { it.sat >= Tuning.MIN_ROUTE_SATURATION && it.value >= Tuning.MIN_ROUTE_VALUE }
+        val achromatic = candidates.filter { it !in chromatic }
 
         val groups = ArrayList<List<Hold>>()
         groups.addAll(hueClusters(chromatic))
@@ -67,7 +70,11 @@ object RouteGrouper {
             .sortedBy { members -> members.minOf { it.u } }
     }
 
-    /** Sorts by hue, starts after the largest circular gap and splits where consecutive hues differ by more than [Tuning.HUE_GAP_DEG]. */
+    /**
+     * Sorts by hue, starts after the largest circular gap and splits where consecutive hues differ by more
+     * than [Tuning.HUE_GAP_DEG]. A cluster that still spans more than [Tuning.MAX_ROUTE_HUE_SPAN] (hues chained
+     * through intermediate holds, e.g. red to orange) splits at its largest internal gap until none does.
+     */
     private fun hueClusters(holds: List<Hold>): List<List<Hold>> {
         if (holds.isEmpty()) return emptyList()
         val sorted = holds.sortedBy { it.hue }
@@ -90,7 +97,19 @@ object RouteGrouper {
             }
             current.add(hold)
         }
-        return clusters
+        return clusters.flatMap { splitWideCluster(it) }
+    }
+
+    /** [cluster] is in ascending circular hue order from its first element. */
+    private fun splitWideCluster(cluster: List<Hold>): List<List<Hold>> {
+        if (cluster.size < 2 || circularGap(cluster.first().hue, cluster.last().hue) <= Tuning.MAX_ROUTE_HUE_SPAN) return listOf(cluster)
+        var cut = 1
+        var widest = -1f
+        for (i in 1 until cluster.size) {
+            val gap = circularGap(cluster[i - 1].hue, cluster[i].hue)
+            if (gap > widest) { widest = gap; cut = i }
+        }
+        return splitWideCluster(cluster.subList(0, cut)) + splitWideCluster(cluster.subList(cut, cluster.size))
     }
 
     private fun circularGap(from: Float, to: Float): Float = ((to - from) % 360f + 360f) % 360f

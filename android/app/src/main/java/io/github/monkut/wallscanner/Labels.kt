@@ -2,6 +2,7 @@ package io.github.monkut.wallscanner
 
 import android.content.Context
 import androidx.annotation.PluralsRes
+import io.github.monkut.wallscanner.core.Coverage
 import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.io.Location
@@ -80,6 +81,13 @@ object Labels {
     fun plural(c: Context, @PluralsRes id: Int, n: Int): String = c.resources.getQuantityString(id, n, n)
 
     fun join(c: Context, vararg parts: String): String = parts.filter { it.isNotEmpty() }.joinToString(c.getString(R.string.list_separator))
+
+    /** "top right" / "右上": a cell of the depth-coverage grid (row 0 = top, col 0 = left). */
+    fun coverageCell(c: Context, cell: Coverage.Cell): String {
+        val row = c.getString(when (cell.row) { 0 -> R.string.row_top; 1 -> R.string.row_middle; else -> R.string.row_bottom })
+        val col = c.getString(when (cell.col) { 0 -> R.string.col_left; 1 -> R.string.col_centre; else -> R.string.col_right })
+        return c.getString(R.string.coverage_cell, row, col)
+    }
 
     private fun locale(c: Context): Locale = c.resources.configuration.locales[0] ?: Locale.US
 

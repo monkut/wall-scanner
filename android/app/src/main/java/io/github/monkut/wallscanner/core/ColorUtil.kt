@@ -29,7 +29,7 @@ object ColorUtil {
         hue < 70f -> "Yellow"
         hue < 170f -> "Green"
         hue < 200f -> "Cyan"
-        hue < 260f -> "Blue"
+        hue < 245f -> "Blue" // gym purples sit at 250–260°
         hue < 300f -> "Purple"
         else -> "Pink"
     }

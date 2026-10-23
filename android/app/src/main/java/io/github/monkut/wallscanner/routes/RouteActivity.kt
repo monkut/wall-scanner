@@ -5,13 +5,13 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.util.Log
 import android.view.MotionEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.EditText
-import android.widget.ImageView
 import android.widget.ListView
 import android.widget.RadioGroup
 import android.widget.RatingBar
@@ -20,6 +20,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import io.github.monkut.wallscanner.Labels
 import io.github.monkut.wallscanner.R
+import io.github.monkut.wallscanner.core.HoldRole
 import io.github.monkut.wallscanner.io.CaptureStore
 import io.github.monkut.wallscanner.io.LocationStore
 import io.github.monkut.wallscanner.io.RouteRecord
@@ -28,6 +29,7 @@ import io.github.monkut.wallscanner.io.Send
 import io.github.monkut.wallscanner.io.SendResult
 import io.github.monkut.wallscanner.viewer.ViewerActivity
 import java.io.File
+import kotlin.concurrent.thread
 
 /** Record of one confirmed route: its identification summary and the send log (sends.json of its capture). */
 class RouteActivity : AppCompatActivity() {
@@ -38,6 +40,9 @@ class RouteActivity : AppCompatActivity() {
     private lateinit var ratingBar: RatingBar
     private lateinit var ratingLabel: TextView
     private lateinit var btnClearRating: View
+    private lateinit var routeImage: ZoomImageView
+    private lateinit var routeHint: TextView
+    private var hits: List<RouteImage.Hit> = emptyList()
     private var sends: List<Send> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,7 +60,9 @@ class RouteActivity : AppCompatActivity() {
             R.string.route_meta, Labels.location(this, location), Labels.definition(this, route.type),
             Labels.plural(this, R.plurals.holds, route.holdCount),
         )
-        findViewById<ImageView>(R.id.thumbnail).setImageBitmap(CaptureStore.readThumbnail(captureDir))
+        routeImage = findViewById(R.id.routeImage)
+        routeImage.onTap = { x, y -> handleTapImage(x, y) }
+        routeHint = findViewById(R.id.routeHint)
         findViewById<View>(R.id.swatch).background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(Color.rgb(route.color[0], route.color[1], route.color[2]))
@@ -86,6 +93,37 @@ class RouteActivity : AppCompatActivity() {
         super.onResume()
         route = RouteStore.route(captureDir, route.routeId) ?: run { finish(); return }
         refresh()
+        renderRouteImage()
+    }
+
+    /** Draws the route's wall image off the main thread and installs its tap targets. */
+    private fun renderRouteImage() {
+        val routeId = route.routeId
+        thread(name = "route-image") {
+            val rendered = runCatching { RouteImage.render(this, captureDir, routeId) }
+                .onFailure { Log.e(TAG, "route image failed", it) }
+                .getOrNull() ?: return@thread
+            runOnUiThread {
+                if (isDestroyed || route.routeId != routeId) return@runOnUiThread
+                routeImage.setImageBitmap(rendered.bitmap)
+                hits = rendered.hits
+                routeHint.setText(if (rendered.marked) R.string.marks_from_roles else if (rendered.anyMarked) R.string.marks_mixed else R.string.marks_guessed)
+            }
+        }
+    }
+
+    /** A tap on a route hold offers to mark it as the start or the top (stored as the hold's role). */
+    private fun handleTapImage(x: Float, y: Float) {
+        val hit = hits.firstOrNull { it.rect.contains(x, y) } ?: return
+        val items = arrayOf(getString(R.string.mark_start), getString(R.string.mark_top), getString(R.string.mark_clear))
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.hold_n, hit.holdId))
+            .setItems(items) { _, which ->
+                val role = when (which) { 0 -> HoldRole.START; 1 -> HoldRole.FINISH; else -> HoldRole.ANY }
+                RouteStore.setHoldRole(captureDir, hit.holdId, role)
+                renderRouteImage()
+            }
+            .show()
     }
 
     private fun refresh() {
@@ -161,6 +199,7 @@ class RouteActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val TAG = "RouteActivity"
         private const val EXTRA_CAPTURE = "capture"
         private const val EXTRA_ROUTE = "route"
 

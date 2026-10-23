@@ -26,8 +26,20 @@ class KeyframeWriter(private val captureDir: File) {
     private var lastTimeMs = 0L
     private var nv21: ByteArray? = null
 
-    /** True when the camera moved far enough (or a new segment started) since the last keyframe. */
-    fun wants(segmentId: Int, localFromCamera: FloatArray, nowMs: Long): Boolean {
+    /**
+     * Claims the next keyframe index when the camera moved far enough (or a new segment started) since the
+     * last claim, else returns -1. Call from one thread (the depth integration thread); the JPEG itself can
+     * then be written from another with [write].
+     */
+    fun claim(segmentId: Int, localFromCamera: FloatArray, nowMs: Long): Int {
+        if (!wants(segmentId, localFromCamera, nowMs)) return -1
+        lastSegment = segmentId
+        lastMatrix = localFromCamera.copyOf()
+        lastTimeMs = nowMs
+        return count++
+    }
+
+    private fun wants(segmentId: Int, localFromCamera: FloatArray, nowMs: Long): Boolean {
         if (nowMs - lastTimeMs < MIN_INTERVAL_MS) return false
         if (segmentId != lastSegment) return true
         val last = lastMatrix ?: return true
@@ -38,13 +50,13 @@ class KeyframeWriter(private val captureDir: File) {
         return Math.toDegrees(acos(dot).toDouble()) >= MIN_TURN_DEG
     }
 
-    /** Writes the JPEG and index line. Call on the worker thread after [wants] returned true. */
+    /** Writes the JPEG and index line for a claimed [index]. Call on one thread (the keyframe thread). */
     fun write(
-        segmentId: Int, localFromCamera: FloatArray, nowMs: Long, timestampNs: Long,
+        index: Int, segmentId: Int, localFromCamera: FloatArray, timestampNs: Long,
         y: ByteArray, yRowStride: Int, u: ByteArray, v: ByteArray, uvRowStride: Int, uvPixelStride: Int, width: Int, height: Int,
         fx: Float, fy: Float, cx: Float, cy: Float,
     ) {
-        val name = "frame-${"%04d".format(count)}.jpg"
+        val name = "frame-${"%04d".format(index)}.jpg"
         FileOutputStream(File(dir, name)).use { out ->
             YuvImage(toNv21(y, yRowStride, u, v, uvRowStride, uvPixelStride, width, height), ImageFormat.NV21, width, height, null)
                 .compressToJpeg(Rect(0, 0, width, height), JPEG_QUALITY, out)
@@ -55,11 +67,7 @@ class KeyframeWriter(private val captureDir: File) {
             .put("timestampNs", timestampNs)
             .put("localFromCamera", JSONArray(localFromCamera.map { it.toDouble() }))
             .put("intrinsics", JSONObject().put("fx", fx).put("fy", fy).put("cx", cx).put("cy", cy).put("width", width).put("height", height))
-        index.appendText(line.toString() + "\n")
-        count++
-        lastSegment = segmentId
-        lastMatrix = localFromCamera.copyOf()
-        lastTimeMs = nowMs
+        this.index.appendText(line.toString() + "\n")
     }
 
     /** Rewrites the index as frames.json with world-from-camera matrices using each segment's final transform. */

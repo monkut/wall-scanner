@@ -26,8 +26,10 @@ shows the app language (EN-US, EN-UK or JA) and opens the language picker.
 
 - **Capture** mode is for scanning and identifying routes: the **New scan** button and the list of captures
   (thumbnail, timestamp, location, wall type, hold / route / confirmed counts). Tap a capture to open it in the
-  viewer. Long-press for **Set location**, **Share** (zip of the capture) and **Delete**. Captures without a
-  3D scene are listed as "incomplete · diagnostics only" and can still be shared.
+  viewer. Long-press for **Set location**, **Reprocess** (runs hold and route detection again on the saved
+  point cloud, replacing route edits and confirmations; use after a detector change), **Share** (zip of the
+  capture) and **Delete**. Captures without a 3D scene are listed as "incomplete · diagnostics only" and can
+  still be shared.
 - **Logbook** mode is for recording progress. It opens on the registered locations (name; kind, grade scale
   and GPS when coordinates are set; route and send counts) under a summary line (routes · sends · flashes ·
   locations); a "No location" row appears when confirmed routes belong to no registered location. **Add
@@ -82,8 +84,18 @@ the routes with a colour swatch, name, grade dropdown, hold count, **Confirm** a
 
 ### Route record (Logbook)
 
-Shows the route's swatch, name, grade, location, wall type, source capture and hold count with the capture
-thumbnail. **Log send** records a result (Flash / Send / Attempt), the number of tries and a note, timestamped
+Shows the route's swatch, name, grade, location, wall type, source capture and hold count above a large
+front view of the route (`routes/RouteImage.kt`), orthographic in the wall plane (true distances, up = the
+wall's up). With an orthophoto (`wall.png`, built at Finish from the scan's keyframes) the wall is shown as
+photographed, dimmed everywhere except inside the route's holds, which are outlined in chalk along their
+image-segmented shapes; without one (older captures) the wall is a flat surface colour with a faint
+half-metre grid, the route's holds filled in their own colours and every other hold a grey silhouette. The
+start hold(s) and top hold are ringed in tape yellow; the wall angle (overhang / vertical / slab from the plane
+normal) and a 1 m scale sit in the corners. Start and top come from hold roles when
+any are set (solid rings) — from the viewer, tape detection, or a tap on this image, which offers **Set as
+start / Set as top / Clear mark** for the tapped route hold — otherwise the lowest one or two holds and the
+highest are guessed (dashed rings). Pinch to zoom, drag to pan, double-tap to toggle. Captures made before
+outlines existed draw holds as ellipses until reprocessed. **Log send** records a result (Flash / Send / Attempt), the number of tries and a note, timestamped
 in JST. Sends are listed newest first; long-press one to delete it. The star row rates the climb 0–5
 (optional: "Not rated" until set, **Clear** removes it; the rating shows as "★ n" in the logbook route row).
 **Capture** opens the source capture in the viewer for re-editing; the send log and rating are kept separately
@@ -121,8 +133,10 @@ Each capture has a `scan.log`. Key lines, all with JST timestamps:
 | `TRACKING lost (…) / regained after …` | ARCore tracking changes with camera poses |
 | `SEGMENT n started …`, `SEGMENT n: voxels=… snap=accepted/rejected/skipped(…)` | Segment anchors and snap outcome |
 | `gps: requesting fix from …`, `gps: lat, lon (±m) from provider`, `gps: location … coordinates set` | Position fix for a location without coordinates (`scan/GpsFix.kt`) |
-| `STATUS segments=… pos=…` | Periodic position and processing counters |
-| `RESULT: plane … holds=… routes=…` or `RESULT: no wall plane` | Processing outcome |
+| `STATUS segments=… pos=… integrate(…) upload(…)` | Periodic position, processing counters and per-frame timings |
+| `COVERAGE thin depth in (row r, col c) …` | Cells of the 3 × 3 wall grid with little depth (row 0 = top, col 0 = left) |
+| `orthophoto: WxH px …`, `hold shapes: …`, `hold search: n image-only holds …`, `tape marks: n start holds …` | Photo-based stages of processing with timings |
+| `RESULT: plane … wallColor=… holds=… unassigned=… routes=…` or `RESULT: no wall plane` | Processing outcome (unassigned = holds left out of every route) |
 
 Uncaught exceptions are written to `files/crashes/` and included in every share. **Share** (long-press a
 capture, or the viewer's Share button) zips the capture directory, including `sends.json`, for export. Pull a
@@ -146,6 +160,7 @@ files/captures/<JST timestamp>/
   scene.json                              wall frame, holds, routes (schema: ARCHITECTURE.md §9)
   sends.json                              { version, sends: [{ id, routeId, at, result, attempts, note }], ratings: { "<routeId>": 0..5 } }
   thumbnail.png                           front view used in the lists
+  wall.png                                orthophoto of the wall from the keyframes (5 mm/px; bounds in scene.json wall.photo)
 ```
 
 ## Tools (run from the repository root with `uv`)
@@ -186,9 +201,16 @@ counts are written out with locale plurals ("1 try", "2 tries", "記録 2 件").
 
 - Single dominant wall plane; multi-panel walls (slab + overhang) get holds only on the dominant panel. Outdoor rock gets one coarse reference plane per scan, so a boulder should be scanned one face at a time; the thumbnail and (u, v) hold layout follow that face.
 - Depth-from-motion resolution limits detection of low-profile holds (< 2 cm) and footchips.
-- Route grouping is colour-only; mixed-colour sets need manual editing in the viewer. A hold's colour is the mean of the more saturated half of its voxels, which keeps wall bleed and shadow from pulling it under `MIN_ROUTE_SATURATION` (0.3); genuinely grey, white and black holds still group by value only. Clusters of 10–15 voxels at the noise floor can still form small false routes.
+- Holds are bumps in a 2 cm relief map of the wall (per-cell median plane distance, smoothed 3 × 3, `core/HoldDetector.kt`): raw depth leaves the wall 2–3 cm thick per voxel, so per-voxel clustering merged holds with the speckle around them. Touching holds are separated by re-thresholding at rising levels (`HOLD_SPLIT_LEVELS`) and keeping prominent peaks. A coloured hold's footprint then grows into neighbouring cells of the same colour (`HOLD_GROW_*`): flat slopers and jug edges sit at the depth noise floor, where relief alone finds only part of the hold. Each hold's outline is traced from its cells (`core/HoldOutline.kt`). Mats, side walls and the floor at the wall's edges still produce false holds, mostly grey or white; delete them in the viewer.
+- Hold shapes come from the photos, not the depth: at Finish (and on Reprocess) `io/ScenePipeline.kt` builds an orthophoto of the wall from the saved keyframes (`core/Orthophoto.kt`: every 5 mm wall pixel, placed at its measured relief, projected through each keyframe's pose; the most frontal, closest view wins; keyframes decoded at half size). `core/ColorPatches.kt` splits the photo into patches of one hue (saturated, not the wall colour, 3 cm gaps bridged so highlights and chalk do not cut a hold). `core/HoldShapes.kt` makes a coloured hold the patch its depth seed lies on, plus same-hue patches that share enough border with it and grey, white or dark parts wrapped by it (two-tone holds, shaded undersides), closed by 4 cm and hole-filled, then smoothed; two depth seeds on one patch merge into one hold. Grey, white and black holds grow from their seed over pixels closer in Lab colour to the hold than to the wall, at most 10 cm beyond the seed. The depth outline stays when the hold is not separable from the wall. White volumes on a light wall are the weak case.
+- Start holds from tape (`TapeMarks` in `core/HoldSearch.kt`): a rectangle of tape from a hold down to the route's white placard marks that hold as the start; the tape's colour is the gym's grade, not the hold colour, and is recorded on the hold (`tape`). Placards are white components 5–25 × 2.5–10 cm; from 1.5 cm above each card's top edge the tape is grown upward (any colour, grey and black included, within RGB distance 48 of where it leaves the card, up to 40 cm, under 5 cm wide) to the hold it reaches. Two strips leaving one placard mark a two-hold start. Without a placard, a thin strip of coloured tape still counts: strips are tinted or saturated pixels left after an opening removes anything wider than tape, 5–40 cm long and under 5 cm wide along their own axis, within 50° of vertical, whose lower half hangs in clear wall; the hold whose outline is within 6 cm above the strip's top gets the `start` role unless one was already set. Top holds are still guessed by height or marked by hand.
+- Holds the depth missed are searched for in the orthophoto (`core/HoldSearch.kt`): saturated patches of one hue, 4 cm or more across, not tape-shaped, not the wall colour, not below the wall surface's bottom edge (crash pads) and not covered by a detected hold become image-only holds (`voxels: 0`, height from the depth relief under them or 0). This recovers flat footholds, holds mounted on volumes and anything in a corner the sweep skipped. Volumes themselves count as holds up to `MAX_HOLD_HEIGHT` (0.8 m); above 10 cm of relief a hold on a volume only needs `HOLD_PROMINENCE_HIGH` (4 cm) over the volume's surface to split from it.
+- Depth coverage: at Finish the wall extent is checked as a 3 × 3 grid (`core/Coverage.kt`); cells with under 15% of the median cell's points are logged as `COVERAGE thin …` and shown in a toast ("Little depth data at the top right of the wall …"), since holds there come only from the photo.
+- Route grouping is colour-only; mixed-colour sets need manual editing in the viewer. A hold's colour comes from the voxels of its core (cells at least half its peak height) minus voxels that match the wall's own colour (`core/WallColor.kt`: hue, saturation and value tolerances taken from the wall surface), then the mean of the more saturated half. Holds that still look like the wall stay unassigned. Hue clusters wider than `MAX_ROUTE_HUE_SPAN` (35°) split at their largest gap, so red and orange sets stay apart. Genuinely grey, white and black holds group by value only.
 - Snap resolution is one relief cell (2 cm) and one roll step (0.5°); segments without ≥ 0.2 m² of overlap stay on their anchor pose.
-- Raw depth noise smears the wall about 3 voxels thick and fills 60–70% of a scan with off-wall points. The voxel map evicts least-hit voxels past `MAX_VOXELS` (1.4M per segment, logged as `SEGMENT n full`) and Finish drops voxels under `MIN_VOXEL_HITS`; both thresholds are untested on a real wall. Gym scans reject depth beyond `MAX_DEPTH_RANGE` (3.5 m), so the top of a tall wall needs the phone raised or a step back.
+- Raw depth noise smears the wall about 3 voxels thick and fills 60–70% of a scan with off-wall points. The voxel map evicts least-hit voxels past `MAX_VOXELS` (1.4M per segment, logged as `SEGMENT n full`) and Finish drops voxels under `MIN_VOXEL_HITS` (about 40% of a real wall scan). A 90 s gym scan reaches 1.1M voxels without hitting the cap. Gym scans reject depth beyond `MAX_DEPTH_RANGE` (3.5 m), so the top of a tall wall needs the phone raised or a step back.
+- `RealCaptureHarness` (unit test) rebuilds every capture pulled into `captures/` with the current pipeline and writes `scene-new.json` (and `wall-new.ppm`) beside each: `./gradlew :app:testDebugUnitTest --tests '*RealCaptureHarness*' -i | grep HARNESS`. Use it to compare hold and route counts before and after a detector change. The orthophoto stage needs the keyframes decoded first with `uv run tools/frames_to_ppm.py captures/<id>` (unit tests compile against android.jar, which has no JPEG decoder).
+- The live overlay draws at most 300k points per segment (`ArRenderer.PREVIEW_MAX_POINTS`, every k-th voxel); the full cloud is only in the viewer. Depth integration runs at about half the raw depth rate (`skipped(busy=…)` in the log); `integrate(avg/max)` and `upload(avg/max)` in the `STATUS` line show where the time goes.
 - Locations can be registered and assigned but not renamed or deleted; grades must come from one of the four scales (no free text).
 - Routes and sends live with the capture they were identified in; there is no merging of the same route across captures yet.
 - TODO: multi-plane segmentation, ML hold segmentation, capture bundle export (frames + poses) for the splat backend, tape detection on device.

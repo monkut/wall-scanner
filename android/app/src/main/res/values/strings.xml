@@ -82,6 +82,10 @@
     <string name="delete_send">Delete this send?\n%1$s</string>
     <string name="delete">Delete</string>
     <string name="share">Share</string>
+    <string name="reprocess">Reprocess</string>
+    <string name="reprocess_message">Runs hold and route detection again on this capture\'s saved point cloud. Route edits and confirmations in it are replaced; sends stay in the logbook, but routes must be confirmed again.</string>
+    <string name="reprocess_done">Reprocessed: %1$s</string>
+    <string name="reprocess_failed">Reprocessing failed: no point cloud or no wall plane.</string>
 
     <!-- Scan -->
     <string name="start_scan">Start scan</string>
@@ -123,6 +127,27 @@
     <string name="arcore_unavailable">ARCore is not available: %1$s</string>
     <string name="scene_saved">Routes saved</string>
     <string name="thumbnail">Scan thumbnail</string>
+    <string name="route_image">Route on the wall; pinch to zoom</string>
+    <string name="wall_overhang">Overhang %1$d°</string>
+    <string name="wall_slab">Slab %1$d°</string>
+    <string name="wall_vertical">Vertical</string>
+    <string name="label_start">START</string>
+    <string name="label_top">TOP</string>
+    <string name="marks_from_roles">Start and top from marked holds. Tap a hold to change.</string>
+    <string name="marks_guessed">Start and top guessed from height (dashed). Tap a route hold to mark it.</string>
+    <string name="marks_mixed">Solid ring: marked (tape or by hand). Dashed ring: guessed from height. Tap a route hold to change.</string>
+    <string name="hold_n">Hold %1$d</string>
+    <string name="mark_start">Set as start</string>
+    <string name="mark_top">Set as top</string>
+    <string name="mark_clear">Clear mark</string>
+    <string name="coverage_thin">Little depth data at the %1$s of the wall. Sweep there on the next scan so holds are found from depth, not only from the photos.</string>
+    <string name="coverage_cell">%1$s %2$s</string>
+    <string name="row_top">top</string>
+    <string name="row_middle">middle</string>
+    <string name="row_bottom">bottom</string>
+    <string name="col_left">left</string>
+    <string name="col_centre">centre</string>
+    <string name="col_right">right</string>
     <string name="points_saved_no_wall">Points saved for analysis, but no wall or rock face was found. Keep scanning or finish again.</string>
 
     <!-- Counts -->

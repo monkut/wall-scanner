@@ -2,6 +2,7 @@ package io.github.monkut.wallscanner.scan
 
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import android.os.SystemClock
 import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingFailureReason
@@ -49,6 +50,14 @@ class ArRenderer(
     private var viewportHeight = 0
     private var viewportChanged = false
     private var frameCount = 0
+
+    @Volatile private var uploads = 0
+    @Volatile private var uploadMsTotal = 0L
+    @Volatile private var uploadMsMax = 0L
+
+    /** Preview upload timing on the GL thread (a slow upload is a visible hitch in the camera image). */
+    fun uploadStats(): String =
+        "upload(n=$uploads avg=${if (uploads == 0) 0 else uploadMsTotal / uploads}ms max=${uploadMsMax}ms cap=$PREVIEW_MAX_POINTS)"
 
     /** Ends the current segment; the next tracked, recording frame opens a new one with a fresh anchor. */
     fun endSegment() { currentSegment = null }
@@ -101,10 +110,13 @@ class ArRenderer(
             val upload = frameCount % UPLOAD_EVERY_FRAMES == 0
             for (seg in segments.all()) {
                 seg.renderer.createOnGlThread()
-                if (upload && seg.map.size != seg.uploadedVoxels) {
-                    val cloud = seg.map.snapshot()
-                    seg.renderer.update(cloud)
-                    seg.uploadedVoxels = cloud.count
+                val size = seg.map.size
+                if (upload && size != seg.uploadedVoxels) {
+                    val t0 = SystemClock.elapsedRealtime()
+                    seg.renderer.update(seg.map.preview(PREVIEW_MAX_POINTS))
+                    seg.uploadedVoxels = size
+                    val ms = SystemClock.elapsedRealtime() - t0
+                    uploads++; uploadMsTotal += ms; if (ms > uploadMsMax) uploadMsMax = ms
                 }
                 seg.renderer.draw(viewMatrix, projectionMatrix, seg.anchorMatrix)
             }
@@ -129,5 +141,7 @@ class ArRenderer(
         private const val FAR_CLIP = 30f
         private const val UPLOAD_EVERY_FRAMES = 15
         private const val STATUS_EVERY_FRAMES = 10
+        /** Live preview points per segment; the full map is drawn only in the viewer after Finish. */
+        private const val PREVIEW_MAX_POINTS = 300_000
     }
 }

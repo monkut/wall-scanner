@@ -81,6 +81,10 @@
     <string name="delete_send">この記録を削除しますか？\n%1$s</string>
     <string name="delete">削除</string>
     <string name="share">共有</string>
+    <string name="reprocess">再処理</string>
+    <string name="reprocess_message">このキャプチャの保存済み点群に対して、ホールドとルートの検出をやり直します。ルートの編集と確定は置き換えられます。センドの記録はログブックに残りますが、ルートの再確定が必要です。</string>
+    <string name="reprocess_done">再処理しました: %1$s</string>
+    <string name="reprocess_failed">再処理に失敗しました: 点群または壁面が見つかりません。</string>
 
     <!-- スキャン -->
     <string name="start_scan">スキャン開始</string>
@@ -122,6 +126,27 @@
     <string name="arcore_unavailable">ARCore を利用できません: %1$s</string>
     <string name="scene_saved">ルートを保存しました</string>
     <string name="thumbnail">スキャンのサムネイル</string>
+    <string name="route_image">壁面上のルート。ピンチで拡大</string>
+    <string name="wall_overhang">前傾 %1$d°</string>
+    <string name="wall_slab">スラブ %1$d°</string>
+    <string name="wall_vertical">垂壁</string>
+    <string name="label_start">スタート</string>
+    <string name="label_top">トップ</string>
+    <string name="marks_from_roles">スタートとトップはマーク済みのホールドから。タップで変更。</string>
+    <string name="marks_guessed">スタートとトップは高さから推定（破線）。ルートのホールドをタップしてマーク。</string>
+    <string name="marks_mixed">実線はマーク済み（テープまたは手動）、破線は高さからの推定。ホールドをタップで変更。</string>
+    <string name="hold_n">ホールド %1$d</string>
+    <string name="mark_start">スタートにする</string>
+    <string name="mark_top">トップにする</string>
+    <string name="mark_clear">マークを外す</string>
+    <string name="coverage_thin">壁の%1$sの深度データが少なめです。次回は写真だけでなく深度からもホールドを見つけられるよう、その部分もスキャンしてください。</string>
+    <string name="coverage_cell">%2$s%1$s</string>
+    <string name="row_top">上</string>
+    <string name="row_middle">中央</string>
+    <string name="row_bottom">下</string>
+    <string name="col_left">左</string>
+    <string name="col_centre">中央</string>
+    <string name="col_right">右</string>
     <string name="points_saved_no_wall">点群は保存しましたが、壁や岩の面が見つかりませんでした。スキャンを続けるか、もう一度終了してください。</string>
 
     <!-- 数量 -->

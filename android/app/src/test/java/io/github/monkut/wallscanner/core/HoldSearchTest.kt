@@ -1,0 +1,118 @@
+package io.github.monkut.wallscanner.core
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import kotlin.math.abs
+import kotlin.math.hypot
+
+/** Image-only hold search: coloured patches no hold covers become holds; tape, pads and covered patches do not. */
+class HoldSearchTest {
+    private val px = 0.005f
+    private val tan = 0xffC9B496.toInt()
+    private val purple = 0xff5A3C9E.toInt()
+    private val frame = WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f))
+    private val extent = floatArrayOf(0f, 0f, 2f, 2f)
+
+    /** 2 × 2 m tan wall with painted features. */
+    private fun photo(paint: (Float, Float) -> Int?): Orthophoto {
+        val n = (2f / px).toInt()
+        val pixels = IntArray(n * n)
+        for (y in 0 until n) for (x in 0 until n) {
+            val u = (x + 0.5f) * px; val v = 2f - (y + 0.5f) * px
+            pixels[y * n + x] = paint(u, v) ?: tan
+        }
+        return Orthophoto(Image(n, n, pixels), 0f, 0f, 2f, 2f, px, FloatArray(n * n))
+    }
+
+    private fun disc(cu: Float, cv: Float, r: Float, color: Int): (Float, Float) -> Int? = { u, v -> if (hypot(u - cu, v - cv) <= r) color else null }
+
+    private fun patches(photo: Orthophoto) = ColorPatches.forHolds(photo, null)
+
+    @Test
+    fun highlightBandDoesNotSplitAHold() {
+        // A 30 cm purple disc crossed by a 2 cm white highlight: one patch, one hold, full disc area.
+        val white = 0xffF4F2EE.toInt()
+        val paint: (Float, Float) -> Int? = { u, v -> if (hypot(u - 1.0f, v - 1.0f) <= 0.15f) (if (abs(v - 1.0f) < 0.01f) white else purple) else null }
+        val p = photo(paint)
+        val found = HoldSearch.find(emptyList(), patches(p), p, frame, extent)
+        assertEquals("one hold, got ${found.map { "(${it.u}, ${it.v}) ${it.width}x${it.tall}" }}", 1, found.size)
+        assertTrue("tall ${found[0].tall}", abs(found[0].tall - 0.3f) < 0.02f)
+    }
+
+    @Test
+    fun tapeStripBelowAHoldMarksItAsStart() {
+        val paint: (Float, Float) -> Int? = { u, v ->
+            when {
+                hypot(u - 1.0f, v - 1.5f) <= 0.1f -> purple                  // the hold
+                u in 0.99f..1.01f && v in 1.2f..1.36f -> purple              // 2 × 16 cm tape just below it
+                hypot(u - 1.0f, v - 0.5f) <= 0.1f -> purple                  // a lower hold of the same colour, no tape
+                else -> null
+            }
+        }
+        val photo = photo(paint)
+        val holds = listOf(seedHold(1, 1.0f, 1.5f, purple), seedHold(2, 1.0f, 0.5f, purple))
+        val marked = TapeMarks.markStarts(holds, photo, null)
+        assertEquals(1, marked)
+        assertEquals(HoldRole.START, holds[0].role)
+        assertEquals(HoldRole.ANY, holds[1].role)
+    }
+
+    @Test
+    fun greyTapeFromAPlacardMarksBothHoldsOfATwoHoldStart() {
+        val grey = 0xff8C8C8C.toInt()
+        val card = 0xffF4F2EE.toInt()
+        val green = 0xff5D783C.toInt()
+        val paint: (Float, Float) -> Int? = { u, v ->
+            when {
+                hypot(u - 0.94f, v - 1.45f) <= 0.05f || hypot(u - 1.06f, v - 1.45f) <= 0.05f -> green // the two start holds
+                hypot(u - 1.5f, v - 1.45f) <= 0.05f -> green                                         // a hold with no tape
+                (u in 0.93f..0.95f || u in 1.05f..1.07f) && v in 1.30f..1.41f -> grey              // 2 × 11 cm grey tape to each hold
+                u in 0.97f..1.0f && v in 1.26f..1.28f -> 0xff202020.toInt()                         // grade text on the card
+                u in 0.90f..1.10f && v in 1.24f..1.30f -> card                                      // 20 × 6 cm placard
+                else -> null
+            }
+        }
+        val photo = photo(paint)
+        val holds = listOf(seedHold(1, 0.94f, 1.45f, green, 0.1f), seedHold(2, 1.06f, 1.45f, green, 0.1f), seedHold(3, 1.5f, 1.45f, green, 0.1f))
+        val tanWall = WallColor(0xC9, 0xB4, 0x96, 36f, 0.25f, 0.1f, 0.6f, 0.95f)
+        val marked = TapeMarks.markStarts(holds, photo, tanWall)
+        assertEquals(2, marked)
+        assertEquals(listOf(HoldRole.START, HoldRole.START, HoldRole.ANY), holds.map { it.role })
+        assertEquals(grey and 0xffffff, holds[0].tape)
+        assertEquals(null, holds[2].tape)
+    }
+
+    private fun seedHold(id: Int, u: Float, v: Float, color: Int, size: Float = 0.2f): Hold =
+        Hold(id, u, v, 0f, u, v, size, size, 0.05f, color shr 16 and 0xff, color shr 8 and 0xff, color and 0xff, 100, Raster.ellipse(u, v, size, size))
+
+    @Test
+    fun uncoveredPurplePatchBecomesAHoldWithItsShape() {
+        val p = photo(disc(1.0f, 1.5f, 0.1f, purple))
+        val found = HoldSearch.find(emptyList(), patches(p), p, frame, extent)
+        assertEquals(1, found.size)
+        val h = found[0]
+        assertTrue("centre (${h.u}, ${h.v})", abs(h.u - 1.0f) < 0.01f && abs(h.v - 1.5f) < 0.01f)
+        assertTrue("width ${h.width}", abs(h.width - 0.2f) < 0.02f)
+        assertEquals("image-only holds carry no voxels", 0, h.voxels)
+        assertTrue("outline points", h.outline.size / 2 >= 16)
+        assertTrue("named purple", ColorUtil.hueName(h.hue) == "Purple")
+    }
+
+    @Test
+    fun coveredTapeAndPadPatchesAreIgnored() {
+        val paint: (Float, Float) -> Int? = { u, v ->
+            when {
+                hypot(u - 0.5f, v - 1.0f) <= 0.1f -> purple                       // covered by an existing hold below
+                u in 1.2f..1.22f && v in 0.8f..1.0f -> purple                     // 2 cm × 20 cm tape strip
+                v < 0.1f && u in 0.5f..1.5f -> purple                             // crash pad along the bottom
+                else -> null
+            }
+        }
+        val existing = Hold(1, 0.5f, 1.0f, 0f, 0.5f, 1.0f, 0.2f, 0.2f, 0.05f, 90, 60, 158, 100, Raster.ellipse(0.5f, 1.0f, 0.22f, 0.22f))
+        val wallBottomAt20cm = floatArrayOf(0f, 0.2f, 2f, 2f) // the pad lies below the wall surface's lowest edge
+        val p = photo(paint)
+        val found = HoldSearch.find(listOf(existing), patches(p), p, frame, wallBottomAt20cm)
+        assertEquals("nothing new: ${found.map { "(${it.u}, ${it.v}) ${it.width}x${it.tall}" }}", 0, found.size)
+    }
+}

@@ -404,16 +404,40 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleCaptureMenu(dir: File) {
-        val items = arrayOf(getString(R.string.set_location), getString(R.string.share), getString(R.string.delete))
+        val items = arrayOf(getString(R.string.set_location), getString(R.string.reprocess), getString(R.string.share), getString(R.string.delete))
         AlertDialog.Builder(this)
             .setTitle(Labels.captureDate(this, dir.name))
             .setItems(items) { _, which ->
                 when (which) {
                     0 -> pickLocation(CaptureStore.readLocationId(dir)) { CaptureStore.setLocation(dir, it.id); refresh() }
-                    1 -> CaptureStore.share(this, dir)
-                    2 -> { CaptureStore.delete(dir); thumbnails.remove(dir.name); refresh() }
+                    1 -> handleReprocess(dir)
+                    2 -> CaptureStore.share(this, dir)
+                    3 -> { CaptureStore.delete(dir); thumbnails.remove(dir.name); refresh() }
                 }
             }
+            .show()
+    }
+
+    /** Re-runs hold and route detection on a capture's saved point cloud (CaptureStore.reprocess) after a confirmation. */
+    private fun handleReprocess(dir: File) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.reprocess)
+            .setMessage(R.string.reprocess_message)
+            .setPositiveButton(R.string.reprocess) { _, _ ->
+                val progress = AlertDialog.Builder(this).setMessage(R.string.processing).setCancelable(false).show()
+                thread(name = "reprocess") {
+                    val summary = runCatching { CaptureStore.reprocess(dir) }.getOrNull()
+                    runOnUiThread {
+                        if (isDestroyed) return@runOnUiThread
+                        progress.dismiss()
+                        thumbnails.remove(dir.name)
+                        refresh()
+                        val message = if (summary != null) getString(R.string.reprocess_done, summary) else getString(R.string.reprocess_failed)
+                        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 

@@ -2,6 +2,7 @@ package io.github.monkut.wallscanner.scan
 
 import android.media.Image
 import android.opengl.Matrix
+import android.os.SystemClock
 import android.util.Log
 import com.google.ar.core.Camera
 import com.google.ar.core.Frame
@@ -66,7 +67,11 @@ private class FrameData(
  */
 class DepthFrameProcessor {
     private val executor = Executors.newSingleThreadExecutor()
+    /** JPEG encoding of keyframes (~100 ms each) runs here so it never holds up depth integration. */
+    private val keyframeExecutor = Executors.newSingleThreadExecutor()
     private val busy = AtomicBoolean(false)
+    @Volatile private var integrateMsTotal = 0L
+    @Volatile private var integrateMsMax = 0L
     private var lastDepthTimestamp = -1L
     private val xyz = FloatArray(Tuning.MAX_SAMPLES_PER_DEPTH_FRAME * 3)
     private val rgb = ByteArray(Tuning.MAX_SAMPLES_PER_DEPTH_FRAME * 3)
@@ -100,7 +105,13 @@ class DepthFrameProcessor {
 
     fun stats(): String =
         "depthFrames=$depthFrames samples=$samplesSeen kept=$kept noDepth=$rejectedNoDepth lowConf=$rejectedConfidence " +
-            "range=$rejectedRange outOfImage=$rejectedOutOfImage skipped(busy=$skippedBusy stale=$skippedStaleDepth notReady=$skippedNotAvailable)"
+            "range=$rejectedRange outOfImage=$rejectedOutOfImage skipped(busy=$skippedBusy stale=$skippedStaleDepth notReady=$skippedNotAvailable) " +
+            "integrate(avg=${if (depthFrames == 0) 0 else integrateMsTotal / depthFrames}ms max=${integrateMsMax}ms)"
+
+    /** Blocks until every keyframe claimed so far has been written; call before resolving frames.jsonl. */
+    fun awaitKeyframes() {
+        try { keyframeExecutor.submit {}.get() } catch (e: Exception) { log?.log("awaitKeyframes: $e") }
+    }
 
     fun process(frame: Frame, segment: Segment) {
         if (busy.get()) { skippedBusy++; return }
@@ -130,6 +141,7 @@ class DepthFrameProcessor {
         }
         if (!busy.compareAndSet(false, true)) return
         executor.execute {
+            val t0 = SystemClock.elapsedRealtime()
             try {
                 integrate(data)
             } catch (e: Exception) {
@@ -137,11 +149,16 @@ class DepthFrameProcessor {
                 log?.log("integrate failed: $e")
             } finally {
                 busy.set(false)
+                val ms = SystemClock.elapsedRealtime() - t0
+                integrateMsTotal += ms; if (ms > integrateMsMax) integrateMsMax = ms
             }
         }
     }
 
-    fun shutdown() = executor.shutdownNow()
+    fun shutdown() {
+        executor.shutdownNow()
+        keyframeExecutor.shutdownNow()
+    }
 
     private fun integrate(f: FrameData) {
         val w = f.depthW
@@ -220,19 +237,22 @@ class DepthFrameProcessor {
         depthFrames++
     }
 
+    /** Claims a keyframe on this thread and encodes it on [keyframeExecutor]; [f] owns its byte arrays, so no copy is needed. */
     private fun writeKeyframe(f: FrameData) {
         val writer = keyframes ?: return
-        val now = System.currentTimeMillis()
-        if (!writer.wants(f.segment.id, f.localFromCamera, now)) return
-        try {
-            writer.write(
-                f.segment.id, f.localFromCamera, now, f.timestampNs,
-                f.yPlane.bytes, f.yPlane.rowStride, f.uPlane.bytes, f.vPlane.bytes, f.uPlane.rowStride, f.uPlane.pixelStride,
-                f.imgW, f.imgH, f.imgFx, f.imgFy, f.imgCx, f.imgCy,
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Keyframe write failed", e)
-            log?.log("keyframe write failed: $e")
+        val index = writer.claim(f.segment.id, f.localFromCamera, System.currentTimeMillis())
+        if (index < 0) return
+        keyframeExecutor.execute {
+            try {
+                writer.write(
+                    index, f.segment.id, f.localFromCamera, f.timestampNs,
+                    f.yPlane.bytes, f.yPlane.rowStride, f.uPlane.bytes, f.vPlane.bytes, f.uPlane.rowStride, f.uPlane.pixelStride,
+                    f.imgW, f.imgH, f.imgFx, f.imgFy, f.imgCx, f.imgCy,
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Keyframe write failed", e)
+                log?.log("keyframe write failed: $e")
+            }
         }
     }
 

@@ -19,6 +19,7 @@ class PointsRenderer {
     private val mvp = FloatArray(16)
     private val viewModel = FloatArray(16)
     private var buffer: FloatBuffer? = null
+    private var staging = FloatArray(0)
 
     /** Idempotent: safe to call every frame. */
     fun createOnGlThread() {
@@ -42,13 +43,19 @@ class PointsRenderer {
             buf = ByteBuffer.allocateDirect(floats * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
             buffer = buf
         }
-        buf.clear()
+        // Interleave into a heap array and copy once: per-float puts into a direct buffer cost ~10× more.
+        if (staging.size < floats) staging = FloatArray(floats)
+        val s = staging
+        val xyz = cloud.xyz; val rgb = cloud.rgb
         for (i in 0 until n) {
-            buf.put(cloud.xyz[i * 3]).put(cloud.xyz[i * 3 + 1]).put(cloud.xyz[i * 3 + 2])
-            buf.put((cloud.rgb[i * 3].toInt() and 0xff) / 255f)
-            buf.put((cloud.rgb[i * 3 + 1].toInt() and 0xff) / 255f)
-            buf.put((cloud.rgb[i * 3 + 2].toInt() and 0xff) / 255f)
+            val o = i * FLOATS_PER_POINT
+            s[o] = xyz[i * 3]; s[o + 1] = xyz[i * 3 + 1]; s[o + 2] = xyz[i * 3 + 2]
+            s[o + 3] = (rgb[i * 3].toInt() and 0xff) / 255f
+            s[o + 4] = (rgb[i * 3 + 1].toInt() and 0xff) / 255f
+            s[o + 5] = (rgb[i * 3 + 2].toInt() and 0xff) / 255f
         }
+        buf.clear()
+        buf.put(s, 0, floats)
         buf.position(0)
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vbo)
         GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, floats * 4, buf, GLES20.GL_DYNAMIC_DRAW)

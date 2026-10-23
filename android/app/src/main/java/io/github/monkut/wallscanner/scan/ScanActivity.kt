@@ -25,11 +25,11 @@ import com.google.ar.core.TrackingFailureReason
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.UnavailableException
 import com.google.ar.core.exceptions.UnsupportedConfigurationException
+import io.github.monkut.wallscanner.Labels
 import io.github.monkut.wallscanner.R
 import io.github.monkut.wallscanner.core.Definition
 import io.github.monkut.wallscanner.core.Rigid
 import io.github.monkut.wallscanner.core.RouteDefinition
-import io.github.monkut.wallscanner.core.SceneBuilder
 import io.github.monkut.wallscanner.core.SceneJson
 import io.github.monkut.wallscanner.core.SegmentSnapper
 import io.github.monkut.wallscanner.core.Thumbnail
@@ -38,6 +38,7 @@ import io.github.monkut.wallscanner.core.VoxelMap
 import io.github.monkut.wallscanner.io.CaptureStore
 import io.github.monkut.wallscanner.io.LocationStore
 import io.github.monkut.wallscanner.io.ScanLog
+import io.github.monkut.wallscanner.io.ScenePipeline
 import io.github.monkut.wallscanner.viewer.ViewerActivity
 import java.io.File
 import java.util.EnumSet
@@ -203,7 +204,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         if (statusCalls % STATUS_LOG_EVERY_CALLS == 0) {
             log.log(
                 "STATUS segments=${segments.size} recording=${renderer.recording} tracking=$tracking voxels=$voxels " +
-                    "evicted=${segments.totalEvictions()} pos=${fmtTranslation(renderer.lastTrackedPose)} · ${processor.stats()}"
+                    "evicted=${segments.totalEvictions()} pos=${fmtTranslation(renderer.lastTrackedPose)} · ${processor.stats()} " +
+                    renderer.uploadStats()
             )
         }
     }
@@ -381,6 +383,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
                 segmentTransforms[seg.id] = fix.compose(anchorT)
                 reference = merged.snapshot()
             }
+            processor.awaitKeyframes()
             val keyframes = processor.keyframes?.resolve(segmentTransforms) ?: 0
             log.log("keyframes: $keyframes resolved to world poses (${CaptureStore.FRAMES_RESOLVED})")
             val cloud = reference
@@ -388,7 +391,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             CaptureStore.writePly(captureDir, cloud)
             log.log("points.ply written (${File(captureDir, CaptureStore.PLY_FILE).length()} bytes)")
 
-            val result = SceneBuilder.build(cloud, cameras, definition = definition)
+            val result = ScenePipeline.build(captureDir, cloud, cameras, definition) { log.log(it) }
             val elapsed = System.currentTimeMillis() - t0
             if (result == null) {
                 log.log("RESULT: no wall plane (${elapsed} ms)")
@@ -402,13 +405,16 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             val p = result.frame.plane
             log.log(
                 "RESULT: plane origin=(${p.ox}, ${p.oy}, ${p.oz}) normal=(${p.nx}, ${p.ny}, ${p.nz}) " +
-                    "inliers=${result.planeInliers}/${cloud.count} holds=${result.holds.size} " +
+                    "inliers=${result.planeInliers}/${cloud.count} wallColor=${result.wallColor ?: "n/a"} holds=${result.holds.size} " +
+                    "unassigned=${result.holds.count { it.routeId == -1 }} " +
                     "routes=${result.routes.joinToString { "${it.name}(${it.holdIds.size})" }} (${elapsed} ms)"
             )
             CaptureStore.writeScene(captureDir, SceneJson.write(result, cloud.count, CaptureStore.nowIso(), Build.MODEL))
             CaptureStore.writeThumbnail(captureDir, Thumbnail.render(cloud, result.frame))
             finished = true
+            val thin = result.thinCoverage
             runOnUiThread {
+                if (thin.isNotEmpty()) toast(getString(R.string.coverage_thin, thin.joinToString { Labels.coverageCell(this, it) }))
                 startActivity(ViewerActivity.intent(this, captureDir.name))
                 finish()
             }

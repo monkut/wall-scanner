@@ -17,7 +17,7 @@ class HoldColorTest {
         val map = VoxelMap()
         val rnd = Random(5)
         val noise = { (rnd.nextFloat() - 0.5f) * 0.004f }
-        SyntheticWall.addPanel(map, 1f, 1f, noise)
+        SyntheticWall.addPanel(map, 1f, 1f, noise, holes = listOf(Triple(0.5f, 0.5f, 0.06f)))
         SyntheticWall.addHemisphere(map, 0.5f, 0.5f, 0.06f, SyntheticWall.gray, noise, colorAt = colorAt)
         return map.snapshot()
     }
