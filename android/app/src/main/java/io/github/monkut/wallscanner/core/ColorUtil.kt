@@ -23,6 +23,9 @@ object ColorUtil {
         return floatArrayOf(h, s, mx)
     }
 
+    /** Shortest angular distance between two hues in degrees, 0..180. */
+    fun hueDistance(a: Float, b: Float): Float = kotlin.math.abs(((a - b) % 360f + 540f) % 360f - 180f)
+
     fun hueName(hue: Float): String = when {
         hue < 15f || hue >= 345f -> "Red"
         hue < 45f -> "Orange"

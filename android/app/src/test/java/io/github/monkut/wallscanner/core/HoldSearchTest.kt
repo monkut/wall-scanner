@@ -59,6 +59,17 @@ class HoldSearchTest {
     }
 
     @Test
+    fun darkHoldWithAHueUnlikeTheWallsIsFound() {
+        // rgb(26, 42, 26): saturation 0.38, brightness 0.16 — under the hold patch floors, but green on a tan wall.
+        val darkGreen = 0xff1A2A1A.toInt()
+        val tanWall = WallColor(0xC9, 0xB4, 0x96, 36f, 0.25f, 0.1f, 0.6f, 0.95f)
+        val p = photo(disc(1.0f, 1.0f, 0.04f, darkGreen))
+        val found = HoldSearch.find(emptyList(), ColorPatches.forHolds(p, tanWall), p, frame, extent)
+        assertEquals("one dark hold: ${found.map { "(${it.u}, ${it.v})" }}", 1, found.size)
+        assertEquals("not without a wall colour to compare hues with", 0, HoldSearch.find(emptyList(), ColorPatches.forHolds(p, null), p, frame, extent).size)
+    }
+
+    @Test
     fun greyTapeFromAPlacardMarksBothHoldsOfATwoHoldStart() {
         val grey = 0xff8C8C8C.toInt()
         val card = 0xffF4F2EE.toInt()

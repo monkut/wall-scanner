@@ -1,6 +1,5 @@
 package io.github.monkut.wallscanner.core
 
-import kotlin.math.abs
 import kotlin.math.max
 
 /**
@@ -8,8 +7,11 @@ import kotlin.math.max
  * [minVal], not the wall's colour, connected through neighbours within [HUE_LINK] of hue. A gap of up to
  * [gapPx] non-matching pixels in a straight line is bridged, so a highlight, a chalk streak or a bolt does
  * not cut one hold into two patches (the bridged pixels themselves are not part of the patch; shapes are
- * closed and hole-filled later). Holds are such patches, and so are tape strips. [label] is 0 for no patch,
- * else the patch id (1-based); [hue], [sat], [value] are per pixel.
+ * closed and hole-filled later). Holds are such patches, and so are tape strips. A dark or dull hold (a
+ * dark green foothold reads as saturation 0.4, brightness 0.2 at 5 mm) also counts when its hue lies at
+ * least [DARK_HUE] from the wall's and it is at least [DARK_SAT] saturated and [DARK_VAL] bright; the hue
+ * test keeps the wall's own shadows out, so it needs a coloured wall. [label] is 0 for no patch, else the
+ * patch id (1-based); [hue], [sat], [value] are per pixel.
  */
 class ColorPatches private constructor(
     val width: Int, val height: Int,
@@ -17,10 +19,12 @@ class ColorPatches private constructor(
     val hue: FloatArray, val sat: FloatArray, val value: FloatArray,
     val size: IntArray, val minX: IntArray, val maxX: IntArray, val minY: IntArray, val maxY: IntArray,
 ) {
-    /** Extent of patch [p] in pixels (long side, short side). */
-    fun sides(p: Int): Pair<Int, Int> {
-        val w = maxX[p] - minX[p] + 1; val h = maxY[p] - minY[p] + 1
-        return Pair(maxOf(w, h), minOf(w, h))
+    /** Pixel indices of patch [p]. */
+    fun members(p: Int): IntArray {
+        val out = IntArray(size[p])
+        var k = 0
+        for (y in minY[p]..maxY[p]) for (x in minX[p]..maxX[p]) { val i = y * width + x; if (label[i] == p) out[k++] = i }
+        return out
     }
 
     companion object {
@@ -28,22 +32,28 @@ class ColorPatches private constructor(
         const val HOLD_SAT = 0.45f
         const val HOLD_VAL = 0.2f
         const val HOLD_GAP_M = 0.03f
+        private const val DARK_SAT = 0.30f
+        private const val DARK_VAL = 0.15f // below this the hue is quantisation noise (TapeMarks.MIN_VAL says the same)
+        private const val DARK_HUE = 30f
 
-        /** Patches for hold detection: hold saturation floor, 3 cm gap bridging. */
+        /** Patches for hold detection: hold saturation floor, dark off-wall-hue holds, 3 cm gap bridging. */
         fun forHolds(photo: Orthophoto, wall: WallColor?): ColorPatches =
-            find(photo, wall, HOLD_SAT, HOLD_VAL, max(1, (HOLD_GAP_M / photo.px + 0.5f).toInt()))
+            find(photo, wall, HOLD_SAT, HOLD_VAL, max(1, (HOLD_GAP_M / photo.px + 0.5f).toInt()), dark = true)
 
-        fun find(photo: Orthophoto, wall: WallColor?, minSat: Float, minVal: Float, gapPx: Int = 0): ColorPatches {
+        fun find(photo: Orthophoto, wall: WallColor?, minSat: Float, minVal: Float, gapPx: Int = 0, dark: Boolean = false): ColorPatches {
             val w = photo.image.width; val h = photo.image.height
             val n = w * h
             val pixels = photo.image.pixels
             val hue = FloatArray(n); val sat = FloatArray(n); val value = FloatArray(n)
             val eligible = BooleanArray(n)
+            val darkRule = dark && wall != null && wall.sat >= Tuning.WALL_GREY_SAT
             for (i in 0 until n) {
                 val p = pixels[i]
                 val c = ColorUtil.rgbToHsv(p shr 16 and 0xff, p shr 8 and 0xff, p and 0xff)
                 hue[i] = c[0]; sat[i] = c[1]; value[i] = c[2]
-                eligible[i] = c[1] >= minSat && c[2] >= minVal && (wall == null || !wall.matches(c))
+                if (wall != null && wall.matches(c)) continue
+                val offHue = darkRule && c[1] >= DARK_SAT && c[2] >= DARK_VAL && ColorUtil.hueDistance(c[0], wall!!.hue) >= DARK_HUE
+                eligible[i] = (c[1] >= minSat && c[2] >= minVal) || offHue
             }
             val label = IntArray(n)
             val queue = IntArray(n)
@@ -69,7 +79,7 @@ class ColorPatches private constructor(
                             val j = ny * w + nx
                             if (label[j] == id) break
                             if (!eligible[j] || label[j] != 0) continue
-                            if (abs(((hue[j] - hue[i]) % 360f + 540f) % 360f - 180f) > HUE_LINK) continue
+                            if (ColorUtil.hueDistance(hue[j], hue[i]) > HUE_LINK) continue
                             label[j] = id; queue[tail++] = j
                             break
                         }

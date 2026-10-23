@@ -31,16 +31,12 @@ object HoldSearch {
         for (p in 1..patches.count) {
             val count = patches.size[p]
             if (count < minSidePx * minSidePx) continue
-            val (long, short) = patches.sides(p)
-            val longM = long * photo.px; val shortM = short * photo.px
+            val longM = max(patches.maxX[p] - patches.minX[p], patches.maxY[p] - patches.minY[p]).plus(1) * photo.px
             if (longM < MIN_SIDE || longM > MAX_SIDE) continue
-            if (TapeMarks.isStrip(longM, shortM)) continue
-            val members = IntArray(count)
-            var k = 0
-            for (y in patches.minY[p]..patches.maxY[p]) for (x in patches.minX[p]..patches.maxX[p]) {
-                val i = y * w + x
-                if (patches.label[i] == p) members[k++] = i
-            }
+            val members = patches.members(p)
+            // Tape is told by its size along its own axes: a slanted strip has a square bounding box.
+            val (_, _, length, width) = TapeMarks.shape(members, count, w, photo.px)
+            if (TapeMarks.isStrip(length, width)) continue
             var coveredCount = 0; var sr = 0L; var sg = 0L; var sb = 0L
             var su = 0.0; var sv = 0.0
             for (i in members) {
@@ -80,8 +76,9 @@ object HoldSearch {
  * Tape marks starts: a rectangle of tape from a hold down to the route's white placard means that hold is a
  * start hold. The tape's colour is the grade, not the hold colour, so it may be grey or black; two strips
  * leaving one placard mark a two-hold start. Placard-anchored tape ([markFromPlacards]) is found first and
- * its colour is recorded on the hold ([Hold.tape]). Without a placard, a thin strip of coloured tape still
- * counts. A strip pixel is saturated or tinted with a hue unlike
+ * its colour is recorded on the hold ([Hold.tape]). On a wall with no placard at all, a thin strip of
+ * coloured tape still counts (once one placard start is found, the wall marks starts that way and the strip
+ * search, which mistakes shaded hold edges for tape on a busy wall, is skipped). A strip pixel is saturated or tinted with a hue unlike
  * the wall's; strips are what is left of such pixels after an opening removes anything wider than tape,
  * 4-connected, with a tape shape along their own axis ([isStrip]: [MIN_SHORT]..[MAX_SHORT] wide, [MIN_LONG]..
  * [MAX_LONG] long, hanging within [STRIP_MAX_TILT] of vertical, filling most of their length × width), whose
@@ -135,7 +132,8 @@ object TapeMarks {
         holds.forEachIndexed { k, hold -> for (i in Raster.fillPolygon(polygon(hold), photo)) holdAt[i] = k }
         val inHold = BooleanArray(n) { holdAt[it] >= 0 }
         if (patches != null) {
-            val holdSized = BooleanArray(patches.count + 1) { p -> p > 0 && patches.sides(p).second * photo.px > MAX_SHORT }
+            // Hold-sized along the patch's own axes: a slanted strip of dark tape has a square bounding box.
+            val holdSized = BooleanArray(patches.count + 1) { p -> p > 0 && shape(patches.members(p), patches.size[p], w, photo.px)[3] > MAX_SHORT }
             for (i in 0 until n) if (holdSized[patches.label[i]]) inHold[i] = true
         }
         // Tape is coloured (gyms tape in the route's colour) and 1–2 cm wide, so at 5 mm per pixel it blends with
@@ -151,13 +149,15 @@ object TapeMarks {
             if (wall != null && wall.matches(c)) continue
             offWall[i] = true
             white[i] = c[1] <= PLACARD_SAT && c[2] >= PLACARD_VAL
-            val offHue = wall != null && wall.sat >= Tuning.WALL_GREY_SAT && c[1] >= TINT_SAT &&
-                kotlin.math.abs(((c[0] - wall.hue) % 360f + 540f) % 360f - 180f) > TINT_HUE
+            val offHue = wall != null && wall.sat >= Tuning.WALL_GREY_SAT && c[1] >= TINT_SAT && ColorUtil.hueDistance(c[0], wall.hue) > TINT_HUE
             tinted[i] = c[2] >= MIN_VAL && (offHue || c[1] >= MIN_SAT) // near-black shadows carry noise hues
             eligible[i] = tinted[i] && !inHold[i]
         }
         // Without a wall colour every pixel is off the wall, and tape cannot be told apart from it.
         var marked = if (wall != null) markFromPlacards(holds, photo, holdAt, inHold, white, offWall) else 0
+        // A wall with placards marks every start that way; the strip search below is for walls without them,
+        // and on a busy wall it mistakes a hold's shaded edge for tape.
+        if (marked > 0) return marked
         // Tape is thin: what survives an opening of OPEN_M is a hold's shadow or an uncovered hold part, not tape.
         val openPx = max(1, (OPEN_M / photo.px + 0.5f).toInt())
         val thick = open(eligible, w, h, openPx)
@@ -303,7 +303,7 @@ object TapeMarks {
     }
 
     /** Centre (x, y), length, width (metres, from second moments) and tilt from vertical (degrees) of [count] pixel indices. */
-    private fun shape(idx: IntArray, count: Int, w: Int, px: Float): FloatArray {
+    internal fun shape(idx: IntArray, count: Int, w: Int, px: Float): FloatArray {
         var mx = 0.0; var my = 0.0
         for (q in 0 until count) { mx += idx[q] % w; my += idx[q] / w }
         mx /= count; my /= count

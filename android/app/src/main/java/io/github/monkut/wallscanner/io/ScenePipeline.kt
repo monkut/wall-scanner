@@ -7,6 +7,7 @@ import io.github.monkut.wallscanner.core.Definition
 import io.github.monkut.wallscanner.core.TapeMarks
 import io.github.monkut.wallscanner.core.HoldSearch
 import io.github.monkut.wallscanner.core.HoldShapes
+import io.github.monkut.wallscanner.core.HoldSplit
 import io.github.monkut.wallscanner.core.Image
 import io.github.monkut.wallscanner.core.Keyframe
 import io.github.monkut.wallscanner.core.OrthophotoBuilder
@@ -52,7 +53,11 @@ object ScenePipeline {
             .onFailure { log("hold search failed: $it") }
             .getOrDefault(emptyList())
         log("hold search: ${extra.size} image-only holds added from the orthophoto (${System.currentTimeMillis() - t2} ms)")
-        val holds = refined + extra
+        val merged = refined + extra
+        val holds = runCatching { HoldSplit.byColor(merged, photo, patches, result.frame, result.wallColor) }
+            .onFailure { log("hold split failed: $it") }
+            .getOrDefault(merged)
+        if (holds.size != merged.size) log("hold split: ${merged.size} holds → ${holds.size} by photo colour")
         val starts = runCatching { TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent) }
             .onFailure { log("tape marks failed: $it") }
             .getOrDefault(0)

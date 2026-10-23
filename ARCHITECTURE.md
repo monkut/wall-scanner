@@ -159,7 +159,7 @@ definition: { type: <id above>, rules: { feet: follow|open|chips, volumesOn: boo
 holds[]:    { ..., routeId: <primary or -1>, routeIds: [..], role: any|start|hand|foot|zone|finish,
               tape: [r, g, b] | null,           colour of the start tape from this hold to its placard (the gym's grade colour)
               outline: [[u, v], ...] }          closed polygon in the wall plane: segmented on the orthophoto when there is
-                                                 one, else traced from the hold's relief cells; voxels: 0 marks an image-only hold
+                                                 one, else traced from the hold's relief cells; voxels: 0 marks an image-only hold (photo search, colour split, or added by hand in the viewer)
 wall:       { origin, normal, up, right, inliers, color: [r, g, b], extent: [minU, minV, maxU, maxV],
               photo: { file: "wall.png", bounds: [minU, minV, maxU, maxV], px } }
                                                  color = mean surface colour; extent = scanned area (1st..99th percentile);
