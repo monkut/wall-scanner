@@ -41,7 +41,7 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("com.google.ar:core:1.57.0")
-    implementation("org.tensorflow:tensorflow-lite:2.16.1") // hold detector (assets/holds.tflite, see tools/holds_model)
+    implementation("com.google.ai.edge.litert:litert:1.4.2") // hold detector (assets/holds.tflite, see tools/holds_model); TF Lite 2.16 cannot run its int8-weight transpose_conv
 
     testImplementation("junit:junit:4.13.2")
 }
