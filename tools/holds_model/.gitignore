@@ -3,3 +3,4 @@ runs/
 weights/
 *.pt
 *.tflite
+__pycache__/

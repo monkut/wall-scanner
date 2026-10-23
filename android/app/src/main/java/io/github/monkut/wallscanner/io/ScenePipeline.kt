@@ -6,6 +6,7 @@ import io.github.monkut.wallscanner.core.ColorPatches
 import io.github.monkut.wallscanner.core.Coverage
 import io.github.monkut.wallscanner.core.Definition
 import io.github.monkut.wallscanner.core.TapeMarks
+import io.github.monkut.wallscanner.core.HoldMerge
 import io.github.monkut.wallscanner.core.HoldSearch
 import io.github.monkut.wallscanner.core.HoldShapes
 import io.github.monkut.wallscanner.core.HoldSplit
@@ -56,15 +57,23 @@ object ScenePipeline {
         log("hold search: ${extra.size} image-only holds added from the orthophoto (${System.currentTimeMillis() - t2} ms)")
         val t3 = System.currentTimeMillis()
         val model = assets?.let { HoldModel.get(it) }
-        val learned = if (model == null) emptyList() else runCatching { model.find(refined + extra, photo, result.frame) }
+        val found = refined + extra
+        val seen = if (model == null) HoldModel.Found(emptyList(), emptyList()) else runCatching { model.find(photo, result.frame, result.extent, (found.maxOfOrNull { it.id } ?: 0) + 1) }
             .onFailure { log("hold model failed: $it") }
-            .getOrDefault(emptyList())
-        log(if (model != null) "hold model: ${learned.size} holds added that no other hold covered (${System.currentTimeMillis() - t3} ms)" else "hold model: ${if (assets == null) "no assets" else HoldModel.loadError}")
-        val merged = refined + extra + learned
-        val holds = runCatching { HoldSplit.byColor(merged, photo, patches, result.frame, result.wallColor) }
+            .getOrDefault(HoldModel.Found(emptyList(), emptyList()))
+        val masks = seen.holds
+        val merged = runCatching { HoldMerge.withModel(found, masks, photo, result.frame) }
+            .onFailure { log("hold merge failed: $it") }
+            .getOrDefault(HoldMerge.Merged(found, 0, 0))
+        log(if (model != null) "hold model: ${masks.size} holds, ${seen.tape.size} tape strips; ${merged.split} merged holds split by them, ${merged.added} added where no other hold was (${System.currentTimeMillis() - t3} ms)" else "hold model: ${if (assets == null) "no assets" else HoldModel.loadError}")
+        val split = runCatching { HoldSplit.byColor(merged.holds, photo, patches, result.frame, result.wallColor) }
             .onFailure { log("hold split failed: $it") }
-            .getOrDefault(merged)
-        if (holds.size != merged.size) log("hold split: ${merged.size} holds → ${holds.size} by photo colour")
+            .getOrDefault(merged.holds)
+        if (split.size != merged.holds.size) log("hold split: ${merged.holds.size} holds → ${split.size} by photo colour")
+        val holds = runCatching { HoldMerge.prune(split, masks, seen.tape, photo, patches, result.wallColor, result.extent) }
+            .onFailure { log("hold prune failed: $it") }
+            .getOrDefault(split)
+        log("hold prune: ${split.size - holds.size} dropped: tape, or at the edge or made of bare wall (neither coloured nor seen by the model)")
         val starts = runCatching { TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent) }
             .onFailure { log("tape marks failed: $it") }
             .getOrDefault(0)

@@ -20,9 +20,7 @@ object HoldSearch {
 
     fun find(holds: List<Hold>, patches: ColorPatches, photo: Orthophoto, frame: WallFrame, extent: FloatArray): List<Hold> {
         val w = photo.image.width; val h = photo.image.height
-        val n = w * h
-        val pixels = photo.image.pixels
-        val covered = BooleanArray(n)
+        val covered = BooleanArray(w * h)
         for (hold in holds) for (i in Raster.fillPolygon(ImageHold.polygon(hold), photo)) covered[i] = true
         val minSidePx = max(2, (MIN_SIDE / photo.px).toInt())
         val found = ArrayList<Hold>()
@@ -33,27 +31,27 @@ object HoldSearch {
             val longM = max(patches.maxX[p] - patches.minX[p], patches.maxY[p] - patches.minY[p]).plus(1) * photo.px
             if (longM < MIN_SIDE || longM > MAX_SIDE) continue
             val members = patches.members(p)
-            // Tape is told by its size along its own axes: a slanted strip has a square bounding box.
-            val (_, _, length, width) = TapeMarks.shape(members, count, w, photo.px)
-            if (TapeMarks.isStrip(length, width)) continue
-            var coveredCount = 0; var sr = 0L; var sg = 0L; var sb = 0L
-            var su = 0.0; var sv = 0.0
-            for (i in members) {
-                if (covered[i]) coveredCount++
-                val px = pixels[i]
-                sr += px shr 16 and 0xff; sg += px shr 8 and 0xff; sb += px and 0xff
-                su += photo.u(i % w + 0.5f); sv += photo.v(i / w + 0.5f)
-            }
-            if (coveredCount >= MAX_COVERED * count) continue
-            val cu = (su / count).toFloat(); val cv = (sv / count).toFloat()
-            if (cv < extent[1]) continue // the wall surface's lowest edge; crash pads lie below it
-            val rel = FloatArray(count) { photo.relief[members[it]] }
-            rel.sort()
-            val height = max(0f, rel[(count * 9) / 10])
-            if (height > PAD_RELIEF && cv < extent[1] + PAD_ZONE) continue // the top of a crash pad leaning on the wall
+            if (members.count { covered[it] } >= MAX_COVERED * count) continue
+            if (!plausible(members, count, photo, extent)) continue
             found.add(ImageHold.fromPixels(nextId++, members, 0, photo, frame))
         }
         return found
+    }
+
+    /**
+     * Whether [count] orthophoto pixels [members] can be a hold: not a strip of tape (told by its size along
+     * its own axes: a slanted strip has a square bounding box), not below the wall surface's bottom edge
+     * (crash pads lie there), and not the top of a crash pad leaning on the wall.
+     */
+    fun plausible(members: IntArray, count: Int, photo: Orthophoto, extent: FloatArray): Boolean {
+        val w = photo.image.width
+        val (_, my, length, width) = TapeMarks.shape(members, count, w, photo.px)
+        if (TapeMarks.isStrip(length, width)) return false
+        val cv = photo.v(my + 0.5f)
+        if (cv < extent[1]) return false
+        val rel = FloatArray(count) { photo.relief[members[it]] }
+        rel.sort()
+        return !(rel[(count * 9) / 10] > PAD_RELIEF && cv < extent[1] + PAD_ZONE)
     }
 }
 

@@ -2,7 +2,7 @@
 # requires-python = ">=3.11,<3.13"
 # dependencies = ["roboflow>=1.1"]
 # ///
-"""Downloads the public CC BY 4.0 climbing-hold datasets from Roboflow Universe in YOLOv8-seg format.
+"""Downloads the public climbing-hold datasets (CC BY 4.0, PanClimb public domain) from Roboflow Universe in YOLOv8-seg format.
 
     ROBOFLOW_API_KEY=… uv run tools/holds_model/download.py [--out tools/holds_model/data/public]
 
@@ -20,6 +20,7 @@ DATASETS = [  # workspace, project (Universe slugs); the latest version of each 
     ("climb-ai", "hold-detector-rnvkl"),
     ("pwals", "bouldering-holds-9wavr"),
     ("roboflow-4rfmv", "climbing-y56wy"),
+    ("panclimb", "climbing-segmentation-lruqt"),  # labels tape as its own class
 ]
 
 

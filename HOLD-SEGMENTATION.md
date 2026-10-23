@@ -70,3 +70,26 @@ Start with Phase 0 and Phase 1 together: Phase 0 is small and makes Phase 1 meas
 A label set helps at every phase, but what to label changes: for Phase 0 and 1 the app's own corrections are
 enough (confirm routes, fix holds, Mark as reference); Phase 2 wants 30+ walls, so CVAT with SAM assistance on
 exported `wall.png` files is the tool, with hold / volume / tape / placard as classes.
+
+## Colour-robust detection (research 2026-10-23, afternoon)
+
+Real walls showed colour and shading driving the errors: a hold split at a keyframe seam, same-colour volumes
+merged, grade tape taken for holds. Findings and what was done:
+
+- **Shape first, colour after.** RGB beats grayscale when colour separates object from background
+  ([TU Wien, SPIE 2023](https://repositum.tuwien.at/handle/20.500.12708/208109): ~5 mAP points), so the input
+  stays RGB; colour invariance comes from augmentation instead (any hue, strong saturation / brightness, one
+  image in five grey). Class-agnostic detection then per-instance attributes generalises better
+  ([Jaiswal, WACV 2021](https://arxiv.org/pdf/2011.14204)). Route colour should become a robust per-mask
+  chroma statistic (not yet done). **Done (G1):** `train.py` augmentation.
+- **Illumination.** CLAHE has the most consistent record for segmentation under uneven light; Retinex and
+  intrinsic decomposition cost much more for little gain. **Done (G1):** `clahe.py` / `core/Clahe.kt` on luma,
+  in training and on the phone.
+- **Touching same-colour holds.** Marker watershed on a relief-curvature + grey-gradient energy is the standard
+  split; depth jumps are weak where volumes touch, creases are not. Not done (G3). **Done instead:** model masks
+  split merged holds (`HoldMerge.withModel`), masks touching along ≥ 35% of an outline stay one hold.
+- **Tape.** Geometric filters fail here (outlined strips are 13 × 7 cm like small holds); PanClimb's public-domain
+  set labels `tape` (1,851 polygons). **Done (G1):** two classes, `hold` and `tape`; holds under tape dropped.
+- No published work on colour-agnostic hold detection was found;
+  [xiaoxiae/Indoor-Climbing-Hold-and-Route-Segmentation](https://github.com/xiaoxiae/Indoor-Climbing-Hold-and-Route-Segmentation)
+  segments first and groups by colour after.

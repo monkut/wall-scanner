@@ -4,11 +4,11 @@
 # ///
 """Runs a hold model on captures' orthophotos and writes scene-model.json beside each, for eval_holds.py.
 
-    uv run tools/holds_model/predict.py <weights.pt|.tflite> captures/<id> [captures/<id2> …] [--imgsz 1024] [--conf 0.25]
+    uv run tools/holds_model/predict.py <weights.pt|.tflite> captures/<id> [captures/<id2> …] [--imgsz 1024] [--conf 0.25] [--no-clahe]
 
-Each predicted mask becomes a hold with its outline in wall metres (the photo's bounds and px come from the
+The orthophoto goes through clahe.equalize first, as in the app. Each predicted `hold` mask becomes a hold with its outline in wall metres (the photo's bounds and px come from the
 capture's scene.json, else the harness's scene-new.json); the rest of the scene (wall, routes) is copied from scene.json so the viewer tools can
-read the file.
+read the file. `tape` masks (two-class models) go to a separate `tape` list of outlines.
 """
 import argparse
 import json
@@ -19,6 +19,8 @@ import numpy as np
 from PIL import Image
 from ultralytics import YOLO
 
+from clahe import equalize
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -26,6 +28,7 @@ def main():
     ap.add_argument("captures", nargs="+", type=Path)
     ap.add_argument("--imgsz", type=int, default=1024)
     ap.add_argument("--conf", type=float, default=0.25)
+    ap.add_argument("--no-clahe", action="store_true", help="for models trained before CLAHE (G1)")
     args = ap.parse_args()
     model = YOLO(args.weights)
     for cap in args.captures:
@@ -39,9 +42,10 @@ def main():
         min_u, min_v, max_u, max_v = photo["bounds"]
         px = photo["px"]
         image = next(f for f in (cap / "wall.png", cap / "wall-new.ppm") if f.exists())
-        bgr = np.asarray(Image.open(image).convert("RGB"))[:, :, ::-1].copy()  # ultralytics reads no PPM; arrays are BGR
+        rgb = np.asarray(Image.open(image).convert("RGB"))
+        bgr = (rgb if args.no_clahe else equalize(rgb))[:, :, ::-1].copy()  # ultralytics reads no PPM; arrays are BGR
         result = model.predict(bgr, imgsz=args.imgsz, conf=args.conf, verbose=False)[0]
-        holds = []
+        holds, tape = [], []
         if result.masks is not None:
             h, w = result.orig_shape
             for k, mask in enumerate(result.masks.data.cpu().numpy()):
@@ -53,6 +57,9 @@ def main():
                 if len(contour) < 3:
                     continue
                 outline = [[round(min_u + x * px, 3), round(max_v - y * px, 3)] for x, y in contour]
+                if int(result.boxes.cls[k]) == 1:
+                    tape.append({"score": round(float(result.boxes.conf[k]), 3), "outline": outline})
+                    continue
                 xs, ys = contour[:, 0], contour[:, 1]
                 holds.append({
                     "id": k + 1, "center": [0, 0, 0], "uv": [round(min_u + xs.mean() * px, 4), round(max_v - ys.mean() * px, 4)],
@@ -60,9 +67,9 @@ def main():
                     "color": [0, 0, 0], "hsv": [0, 0, 0], "voxels": 0, "routeId": -1, "routeIds": [], "role": "any", "tape": None,
                     "score": round(float(result.boxes.conf[k]), 3), "outline": outline,
                 })
-        out = dict(scene, holds=holds, routes=[])
+        out = dict(scene, holds=holds, routes=[], tape=tape)
         (cap / "scene-model.json").write_text(json.dumps(out))
-        print(f"{cap.name}: {len(holds)} holds → scene-model.json")
+        print(f"{cap.name}: {len(holds)} holds, {len(tape)} tape → scene-model.json")
 
 
 if __name__ == "__main__":

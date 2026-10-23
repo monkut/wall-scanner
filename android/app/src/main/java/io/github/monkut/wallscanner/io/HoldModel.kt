@@ -1,6 +1,7 @@
 package io.github.monkut.wallscanner.io
 
 import android.content.res.AssetManager
+import io.github.monkut.wallscanner.core.Clahe
 import io.github.monkut.wallscanner.core.Hold
 import io.github.monkut.wallscanner.core.Orthophoto
 import io.github.monkut.wallscanner.core.SegDecoder
@@ -14,28 +15,31 @@ import java.nio.channels.FileChannel
 
 /**
  * The trained hold detector (assets/holds.tflite, a YOLO11-seg export from tools/holds_model) run on the
- * orthophoto. Absent from the build until a model has been trained; then it adds the holds no depth hold
- * covers. The asset is memory-mapped (it is stored uncompressed). The input is the photo letterboxed into
+ * orthophoto. Absent from the build until a model has been trained; [HoldMerge] combines its holds with the
+ * others. The asset is memory-mapped (it is stored uncompressed). The input is the photo letterboxed into
  * the model's square, RGB 0..1, in whichever channel order the model declares; the two outputs are told
  * apart by rank (boxes 3-D, prototypes 4-D) and the prototypes' channel axis by where the 32 sits.
  */
 class HoldModel private constructor(private val interpreter: Interpreter) {
 
-    /** Holds found by the model that [existing] does not cover. One run at a time: the interpreter is not thread-safe. */
+    /** What the model found: holds, and the grade tape strips a two-class model also outlines (not holds). */
+    class Found(val holds: List<Hold>, val tape: List<Hold>)
+
+    /**
+     * Every hold and tape strip the model finds, numbered from [firstId]. The photo goes through [Clahe] first,
+     * as the training images did. One run at a time: the interpreter is not thread-safe.
+     */
     @Synchronized
-    fun find(existing: List<Hold>, photo: Orthophoto, frame: WallFrame): List<Hold> {
+    fun find(photo: Orthophoto, frame: WallFrame, extent: FloatArray, firstId: Int): Found {
         val inShape = interpreter.getInputTensor(0).shape()
         val channelsFirst = inShape[1] == 3
         val size = if (channelsFirst) inShape[2] else inShape[1]
         val box = SegDecoder.Letterbox.fit(photo.image.width, photo.image.height, size)
         val input = ByteBuffer.allocateDirect(3 * size * size * 4).order(ByteOrder.nativeOrder())
         val plane = size * size
-        val pixels = photo.image.pixels
-        val w = photo.image.width; val h = photo.image.height
-        for (y in 0 until size) for (x in 0 until size) {
-            val sx = ((x + 0.5f - box.padX) / box.scale).toInt(); val sy = ((y + 0.5f - box.padY) / box.scale).toInt()
-            val p = if (sx in 0 until w && sy in 0 until h) pixels[sy * w + sx] else 0x727272 // letterbox grey
-            val i = y * size + x
+        val pixels = box.pixels(Clahe.equalize(photo.image))
+        for (i in 0 until plane) {
+            val p = pixels[i]
             val r = (p shr 16 and 0xff) / 255f; val g = (p shr 8 and 0xff) / 255f; val b = (p and 0xff) / 255f
             if (channelsFirst) { input.putFloat(i * 4, r); input.putFloat((plane + i) * 4, g); input.putFloat((2 * plane + i) * 4, b) }
             else { input.putFloat(i * 12, r); input.putFloat(i * 12 + 4, g); input.putFloat(i * 12 + 8, b) }
@@ -52,7 +56,10 @@ class HoldModel private constructor(private val interpreter: Interpreter) {
         val boxArr = FloatArray(boxShape[1] * boxShape[2]).also { boxes.rewind(); boxes.asFloatBuffer().get(it) }
         val protoArr = FloatArray(protoShape[1] * protoShape[2] * protoShape[3]).also { protos.rewind(); protos.asFloatBuffer().get(it) }
         val detections = SegDecoder.detections(boxArr, boxShape[1], boxShape[2], size)
-        return SegDecoder.holds(detections, protoArr, protoSize, protosChannelsFirst, box, existing, photo, frame)
+        val (holdDets, tapeDets) = detections.partition { it.cls != SegDecoder.TAPE }
+        val holds = SegDecoder.holds(holdDets, protoArr, protoSize, protosChannelsFirst, box, photo, frame, extent, firstId)
+        val tape = SegDecoder.holds(tapeDets, protoArr, protoSize, protosChannelsFirst, box, photo, frame, extent, firstId + holds.size, plausibleOnly = false)
+        return Found(holds, tape)
     }
 
     companion object {

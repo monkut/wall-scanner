@@ -51,8 +51,11 @@ class RealCaptureHarness {
                 println("HARNESS ${dir.name} hold shapes: ${result.holds.size} → ${refined.size} refined (${System.currentTimeMillis() - t2} ms)")
                 val t3 = System.currentTimeMillis()
                 val extra = HoldSearch.find(refined, patches, photo, result.frame, result.extent)
-                val holds = HoldSplit.byColor(refined + extra, photo, patches, result.frame, result.wallColor)
-                if (holds.size != refined.size + extra.size) println("HARNESS ${dir.name} hold split: ${refined.size + extra.size} → ${holds.size} by photo colour")
+                val split = HoldSplit.byColor(refined + extra, photo, patches, result.frame, result.wallColor)
+                if (split.size != refined.size + extra.size) println("HARNESS ${dir.name} hold split: ${refined.size + extra.size} → ${split.size} by photo colour")
+                // The JVM cannot run the hold model: holds are judged by colour alone here.
+                val holds = HoldMerge.prune(split, emptyList(), emptyList(), photo, patches, result.wallColor, result.extent)
+                println("HARNESS ${dir.name} hold prune: ${split.size - holds.size} dropped")
                 val starts = TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent)
                 result.photo = photo
                 result = SceneBuilder.withHolds(result, holds)

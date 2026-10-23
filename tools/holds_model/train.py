@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11,<3.13"
-# dependencies = ["ultralytics>=8.3"]
+# dependencies = ["ultralytics>=8.3", "albumentations>=1.4"]
 # ///
 """Fine-tunes a YOLO11 segmentation model on data/holds.yaml.
 
@@ -8,12 +8,16 @@
 
 Weights and curves go to tools/holds_model/runs/<name>/ (base weights are downloaded into tools/holds_model/). The orthophotos are ~700 px wide at 5 mm per pixel
 and footholds are 8–20 px across, so 1024 keeps them visible; the public gym photos are resized to the same
-size. Mosaic is left on; flips keep holds valid; hue augmentation is kept small so hold colours stay true.
+size. Mosaic is left on; flips keep holds valid. Colour is augmented hard (any hue, strong saturation and
+brightness changes, one image in five grey) so the model finds holds by shape and relief of the photo, not
+by colour: colour picks the route afterwards, and shading or a two-tone hold must not split or hide a hold.
+The images are already CLAHE-equalised by merge.py, as the app's input is.
 """
 import argparse
 import os
 from pathlib import Path
 
+import albumentations as A
 from ultralytics import YOLO
 
 HERE = Path(__file__).resolve().parent
@@ -35,7 +39,8 @@ def main():
     YOLO(args.model).train(
         data=str(data), imgsz=args.imgsz, epochs=args.epochs, batch=args.batch,
         project=str(HERE / "runs"), name=args.name, exist_ok=True,
-        hsv_h=0.005, hsv_s=0.4, hsv_v=0.3, fliplr=0.5, flipud=0.0, degrees=5.0, scale=0.4,
+        hsv_h=0.5, hsv_s=0.9, hsv_v=0.6, fliplr=0.5, flipud=0.0, degrees=5.0, scale=0.4,
+        augmentations=[A.Blur(p=0.01), A.MedianBlur(p=0.01), A.ToGray(p=0.2)],
         patience=30,
     )
 

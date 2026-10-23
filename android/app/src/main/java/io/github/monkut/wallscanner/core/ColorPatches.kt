@@ -36,6 +36,10 @@ class ColorPatches private constructor(
         private const val DARK_VAL = 0.15f // below this the hue is quantisation noise (TapeMarks.MIN_VAL says the same)
         private const val DARK_HUE = 30f
 
+        /** A hold's colour even when dark or dull: at least [DARK_SAT] saturated, [DARK_VAL] bright, hue [DARK_HUE] from the wall's. */
+        fun offWallHue(hue: Float, sat: Float, value: Float, wall: WallColor): Boolean =
+            sat >= DARK_SAT && value >= DARK_VAL && ColorUtil.hueDistance(hue, wall.hue) >= DARK_HUE
+
         /** Patches for hold detection: hold saturation floor, dark off-wall-hue holds, 3 cm gap bridging. */
         fun forHolds(photo: Orthophoto, wall: WallColor?): ColorPatches =
             find(photo, wall, HOLD_SAT, HOLD_VAL, max(1, (HOLD_GAP_M / photo.px + 0.5f).toInt()), dark = true)
@@ -52,7 +56,7 @@ class ColorPatches private constructor(
                 val c = ColorUtil.rgbToHsv(p shr 16 and 0xff, p shr 8 and 0xff, p and 0xff)
                 hue[i] = c[0]; sat[i] = c[1]; value[i] = c[2]
                 if (wall != null && wall.matches(c)) continue
-                val offHue = darkRule && c[1] >= DARK_SAT && c[2] >= DARK_VAL && ColorUtil.hueDistance(c[0], wall!!.hue) >= DARK_HUE
+                val offHue = darkRule && offWallHue(c[0], c[1], c[2], wall!!)
                 eligible[i] = (c[1] >= minSat && c[2] >= minVal) || offHue
             }
             val label = IntArray(n)

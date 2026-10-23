@@ -14,8 +14,11 @@ import kotlin.math.sin
  *
  * The tolerances follow the wall's own spread: saturation within its interquartile range (at least
  * [Tuning.WALL_SAT_TOL]) of the median, value between its 10th and 90th percentiles widened by
- * [Tuning.WALL_VAL_TOL], hue within [Tuning.WALL_HUE_TOL] of the mean hue direction. Hue is ignored for a
- * grey wall (median saturation under [Tuning.WALL_GREY_SAT]).
+ * [Tuning.WALL_VAL_TOL], hue within [Tuning.WALL_HUE_TOL] of the wall's hue. That hue is the peak of the
+ * saturation-weighted hue histogram, refined by the mean direction of the voxels near the peak: the plane's
+ * band also holds every hold's skirt, and on a busy wall their colours pull a plain mean far off (purple and
+ * red holds turned tan plywood at 35° into 8°). Hue is ignored for a grey wall (median saturation under
+ * [Tuning.WALL_GREY_SAT]).
  */
 class WallColor(
     /** Mean surface colour, for drawing the wall. */
@@ -41,14 +44,17 @@ class WallColor(
             "val=${"%.2f".format(valLo)}..${"%.2f".format(valHi)}"
 
     companion object {
+        private const val HUE_BINS = 36
+        private const val PEAK_SPAN = 20f // voxels this close to the histogram peak refine the hue
+
         /** Null when fewer than 100 voxels lie on the plane. */
         fun of(cloud: VoxelCloud, frame: WallFrame): WallColor? {
             val xyz = cloud.xyz; val rgb = cloud.rgb
             var n = 0
             for (i in 0 until cloud.count) if (abs(frame.d(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])) <= Tuning.WALL_COLOR_BAND) n++
             if (n < 100) return null
-            val sats = FloatArray(n); val vals = FloatArray(n)
-            var sinSum = 0.0; var cosSum = 0.0
+            val sats = FloatArray(n); val vals = FloatArray(n); val hues = FloatArray(n)
+            val hist = FloatArray(HUE_BINS)
             var sr = 0L; var sg = 0L; var sb = 0L
             var k = 0
             for (i in 0 until cloud.count) {
@@ -56,11 +62,18 @@ class WallColor(
                 val r = rgb[i * 3].toInt() and 0xff; val g = rgb[i * 3 + 1].toInt() and 0xff; val b = rgb[i * 3 + 2].toInt() and 0xff
                 sr += r; sg += g; sb += b
                 val c = ColorUtil.rgbToHsv(r, g, b)
-                val rad = Math.toRadians(c[0].toDouble())
-                // Saturation-weighted so grey voxels do not pull the hue direction around.
-                sinSum += sin(rad) * c[1]; cosSum += cos(rad) * c[1]
-                sats[k] = c[1]; vals[k] = c[2]
+                // Saturation-weighted so grey voxels do not pull the hue around.
+                hist[(c[0] / (360f / HUE_BINS)).toInt().coerceIn(0, HUE_BINS - 1)] += c[1]
+                hues[k] = c[0]; sats[k] = c[1]; vals[k] = c[2]
                 k++
+            }
+            val peakBin = (0 until HUE_BINS).maxBy { b -> hist[(b + HUE_BINS - 1) % HUE_BINS] + 2 * hist[b] + hist[(b + 1) % HUE_BINS] }
+            val peak = (peakBin + 0.5f) * (360f / HUE_BINS)
+            var sinSum = 0.0; var cosSum = 0.0
+            for (j in 0 until n) {
+                if (ColorUtil.hueDistance(hues[j], peak) > PEAK_SPAN) continue
+                val rad = Math.toRadians(hues[j].toDouble())
+                sinSum += sin(rad) * sats[j]; cosSum += cos(rad) * sats[j]
             }
             sats.sort(); vals.sort()
             var hue = Math.toDegrees(atan2(sinSum, cosSum)).toFloat()
