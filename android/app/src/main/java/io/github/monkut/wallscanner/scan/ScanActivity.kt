@@ -85,7 +85,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         processor.log = log
         processor.keyframes = KeyframeWriter(captureDir)
         definition = Definition(RouteDefinition.fromId(intent.getStringExtra(EXTRA_DEFINITION)))
-        CaptureStore.writeMeta(captureDir, definition, intent.getStringExtra(EXTRA_LOCATION) ?: "")
+        CaptureStore.writeMeta(captureDir, definition, intent.getStringExtra(EXTRA_LOCATION) ?: "", intent.getStringExtra(EXTRA_SET) ?: "")
         logEnvironment()
         log.log("location: ${intent.getStringExtra(EXTRA_LOCATION) ?: "none"}")
         val location = LocationStore.get(this, intent.getStringExtra(EXTRA_LOCATION))
@@ -445,6 +445,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
     companion object {
         const val EXTRA_DEFINITION = "definition"
         const val EXTRA_LOCATION = "location"
+        const val EXTRA_SET = "set"
         private const val CAMERA_PERMISSION_CODE = 1
         private const val MAX_CPU_IMAGE_WIDTH = 1920
         private const val MIN_VOXELS_TO_FINISH = 2000

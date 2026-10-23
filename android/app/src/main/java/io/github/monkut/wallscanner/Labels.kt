@@ -8,6 +8,7 @@ import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.io.Location
 import io.github.monkut.wallscanner.io.LocationKind
 import io.github.monkut.wallscanner.io.SendResult
+import io.github.monkut.wallscanner.io.WallSet
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -70,6 +71,13 @@ object Labels {
 
     fun location(c: Context, location: Location): String =
         if (location.id.isEmpty()) c.getString(R.string.unknown_location) else location.name
+
+    /** "October Set", or "October Set (retired)" once the wall was reset. */
+    fun set(c: Context, set: WallSet): String = if (set.active) set.name else c.getString(R.string.set_retired_label, set.name)
+
+    /** "October Set" / "10月セット" for the current month (JST) in the app language. */
+    fun defaultSetName(c: Context): String =
+        c.getString(R.string.default_set_name, ZonedDateTime.now(JST).format(DateTimeFormatter.ofPattern("LLLL", locale(c))))
 
     /** "Gym, Japanese (Q/D)" for a registered location; empty for the unknown placeholder. */
     fun locationDetail(c: Context, location: Location): String =

@@ -48,7 +48,23 @@ class GeoPoint(val lat: Double, val lon: Double, val accuracyM: Float, val at: S
     }
 }
 
-/** A gym or outdoor area. Captures (and so routes) belong to one location. */
+/**
+ * A gym's route set: the routes on a wall between two resets ("October Set"). A set is retired when the wall
+ * is reset; its routes and sends stay in the logbook under it. Outdoor areas have no sets.
+ */
+class WallSet(val id: String, val name: String, val createdAt: String, val retiredAt: String? = null) {
+    val active: Boolean get() = retiredAt == null
+
+    companion object {
+        /** The set a new scan at the location goes to: the newest active one, or null when none is open. */
+        fun current(sets: List<WallSet>): WallSet? = sets.filter { it.active }.maxByOrNull { it.createdAt }
+
+        /** Display order: active sets newest first, then retired ones newest first. */
+        fun ordered(sets: List<WallSet>): List<WallSet> = sets.sortedWith(compareBy<WallSet> { !it.active }.thenByDescending { it.createdAt })
+    }
+}
+
+/** A gym or outdoor area. Captures (and so routes) belong to one location, and at a gym to one of its sets. */
 class Location(
     val id: String,
     val name: String,
@@ -56,11 +72,15 @@ class Location(
     val gradeSystem: GradeSystem = GradeSystem.DEFAULT,
     /** Set from the first scan made there with location permission; null until then. */
     val coords: GeoPoint? = null,
-)
+    val sets: List<WallSet> = emptyList(),
+) {
+    fun set(id: String?): WallSet? = sets.firstOrNull { it.id == id }
+}
 
 /**
- * files/locations.json: `{ version, nextId, locations: [{ id, name, kind, gradeSystem, coords? }] }`.
- * `nextId` only grows, so a removed location's id is never reissued to a new one (captures keep dangling ids).
+ * files/locations.json: `{ version, nextId, locations: [{ id, name, kind, gradeSystem, coords?,
+ * sets: [{ id, name, createdAt, retiredAt? }] }] }`. `nextId` only grows and numbers locations and sets
+ * alike, so a removed location's id is never reissued to a new one (captures keep dangling ids).
  */
 object LocationStore {
     private const val FILE = "locations.json"
@@ -78,10 +98,19 @@ object LocationStore {
             val arr = json.getJSONArray("locations")
             val locations = (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
+                // A damaged set entry is skipped on its own: one bad set must never empty the whole file on the next write.
+                val sets = o.optJSONArray("sets")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { k ->
+                        val s = arr.optJSONObject(k) ?: return@mapNotNull null
+                        val id = s.optString("id"); val name = s.optString("name")
+                        if (id.isEmpty() || name.isEmpty()) null
+                        else WallSet(id, name, s.optString("createdAt"), s.optString("retiredAt").takeIf { it.isNotEmpty() })
+                    }
+                } ?: emptyList()
                 Location(
                     o.getString("id"), o.getString("name"), LocationKind.fromId(o.optString("kind")),
                     GradeSystem.fromId(o.optString("gradeSystem")) ?: GradeSystem.DEFAULT,
-                    GeoPoint.fromJson(o.optJSONObject("coords")),
+                    GeoPoint.fromJson(o.optJSONObject("coords")), sets,
                 )
             }
             // Files written before nextId existed fall back to max + 1.
@@ -110,16 +139,33 @@ object LocationStore {
         val target = stored.locations.firstOrNull { it.id == id } ?: return false
         val current = target.coords
         if (current != null && (current.manual || point.accuracyM >= current.accuracyM)) return false
-        write(context, stored.locations.map { if (it.id == id) Location(it.id, it.name, it.kind, it.gradeSystem, point) else it }, stored.nextId)
+        write(context, stored.locations.map { if (it.id == id) Location(it.id, it.name, it.kind, it.gradeSystem, point, it.sets) else it }, stored.nextId)
         return true
     }
 
-    /** Replaces the location with [location]'s id; a no-op for an unknown id. */
+    /** Replaces the location with [location]'s id (name, kind, scale, coordinates; its sets stay); a no-op for an unknown id. */
     fun update(context: Context, location: Location) {
         val stored = read(context)
-        if (stored.locations.none { it.id == location.id }) return
-        write(context, stored.locations.map { if (it.id == location.id) location else it }, stored.nextId)
+        val old = stored.locations.firstOrNull { it.id == location.id } ?: return
+        val merged = Location(location.id, location.name, location.kind, location.gradeSystem, location.coords, old.sets)
+        write(context, stored.locations.map { if (it.id == location.id) merged else it }, stored.nextId)
     }
+
+    /** Opens a new set at location [locationId], dated now. */
+    fun addSet(context: Context, locationId: String, name: String): WallSet {
+        val stored = read(context)
+        val set = WallSet("set-${stored.nextId}", name.trim(), CaptureStore.nowIso())
+        write(context, stored.locations.map { if (it.id == locationId) withSets(it, it.sets + set) else it }, stored.nextId + 1)
+        return set
+    }
+
+    /** Replaces the set with [set]'s id at [locationId] (rename, retire, reopen). */
+    fun updateSet(context: Context, locationId: String, set: WallSet) {
+        val stored = read(context)
+        write(context, stored.locations.map { l -> if (l.id == locationId) withSets(l, l.sets.map { if (it.id == set.id) set else it }) else l }, stored.nextId)
+    }
+
+    private fun withSets(l: Location, sets: List<WallSet>) = Location(l.id, l.name, l.kind, l.gradeSystem, l.coords, sets)
 
     /** Removes location [id]; captures that point at it show as [UNKNOWN] afterwards. The id is not reused. */
     fun remove(context: Context, id: String) {
@@ -132,6 +178,15 @@ object LocationStore {
         for (l in locations) {
             val o = JSONObject().put("id", l.id).put("name", l.name).put("kind", l.kind.id).put("gradeSystem", l.gradeSystem.id)
             l.coords?.let { o.put("coords", it.toJson()) }
+            if (l.sets.isNotEmpty()) {
+                val sets = JSONArray()
+                for (s in l.sets) {
+                    val so = JSONObject().put("id", s.id).put("name", s.name).put("createdAt", s.createdAt)
+                    s.retiredAt?.let { so.put("retiredAt", it) }
+                    sets.put(so)
+                }
+                o.put("sets", sets)
+            }
             arr.put(o)
         }
         File(context.filesDir, FILE).writeText(JSONObject().put("version", 1).put("nextId", nextId).put("locations", arr).toString(2))

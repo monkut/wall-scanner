@@ -20,6 +20,8 @@ class RouteRecord(
     val confirmed: Boolean,
     val type: RouteDefinition,
     val locationId: String,
+    /** The gym set the capture belongs to; "" when none. */
+    val setId: String = "",
 )
 
 enum class SendResult(val id: String) {
@@ -49,7 +51,7 @@ object RouteStore {
         return runCatching {
             val scene = JSONObject(CaptureStore.readScene(dir))
             val type = RouteDefinition.fromId(scene.optJSONObject("definition")?.optString("type"))
-            val locationId = CaptureStore.readLocationId(dir)
+            val place = CaptureStore.readPlace(dir)
             val routes = scene.getJSONArray("routes")
             (0 until routes.length()).map { i ->
                 val r = routes.getJSONObject(i)
@@ -58,7 +60,7 @@ object RouteStore {
                     dir.name, r.getInt("id"), r.optString("name"), r.optString("grade"),
                     GradeSystem.fromId(r.optString("gradeSystem")),
                     intArrayOf(c.getInt(0), c.getInt(1), c.getInt(2)),
-                    r.getJSONArray("holdIds").length(), r.optBoolean("confirmed", false), type, locationId,
+                    r.getJSONArray("holdIds").length(), r.optBoolean("confirmed", false), type, place.locationId, place.setId,
                 )
             }
         }.getOrDefault(emptyList())

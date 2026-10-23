@@ -25,8 +25,8 @@ A **Capture | Logbook** switch at the top selects the mode; the choice is rememb
 shows the app language (EN-US, EN-UK or JA) and opens the language picker.
 
 - **Capture** mode is for scanning and identifying routes: the **New scan** button and the list of captures
-  (thumbnail, timestamp, location, wall type, hold / route / confirmed counts). Tap a capture to open it in the
-  viewer. Long-press for **Set location**, **Reprocess** (runs hold and route detection again on the saved
+  (thumbnail, timestamp, location, set, wall type, hold / route / confirmed counts). Tap a capture to open it in the
+  viewer. Long-press for **Set location** (location and, at a gym, set), **Reprocess** (runs hold and route detection again on the saved
   point cloud, replacing route edits and confirmations; use after a detector change), **Share** (zip of the
   capture) and **Delete**. Captures without a 3D scene are listed as "incomplete · diagnostics only" and can
   still be shared.
@@ -39,7 +39,10 @@ shows the app language (EN-US, EN-UK or JA) and opens the language picker.
   unique), kind, grade scale and coordinates ("latitude, longitude" in decimal degrees, or **Use phone
   position** for a fix; a hand-entered position is stored with accuracy 0), plus **Delete**, which asks first
   and leaves captures, routes and sends in place as "No location". The same form registers a new location
-  from New scan's "New location…" and from Add location. Tap a route to open its record.
+  from New scan's "New location…" and from Add location. At a gym the routes are grouped by **set** (the
+  routes on the wall between two resets): open sets first, newest first, then retired ones, then "No set" for
+  routes scanned without one; a set header shows its dates and route count, and its **Edit** renames the set
+  or marks it retired once the wall has been reset (its routes and sends stay). Tap a route to open its record.
 
 ### Language
 
@@ -53,11 +56,13 @@ locale support (`Language.kt`) and applied to the viewer page through its `lang`
 
 1. **Where are you scanning?** Pick a registered location or **New location…** (name, Gym / Outdoor area,
    grade scale Q/D, V, Font or YDS). The last used location is preselected.
-2. **How are routes marked on this wall or rock?** Hold colour, hold colour with taped start and finish, tape, circuit, tagged, competition,
+2. **Which set is this wall?** (gyms only) Pick one of the gym's open sets or **New set…**, named after the
+   month ("October Set") unless renamed; **Without a set** goes on with none. The last used set is preselected.
+3. **How are routes marked on this wall or rock?** Hold colour, hold colour with taped start and finish, tape, circuit, tagged, competition,
    free / spray wall, system board, or outdoor rock (preselected for outdoor areas). See `ARCHITECTURE.md` §9
    for what each type means and how it is processed.
 
-Both choices are written to the capture's `capture.json` before any data is recorded. If the location has no coordinates yet, the scan asks for location permission once ARCore is running and records the best position fix (network first, GPS when available) in `capture.json` and on the location; the location list then shows "GPS" in its detail line.
+The choices are written to the capture's `capture.json` before any data is recorded. If the location has no coordinates yet, the scan asks for location permission once ARCore is running and records the best position fix (network first, GPS when available) in `capture.json` and on the location; the location list then shows "GPS" in its detail line.
 
 ### Scan screen
 
@@ -159,9 +164,9 @@ adb exec-out run-as io.github.monkut.wallscanner tar -C files/captures -cf - <id
 ## Files on the device
 
 ```
-files/locations.json                      { version, nextId, locations: [{ id, name, kind: gym|outdoor, gradeSystem, coords?: { lat, lon, accuracyM, at } }] }
+files/locations.json                      { version, nextId, locations: [{ id, name, kind: gym|outdoor, gradeSystem, coords?: { lat, lon, accuracyM, at }, sets: [{ id, name, createdAt, retiredAt? }] }] }
 files/captures/<JST timestamp>/
-  capture.json                            { version, createdAt, location, definition: { type, rules }, gps?: { lat, lon, accuracyM, at } }
+  capture.json                            { version, createdAt, location, set, definition: { type, rules }, gps?: { lat, lon, accuracyM, at } }
   scan.log                                diagnostics (always written)
   segments/segment-NN.ply                 per-segment points, world coordinates before snapping
   frames/frame-NNNN.jpg, frames.jsonl     keyframes and segment-local poses

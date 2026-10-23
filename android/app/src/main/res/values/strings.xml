@@ -34,6 +34,20 @@
     <string name="kind_gym">Gym</string>
     <string name="kind_outdoor">Outdoor area</string>
     <string name="set_location">Set location</string>
+    <!-- Gym sets: the routes on a wall between two resets -->
+    <string name="choose_set">Which set is this wall?</string>
+    <string name="new_set">New set…</string>
+    <string name="set_name_label">Set name</string>
+    <string name="set_name_hint">e.g. October Set</string>
+    <string name="default_set_name">%1$s Set</string>
+    <string name="without_set">Without a set</string>
+    <string name="no_set">No set</string>
+    <string name="set_since">since %1$s</string>
+    <string name="set_retired_on">retired %1$s</string>
+    <string name="set_retired_label">%1$s (retired)</string>
+    <string name="set_retired_checkbox">Retired: the wall has been reset</string>
+    <string name="edit_set">Edit set</string>
+    <string name="set_name_taken">A set named %1$s already exists here</string>
     <string name="grade_system">Grade scale</string>
     <string name="grades_kyu">Q/D</string>
     <string name="grades_v">V</string>

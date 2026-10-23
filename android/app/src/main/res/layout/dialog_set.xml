@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- New set / Edit set: the set's name, and (when editing) whether the wall has been reset. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="24dp"
+    android:paddingTop="8dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAppearance="?attr/textAppearanceBody2"
+        android:text="@string/set_name_label" />
+
+    <EditText
+        android:id="@+id/setName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/set_name_hint"
+        android:inputType="textCapWords"
+        android:importantForAutofill="no" />
+
+    <CheckBox
+        android:id="@+id/setRetired"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/set_retired_checkbox" />
+</LinearLayout>

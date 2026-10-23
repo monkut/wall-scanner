@@ -84,26 +84,34 @@ object CaptureStore {
 
     fun writeScene(dir: File, json: String) = File(dir, SCENE_FILE).writeText(json)
 
-    /** capture.json: location and route definition chosen at New scan, written before scanning so post-processing can use them. */
-    fun writeMeta(dir: File, definition: Definition, locationId: String) {
+    /** capture.json: location, set and route definition chosen at New scan, written before scanning so post-processing can use them. */
+    fun writeMeta(dir: File, definition: Definition, locationId: String, setId: String = "") {
         val json = JSONObject()
             .put("version", 2)
             .put("createdAt", nowIso())
             .put("location", locationId)
+            .put("set", setId)
             .put("definition", JSONObject()
                 .put("type", definition.type.id)
                 .put("rules", JSONObject().put("feet", definition.rules.feet.id).put("volumesOn", definition.rules.volumesOn)))
         File(dir, META_FILE).writeText(json.toString(2))
     }
 
-    fun readLocationId(dir: File): String =
-        runCatching { JSONObject(File(dir, META_FILE).readText()).optString("location") }.getOrDefault("")
+    /** Where a capture was made: a `locations.json` location id and, at a gym, set id; "" when unset (older or outdoor captures). */
+    class Place(val locationId: String, val setId: String)
+
+    fun readPlace(dir: File): Place = runCatching {
+        val json = JSONObject(File(dir, META_FILE).readText())
+        Place(json.optString("location"), json.optString("set"))
+    }.getOrDefault(Place("", ""))
+
+    fun readLocationId(dir: File): String = readPlace(dir).locationId
 
     /** Re-assigns an existing capture (older ones have no location) without touching the rest of capture.json. */
-    fun setLocation(dir: File, locationId: String) {
+    fun setLocation(dir: File, locationId: String, setId: String) {
         val file = File(dir, META_FILE)
         val json = runCatching { JSONObject(file.readText()) }.getOrDefault(JSONObject().put("version", 2))
-        file.writeText(json.put("location", locationId).toString(2))
+        file.writeText(json.put("location", locationId).put("set", setId).toString(2))
     }
 
     /** Records the scan's position fix in capture.json (`gps`); later, more accurate fixes overwrite it. */
