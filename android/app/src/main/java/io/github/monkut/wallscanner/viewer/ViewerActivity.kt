@@ -14,8 +14,11 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
+import io.github.monkut.wallscanner.Language
 import io.github.monkut.wallscanner.R
 import io.github.monkut.wallscanner.io.CaptureStore
+import io.github.monkut.wallscanner.io.LocationStore
+import io.github.monkut.wallscanner.io.RouteStore
 import java.io.File
 
 /** Shows a capture in the bundled three.js viewer (assets/viewer) and persists route edits made there. */
@@ -46,14 +49,22 @@ class ViewerActivity : AppCompatActivity() {
                 loader.shouldInterceptRequest(request.url)
         }
         webView.addJavascriptInterface(Bridge(), "WallBridge")
-        webView.loadUrl("$BASE_URL/assets/viewer/index.html?capture=" + Uri.encode(captureId))
+        val grades = LocationStore.get(this, CaptureStore.readLocationId(captureDir)).gradeSystem
+        webView.loadUrl(
+            "$BASE_URL/assets/viewer/index.html?capture=" + Uri.encode(captureId) + "&grades=" + grades.id +
+                "&lang=" + Language.current().tag
+        )
     }
 
     inner class Bridge {
         @JavascriptInterface
         fun saveScene(json: String) {
+            RouteStore.sends(captureDir) // moves any legacy scene.sends into sends.json before they are overwritten
             CaptureStore.writeScene(captureDir, json)
-            runOnUiThread { Toast.makeText(this@ViewerActivity, R.string.scene_saved, Toast.LENGTH_SHORT).show() }
+            runOnUiThread {
+                Toast.makeText(this@ViewerActivity, R.string.scene_saved, Toast.LENGTH_SHORT).show()
+                finish() // back to the capture list / New scan screen
+            }
         }
 
         @JavascriptInterface

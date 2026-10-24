@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <View
+            android:id="@+id/swatch"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/routeName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textAppearance="?attr/textAppearanceHeadline6" />
+
+        <TextView
+            android:id="@+id/routeGrade"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:textAppearance="?attr/textAppearanceBody1" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/routeMeta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textAppearance="?attr/textAppearanceBody2" />
+
+    <!-- Rendered front view of the route on the wall (RouteImage); pinch to zoom, double-tap to toggle. -->
+    <io.github.monkut.wallscanner.routes.ZoomImageView
+        android:id="@+id/routeImage"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="3"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/thumbnail_frame"
+        android:clipToOutline="true"
+        android:contentDescription="@string/route_image" />
+
+    <TextView
+        android:id="@+id/routeHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textAppearance="?attr/textAppearanceCaption"
+        android:textColor="@color/dust" />
+
+    <!-- Optional 0–5 star rating of the climb; the label says "Not rated" until one is set. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <RatingBar
+            android:id="@+id/rating"
+            style="?android:attr/ratingBarStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:stepSize="1"
+            android:rating="0"
+            android:progressTint="@color/tape"
+            android:progressBackgroundTint="@color/hairline"
+            android:secondaryProgressTint="@android:color/transparent"
+            android:contentDescription="@string/rating" />
+
+        <TextView
+            android:id="@+id/ratingLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:textAppearance="?attr/textAppearanceBody2" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnClearRating"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:paddingHorizontal="12dp"
+            android:text="@string/clear_rating"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- The route's own comment (beta, conditions); tap to add or edit. -->
+    <TextView
+        android:id="@+id/comment"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="?attr/selectableItemBackground"
+        android:minHeight="40dp"
+        android:gravity="center_vertical"
+        android:textAppearance="?attr/textAppearanceBody2" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRecordClimb"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="@string/record_climb" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnLogSend"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:layout_marginStart="8dp"
+            android:text="@string/log_send" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnOpenCapture"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:layout_marginStart="8dp"
+            android:text="@string/open_capture" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/sends"
+        android:textAppearance="?attr/textAppearanceHeadline6" />
+
+    <TextView
+        android:id="@+id/emptyText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/no_sends"
+        android:textAppearance="?attr/textAppearanceBody1"
+        android:textColor="@color/dust"
+        android:visibility="gone" />
+
+    <ListView
+        android:id="@+id/sendList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="4dp"
+        android:divider="@color/hairline"
+        android:dividerHeight="1dp"
+        android:footerDividersEnabled="false" />
+</LinearLayout>

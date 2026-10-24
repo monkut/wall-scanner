@@ -5,26 +5,46 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Wall</title>
 <style>
-  :root { --bg: #101418; --fg: #e8ecf0; --panel: rgba(16, 20, 24, 0.92); --line: #2a3138; }
+  /* Same tokens as the app theme: wall, panel, hairline, chalk, dust, tape, send. */
+  @font-face { font-family: 'Atkinson'; src: url('./fonts/atkinson-regular.ttf'); font-weight: 400; }
+  @font-face { font-family: 'Atkinson'; src: url('./fonts/atkinson-bold.ttf'); font-weight: 700; }
+  :root { --bg: #15191d; --panel: rgba(33, 40, 48, 0.94); --line: #303a44; --fg: #efebe3; --dust: #9aa4ad; --tape: #f2c14e; --send: #5db974; --field: #15191d; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px system-ui, sans-serif; overflow: hidden; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px/1.35 'Atkinson', system-ui, sans-serif; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
   #panel { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); }
-  #toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; }
-  #status { flex: 1; font-size: 13px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  button { background: #1e88e5; color: #fff; border: 0; border-radius: 6px; padding: 8px 12px; font-size: 14px; }
-  button.secondary { background: #2a3138; }
-  #routes { max-height: 42vh; overflow-y: auto; padding: 0 12px 12px; display: none; }
+  #toolbar { display: flex; gap: 8px; align-items: center; padding: 10px 16px; }
+  #status { flex: 1; font-size: 13px; color: var(--dust); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button { background: var(--tape); color: var(--bg); border: 0; border-radius: 8px; padding: 10px 14px; font: inherit; font-weight: 700; }
+  button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); font-weight: 400; }
+  button:focus-visible { outline: 2px solid var(--tape); outline-offset: 2px; }
+  #points[hidden], #ids[hidden] { display: none; }
+  #routes { max-height: 42vh; overflow-y: auto; padding: 0 16px 14px; display: none; }
   #panel.open #routes { display: block; }
-  .route { display: flex; gap: 8px; align-items: center; padding: 8px; margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; }
-  .route.selected { border-color: #1e88e5; background: rgba(30, 136, 229, 0.15); }
-  .swatch { width: 24px; height: 24px; border-radius: 50%; flex: none; border: 2px solid #fff3; }
-  .route input { background: #0b0e11; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 6px; min-width: 0; }
+  .route { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+  .route.selected { border-left: 3px solid var(--tape); padding-left: 8px; margin-left: -11px; }
+  .swatch { width: 22px; height: 22px; border-radius: 50%; flex: none; border: 2px solid rgba(239, 235, 227, 0.4); }
+  .route input, .route select { background: var(--field); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; min-width: 0; font: inherit; }
   .route input.name { flex: 1; }
-  .route input.grade { width: 56px; }
-  .count { width: 28px; text-align: center; opacity: 0.8; }
-  .route button { padding: 6px 8px; font-size: 13px; }
-  #hint { padding: 6px 0 0; font-size: 13px; opacity: 0.7; }
+  .route select.grade { width: 88px; padding: 7px 4px; }
+  .count { width: 26px; text-align: center; color: var(--dust); }
+  .route button { padding: 7px 10px; font-size: 13px; }
+  .route button.confirm { background: transparent; color: var(--fg); border: 1px solid var(--line); font-weight: 400; }
+  .route button.confirm.on { background: var(--send); color: var(--bg); border-color: var(--send); font-weight: 700; }
+  #add { margin-top: 10px; }
+  #hint { padding: 10px 0 0; font-size: 13px; color: var(--dust); }
+  #roles { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  #roles .role { border: 2px solid; background: transparent; color: inherit; padding: 5px 10px; border-radius: 6px; font-weight: 400; }
+  #roles .role.active { background: rgba(239, 235, 227, 0.16); }
+  /* Long-press menu on the wall photo: add a hold, or split / remove the pressed one. */
+  #menu { position: fixed; display: none; flex-direction: column; gap: 6px; min-width: 200px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; z-index: 2; }
+  #menu.open { display: flex; }
+  #menu .title { font-size: 13px; color: var(--dust); padding: 2px 4px; }
+  #menu button { text-align: left; }
+  /* Shown while drawing a hold's outline. */
+  #drawbar { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); display: none; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; z-index: 2; }
+  #drawbar.open { display: flex; }
+  @media (prefers-reduced-motion: no-preference) { #routes { transition: max-height 150ms ease; } }
 </style>
 <script type="importmap">
   {
@@ -37,10 +57,14 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="menu"></div>
+<div id="drawbar"><button id="drawUndo" class="secondary">Undo</button><button id="drawDone">Done</button><button id="drawCancel" class="secondary">Cancel</button></div>
 <div id="panel">
   <div id="toolbar">
     <button id="toggle" class="secondary">Routes</button>
     <span id="status">Loading…</span>
+    <button id="ids" hidden title="Hold numbers">#</button>
+    <button id="points" class="secondary" hidden>Points</button>
     <button id="save">Save</button>
     <button id="share" class="secondary">Share</button>
   </div>
@@ -50,37 +74,118 @@
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-  const captureId = new URLSearchParams(location.search).get('capture');
+  const params = new URLSearchParams(location.search);
+  const captureId = params.get('capture');
+  const defaultGrades = params.get('grades') || 'kyu_dan';
+  // App language (en-US default, en-GB spellings, ja); mirrors res/values*/strings.xml.
+  const STRINGS = {
+    'en-US': {
+      routes: 'Routes', loading: 'Loading…', save: 'Save', share: 'Share', confirm: 'Confirm', confirmed: 'Confirmed', points: 'Points',
+      newRoute: 'New route', route: 'Route', grade: 'grade', pts: 'points', holds: 'holds', routesN: 'routes', confirmedN: 'confirmed',
+      roles: { start: 'start', hand: 'hand', foot: 'foot', zone: 'zone', finish: 'finish' },
+      hintRole: (r) => `Marking "${r}": tap holds to mark them, tap again to clear.`,
+      hintSelect: (type, n) => `${type}. Tap a swatch to select a route, tap holds to add or remove them, then confirm it. Sends are logged from the Logbook. ${n} unassigned holds.`,
+      hintEditing: (name) => `Editing "${name}": tap holds on the wall to add or remove them.`,
+      hintPhoto: 'Long-press the wall to draw a hold, or a hold to split, merge, redraw or remove it.',
+      wall: 'Wall', holdN: (id) => `Hold ${id}`, drawHold: 'Draw a hold', redrawHold: 'Redraw outline', splitHold: 'Split hold here', removeHold: 'Remove hold', cancel: 'Cancel',
+      drawHint: "Tap around the hold's edge; tap the first point or Done to finish.", drawMore: 'Tap at least three points around the hold.',
+      undo: 'Undo', done: 'Done',
+      mergeHold: 'Merge with another hold', mergePick: (id) => `Tap the hold to merge into Hold ${id}; tap the wall to cancel.`,
+      mergeApart: 'Those holds do not touch; merge parts of one hold.',
+      cannotSplit: 'A cut here does not divide the hold; press where it narrows between the two parts.',
+      definitions: { mono_color: 'Hold color', color_taped: 'Hold color, taped start and finish', tape: 'Tape', circuit: 'Circuit', tagged: 'Tagged', comp: 'Competition', free: 'Free / spray wall', board: 'System board', outdoor: 'Outdoor rock' },
+      grades: { kyu_dan: 'Japanese (Q/D)', v: 'V-scale', font: 'Font', yds: 'YDS' },
+      failed: 'Could not load the capture: ',
+    },
+    ja: {
+      routes: 'ルート', loading: '読み込み中…', save: '保存', share: '共有', confirm: '確定', confirmed: '確定済み', points: '点群',
+      newRoute: '新しいルート', route: 'ルート', grade: 'グレード', pts: '点', holds: 'ホールド', routesN: 'ルート', confirmedN: '確定',
+      roles: { start: 'スタート', hand: '手', foot: '足', zone: 'ゾーン', finish: 'トップ' },
+      hintRole: (r) => `「${r}」をマーク中: ホールドをタップして設定、もう一度タップで解除。`,
+      hintSelect: (type, n) => `${type}。スウォッチをタップしてルートを選び、ホールドをタップして追加・削除し、確定してください。記録はログブックから。未割り当てのホールド ${n}。`,
+      hintEditing: (name) => `「${name}」を編集中: 壁のホールドをタップして追加・削除します。`,
+      hintPhoto: '壁を長押しでホールドを描く、ホールドを長押しで分割・結合・描き直し・削除。',
+      wall: '壁', holdN: (id) => `ホールド ${id}`, drawHold: 'ホールドを描く', redrawHold: '輪郭を描き直す', splitHold: 'ここでホールドを分割', removeHold: 'ホールドを削除', cancel: 'キャンセル',
+      drawHint: 'ホールドの縁に沿ってタップ。最初の点か「完了」で閉じます。', drawMore: 'ホールドの周りを3点以上タップしてください。',
+      undo: '元に戻す', done: '完了',
+      mergeHold: '別のホールドと結合', mergePick: (id) => `ホールド ${id} に結合するホールドをタップ。壁をタップで取り消し。`,
+      mergeApart: 'このホールドは接していません。1つのホールドの部分同士を結合してください。',
+      cannotSplit: 'ここで切ってもホールドは分かれません。2つの部分の間のくびれを長押ししてください。',
+      definitions: { mono_color: 'ホールドの色', color_taped: 'ホールドの色＋スタート/ゴールのテープ', tape: 'テープ', circuit: 'サーキット', tagged: 'タグ付き', comp: 'コンペ形式', free: 'フリー／スプレーウォール', board: 'システムボード', outdoor: '外岩' },
+      grades: { kyu_dan: '日本式（級/段）', v: 'V スケール', font: 'Font', yds: 'YDS' },
+      failed: 'キャプチャを読み込めませんでした: ',
+    },
+  };
+  STRINGS['en-GB'] = { ...STRINGS['en-US'], definitions: { ...STRINGS['en-US'].definitions, mono_color: 'Hold colour', color_taped: 'Hold colour, taped start and finish' } };
+  const lang = params.get('lang') || 'en-US';
+  const T = STRINGS[lang] || STRINGS[lang.split('-')[0]] || STRINGS['en-US'];
+  document.documentElement.lang = lang;
+  document.getElementById('toggle').textContent = T.routes;
+  document.getElementById('save').textContent = T.save;
+  document.getElementById('share').textContent = T.share;
+  document.getElementById('points').textContent = T.points;
+  document.getElementById('drawUndo').textContent = T.undo;
+  document.getElementById('drawDone').textContent = T.done;
+  document.getElementById('drawCancel').textContent = T.cancel;
+  document.getElementById('status').textContent = T.loading;
   const base = `/files/captures/${encodeURIComponent(captureId)}/`;
   const statusEl = document.getElementById('status');
   const routesEl = document.getElementById('routes');
   const panel = document.getElementById('panel');
   const canvas = document.getElementById('c');
+  const menu = document.getElementById('menu');
+  const pointsBtn = document.getElementById('points');
+  const idsBtn = document.getElementById('ids');
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   const scene3 = new THREE.Scene();
-  scene3.background = new THREE.Color(0x101418);
+  scene3.background = new THREE.Color(0x15191d);
   const camera = new THREE.PerspectiveCamera(60, 1, 0.02, 100);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
 
   let scene = null;                 // scene.json, edited in place and saved through WallBridge
+  let points = null;                // the point cloud
   let pointsMaterial = null;
+  let photo = null;                 // the orthophoto on the wall plane (see loadPhoto); null for captures without one
   let selectedRouteId = null;
-  const holdMeshes = new Map();     // holdId -> Mesh
+  let roleMode = null;              // null = edit membership; otherwise a HoldRole id applied on tap
+  const holdMeshes = new Map();     // holdId -> depth box (captures without a photo; with one, holds are drawn on its overlay)
+  const roleMeshes = new Map();     // holdId -> ring / wireframe box showing the hold role
+  const labelSprites = new Map();   // holdId -> its number at the hold's centre (photo view), for talking about holds
+  let showIds = true;
+  const ROLES = ['any', 'start', 'hand', 'foot', 'zone', 'finish'];
+  const ROLE_COLORS = { start: 0x3ddc84, hand: 0xffffff, foot: 0xffd54f, zone: 0x64b5f6, finish: 0xef5350 };
+  const LONG_PRESS_MS = 450;
+  // Grade scales (mirrors core/GradeSystem.kt); the location's scale is listed first.
+  const GRADES = {
+    kyu_dan: { label: 'Japanese (Q/D)', values: [...Array.from({ length: 10 }, (_, i) => `${10 - i}Q`), ...Array.from({ length: 6 }, (_, i) => `${i + 1}D`)] },
+    v: { label: 'V-scale', values: ['VB', ...Array.from({ length: 18 }, (_, i) => `V${i}`)] },
+    font: { label: 'Font', values: ['3', '4', '4+', '5', '5+', ...[6, 7, 8].flatMap((n) => ['A', 'A+', 'B', 'B+', 'C', 'C+'].map((s) => `${n}${s}`)), '9A'] },
+    yds: { label: 'YDS', values: ['5.5', '5.6', '5.7', '5.8', '5.9', ...[10, 11, 12, 13, 14, 15].flatMap((n) => ['a', 'b', 'c', 'd'].map((s) => `5.${n}${s}`))] },
+  };
+  const gradeOrder = [defaultGrades, ...Object.keys(GRADES).filter((k) => k !== defaultGrades)].filter((k) => GRADES[k]);
+  const gradeOptions = (r) => `<option value="">${T.grade}</option>` + gradeOrder.map((k) =>
+    `<optgroup label="${T.grades[k] || GRADES[k].label}">` + GRADES[k].values.map((g) =>
+      `<option value="${k}:${g}"${r.gradeSystem === k && r.grade === g ? ' selected' : ''}>${g}</option>`).join('') + '</optgroup>').join('');
 
   const setStatus = (text) => { statusEl.textContent = text; };
+  let pointCount = 0;
+  const showCounts = () => setStatus(`${T.definitions[scene.definition.type] || ''}, ${pointCount.toLocaleString()} ${T.pts}, ${scene.holds.length} ${T.holds}, ${scene.routes.length} ${T.routesN}, ${scene.routes.filter((r) => r.confirmed).length} ${T.confirmedN}`);
   const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
   const rgbCss = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
   const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const routeOf = (id) => scene.routes.find((r) => r.id === id) || null;
   const holdOf = (id) => scene.holds.find((h) => h.id === id);
-  const sendCount = (routeId) => scene.sends.filter((s) => s.routeId === routeId).length;
+  const primaryRoute = (h) => { h.routeId = h.routeIds.length ? h.routeIds[0] : -1; return h.routeId; };
   const colorOfHold = (h) => {
-    const r = routeOf(h.routeId);
+    const r = routeOf(primaryRoute(h));
     return r ? new THREE.Color(r.color[0] / 255, r.color[1] / 255, r.color[2] / 255) : new THREE.Color(0x8a9199);
   };
+  // Wall frame: (u, v) in the wall plane (right, up) and d along the normal, as scene.json's wall fields define them.
+  const wallQuaternion = () => new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(vec(scene.wall.right), vec(scene.wall.up), vec(scene.wall.normal)));
+  const wallPoint = (u, v, d = 0) => vec(scene.wall.origin).addScaledVector(vec(scene.wall.right), u).addScaledVector(vec(scene.wall.up), v).addScaledVector(vec(scene.wall.normal), d);
 
   const resize = () => {
     renderer.setSize(innerWidth, innerHeight, false);
@@ -112,35 +217,175 @@
     return { positions, colors, count };
   };
 
+  // The orthophoto (wall.png, built at Finish from the keyframes) on the wall, pushed out by the relief the point
+  // cloud measured (relief.png: millimetres as red × 256 + green), so holds and volumes stand out in 3D; captures
+  // without a relief stay flat. Its pixels stay readable on a canvas for the hold edits below. The holds are drawn
+  // on a second, transparent copy of the surface (OVERLAY_SCALE × the photo's pixels). Resolves without a photo
+  // for older captures.
+  const SURFACE_STEP_PX = 2;   // one vertex per 1 cm at 5 mm pixels
+  const OVERLAY_SCALE = 2;
+  const loadImage = (file) => new Promise((resolve) => {
+    if (!file) return resolve(null);
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = base + file;
+  });
+  const pixelsOf = (img) => {
+    const c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    return { canvas: c, data: ctx.getImageData(0, 0, c.width, c.height).data };
+  };
+  const loadPhoto = async () => {
+    const p = scene.wall.photo;
+    if (!p || !p.file || !p.bounds || !p.px) return;
+    const [img, reliefImg] = await Promise.all([loadImage(p.file), loadImage(p.relief)]);
+    if (!img) return;
+    const [minU, minV, maxU, maxV] = p.bounds;
+    const { canvas, data } = pixelsOf(img);
+    let relief = null;
+    if (reliefImg && reliefImg.width === img.width && reliefImg.height === img.height) {
+      const r = pixelsOf(reliefImg).data;
+      relief = new Float32Array(img.width * img.height);
+      for (let i = 0; i < relief.length; i++) relief[i] = (r[i * 4] * 256 + r[i * 4 + 1]) / 1000;
+    }
+    photo = { data, w: img.width, h: img.height, minU, minV, maxU, maxV, px: p.px, relief };
+    const geometry = new THREE.PlaneGeometry(maxU - minU, maxV - minV, Math.ceil(img.width / SURFACE_STEP_PX), Math.ceil(img.height / SURFACE_STEP_PX));
+    const pos = geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setZ(i, heightAt(minU + pos.getX(i) + (maxU - minU) / 2, minV + pos.getY(i) + (maxV - minV) / 2));
+    geometry.computeBoundingSphere();
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const place = (m) => { m.position.copy(wallPoint((minU + maxU) / 2, (minV + maxV) / 2)); m.quaternion.copy(wallQuaternion()); scene3.add(m); return m; };
+    photo.mesh = place(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: tex })));
+    const oc = document.createElement('canvas');
+    oc.width = img.width * OVERLAY_SCALE; oc.height = img.height * OVERLAY_SCALE;
+    const otex = new THREE.CanvasTexture(oc);
+    otex.colorSpace = THREE.SRGBColorSpace;
+    place(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: otex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 })));
+    photo.overlay = { canvas: oc, ctx: oc.getContext('2d'), tex: otex };
+  };
+  // Height off the wall at (u, v): the relief's nearest pixel, 0 without one.
+  const heightAt = (u, v) => {
+    if (!photo || !photo.relief) return 0;
+    const x = Math.min(photo.w - 1, Math.max(0, Math.floor((u - photo.minU) / photo.px))), y = Math.min(photo.h - 1, Math.max(0, Math.floor((photo.maxV - v) / photo.px)));
+    return photo.relief[y * photo.w + x];
+  };
+  const surfacePoint = (u, v, lift = 0) => wallPoint(u, v, heightAt(u, v) + lift);
+  const pixelOf = (u, v) => [Math.min(photo.w - 1, Math.max(0, Math.floor((u - photo.minU) / photo.px))), Math.min(photo.h - 1, Math.max(0, Math.floor((photo.maxV - v) / photo.px)))];
+  const uvOfPixel = (x, y) => [photo.minU + (x + 0.5) * photo.px, photo.maxV - (y + 0.5) * photo.px];
+
+  // A hold's number as a small sprite of fixed screen size (LABEL_H of the view's height at any zoom), white on a
+  // dark backing so it reads on any hold.
+  const LABEL_H = 0.022;
+  const holdLabel = (id) => {
+    const text = String(id);
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    ctx.font = 'bold 40px Atkinson, sans-serif';
+    c.width = Math.ceil(ctx.measureText(text).width) + 16; c.height = 52;
+    ctx.fillStyle = 'rgba(21, 25, 29, 0.7)';
+    ctx.beginPath(); ctx.roundRect(0, 0, c.width, c.height, 10); ctx.fill();
+    ctx.font = 'bold 40px Atkinson, sans-serif';
+    ctx.fillStyle = '#efebe3'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, c.width / 2, c.height / 2 + 2);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, sizeAttenuation: false }));
+    sprite.scale.set(LABEL_H * c.width / c.height, LABEL_H, 1);
+    sprite.renderOrder = 2;
+    return sprite;
+  };
+
+  const holdArea = (h) => Math.max(h.size[0], 0.04) * Math.max(h.size[1], 0.04);
+
+  // With a photo, holds are drawn on the photo's overlay (fill, edge in the route colour, role ring; see restyle)
+  // and picked by their outline; without one (older captures), the depth box as before.
   const buildHolds = () => {
     for (const m of holdMeshes.values()) scene3.remove(m);
+    for (const m of roleMeshes.values()) scene3.remove(m);
+    for (const m of labelSprites.values()) scene3.remove(m);
     holdMeshes.clear();
-    const basis = new THREE.Matrix4().makeBasis(vec(scene.wall.right), vec(scene.wall.up), vec(scene.wall.normal));
-    const q = new THREE.Quaternion().setFromRotationMatrix(basis);
+    roleMeshes.clear();
+    labelSprites.clear();
+    const q = wallQuaternion();
     for (const h of scene.holds) {
-      const [w, t, d] = h.size.map((s) => Math.max(s, 0.04));
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(w, t, d),
-        new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
-      );
-      mesh.position.copy(vec(h.center));
+      if (photo) {
+        const label = holdLabel(h.id);
+        label.position.copy(surfacePoint(h.uv[0], h.uv[1], 0.01));
+        label.visible = showIds;
+        scene3.add(label);
+        labelSprites.set(h.id, label);
+        continue;
+      }
+      let mesh, outline;
+      {
+        const [w, t, d] = h.size.map((s) => Math.max(s, 0.04));
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(w, t, d), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+        mesh.position.copy(vec(h.center));
+        outline = new THREE.Mesh(new THREE.BoxGeometry(w * 1.3, t * 1.3, d * 1.3), new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: 0.9 }));
+        outline.position.copy(mesh.position);
+      }
       mesh.quaternion.copy(q);
+      outline.quaternion.copy(q);
       mesh.userData.holdId = h.id;
       scene3.add(mesh);
+      scene3.add(outline);
       holdMeshes.set(h.id, mesh);
+      roleMeshes.set(h.id, outline);
     }
     restyle();
   };
 
+  // The holds on the photo's overlay: largest first so a foothold on a volume stays visible; a light fill, the
+  // route's colour on the edge, members lit when a route is selected, a ring in the role's colour.
+  const drawOverlay = () => {
+    const { canvas, ctx, tex } = photo.overlay;
+    const k = OVERLAY_SCALE;
+    const toPx = ([u, v]) => [(u - photo.minU) / photo.px * k, (photo.maxV - v) / photo.px * k];
+    const css = (c, a) => `rgba(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)},${a})`;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const h of [...scene.holds].sort((a, b) => holdArea(b) - holdArea(a))) {
+      if (!h.outline || h.outline.length < 3) continue;
+      const inSelected = selectedRouteId !== null && h.routeIds.includes(selectedRouteId);
+      const color = colorOfHold(h);
+      ctx.beginPath();
+      h.outline.forEach((p, i) => { const [x, y] = toPx(p); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+      ctx.closePath();
+      ctx.fillStyle = css(color, selectedRouteId === null ? 0.22 : (inSelected ? 0.5 : 0.06));
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = css(h.routeIds.length ? color : new THREE.Color(0xefebe3), selectedRouteId === null || inSelected ? 1 : 0.3);
+      ctx.stroke();
+      if (h.role !== 'any' && (selectedRouteId === null || inSelected)) {
+        const [x, y] = toPx(h.uv);
+        const r = Math.max(h.size[0], h.size[1], 0.06) * 0.6 / photo.px * k;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, 2 * Math.PI);
+        ctx.lineWidth = 0.012 / photo.px * k;
+        ctx.strokeStyle = css(new THREE.Color(ROLE_COLORS[h.role] || 0xffffff), 0.95);
+        ctx.stroke();
+      }
+    }
+    tex.needsUpdate = true;
+  };
+
   const restyle = () => {
+    if (pointsMaterial) pointsMaterial.opacity = selectedRouteId === null ? 1 : 0.5;
+    if (photo) { drawOverlay(); return; }
     for (const h of scene.holds) {
-      const mat = holdMeshes.get(h.id).material;
-      const inSelected = selectedRouteId !== null && h.routeId === selectedRouteId;
+      const mesh = holdMeshes.get(h.id);
+      const mat = mesh.material;
+      const inSelected = selectedRouteId !== null && h.routeIds.includes(selectedRouteId);
       mat.color.copy(colorOfHold(h));
       mat.wireframe = !inSelected;
       mat.opacity = selectedRouteId === null ? 0.9 : (inSelected ? 0.6 : 0.25);
+      const outline = roleMeshes.get(h.id);
+      outline.visible = h.role !== 'any' && (selectedRouteId === null || inSelected);
+      if (outline.visible) outline.material.color.setHex(ROLE_COLORS[h.role] || 0xffffff);
     }
-    if (pointsMaterial) pointsMaterial.opacity = selectedRouteId === null ? 1 : 0.5;
   };
 
   const select = (routeId) => {
@@ -149,22 +394,495 @@
     restyle();
   };
 
+  // Holds may belong to several routes (tape, free walls); the first route gives the hold its colour.
   const toggleMembership = (hold, routeId) => {
     const route = routeOf(routeId);
-    if (hold.routeId === routeId) {
-      hold.routeId = -1;
+    if (hold.routeIds.includes(routeId)) {
+      hold.routeIds = hold.routeIds.filter((id) => id !== routeId);
       route.holdIds = route.holdIds.filter((id) => id !== hold.id);
     } else {
-      const prev = routeOf(hold.routeId);
-      if (prev) prev.holdIds = prev.holdIds.filter((id) => id !== hold.id);
-      hold.routeId = routeId;
+      hold.routeIds.push(routeId);
       route.holdIds.push(hold.id);
     }
+    primaryRoute(hold);
+  };
+
+  const setRole = (hold, role) => {
+    hold.role = hold.role === role ? 'any' : role;
+    if (selectedRouteId !== null && !hold.routeIds.includes(selectedRouteId)) toggleMembership(hold, selectedRouteId);
   };
 
   const randomColor = () => {
     const c = new THREE.Color().setHSL(Math.random(), 0.8, 0.5);
     return [Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255)];
+  };
+
+  // ---- Hold edits on the photo: draw a hold's outline, split, merge or remove one. ----
+  // Drawn holds take the tapped polygon as their outline. A split cuts the hold through the pressed point,
+  // along a visible seam when there is one (cutThrough); each side's outline is its outer boundary (as
+  // HoldOutline.kt traces it: cell edges chained into loops, the largest kept, Chaikin-smoothed).
+  const MIN_REGION_PX = 16;
+  const MAX_OUTLINE_PTS = 96;
+  const MERGE_GAP_PX = 3;      // a seam this wide (1.5 cm at 5 mm) between two parts of one hold is closed on merge
+  const CUT_HALF_PX = 1;       // the cut removes a line 3 px (1.5 cm) wide
+  const CLOSE_DRAW_M = 0.015;  // a tap this close to the first point closes the drawn outline (less on small holds)
+  const colorAt = (i) => [photo.data[i * 4], photo.data[i * 4 + 1], photo.data[i * 4 + 2]];
+  const rgbToHsv = ([r, g, b]) => {
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    const s = max === 0 ? 0 : d / max, v = max / 255;
+    let h = 0;
+    if (d > 0) h = max === r ? 60 * (((g - b) / d) % 6) : max === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4);
+    if (h < 0) h += 360;
+    return [h, s, v];
+  };
+  // 4-connected parts of [mask] within the box, largest first.
+  const components = (mask, x0, y0, x1, y1) => {
+    const { w } = photo;
+    const seen = new Uint8Array(mask.length);
+    const parts = [];
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const s = y * w + x;
+      if (!mask[s] || seen[s]) continue;
+      const queue = [s];
+      seen[s] = 1;
+      let bx0 = x, bx1 = x, by0 = y, by1 = y;
+      for (let head = 0; head < queue.length; head++) {
+        const i = queue[head];
+        const cx = i % w, cy = (i - cx) / w;
+        if (cx < bx0) bx0 = cx; if (cx > bx1) bx1 = cx; if (cy < by0) by0 = cy; if (cy > by1) by1 = cy;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < x0 || ny < y0 || nx > x1 || ny > y1) continue;
+          const j = ny * w + nx;
+          if (mask[j] && !seen[j]) { seen[j] = 1; queue.push(j); }
+        }
+      }
+      const out = new Uint8Array(mask.length);
+      for (const i of queue) out[i] = 1;
+      parts.push({ mask: out, count: queue.length, x0: bx0, x1: bx1, y0: by0, y1: by1 });
+    }
+    return parts.sort((a, b) => b.count - a.count);
+  };
+  // The set pixels of [mask] as a region (count and bounding box); null when empty.
+  const regionOf = (mask) => {
+    const { w } = photo;
+    let x0 = w, x1 = -1, y0 = photo.h, y1 = -1, count = 0;
+    for (let i = 0; i < mask.length; i++) {
+      if (!mask[i]) continue;
+      const x = i % w, y = (i - x) / w;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      count++;
+    }
+    return count ? { mask, count, x0, x1, y0, y1 } : null;
+  };
+  const traceOutline = (region) => {
+    const { w } = photo;
+    const { mask, x0, x1, y0, y1 } = region;
+    const at = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1 && mask[y * w + x] === 1;
+    const vw = x1 - x0 + 3; // vertex grid, padded by one pixel
+    const key = (x, y) => (y - y0 + 1) * vw + (x - x0 + 1);
+    const next = new Map();
+    const edge = (ax, ay, bx, by) => { const k = key(ax, ay); if (!next.has(k)) next.set(k, []); next.get(k).push(key(bx, by)); };
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (!at(x, y)) continue;
+      if (!at(x, y - 1)) edge(x, y, x + 1, y);
+      if (!at(x + 1, y)) edge(x + 1, y, x + 1, y + 1);
+      if (!at(x, y + 1)) edge(x + 1, y + 1, x, y + 1);
+      if (!at(x - 1, y)) edge(x, y + 1, x, y);
+    }
+    // Chain edges into loops, consuming each edge once (a vertex where the region pinches is passed twice);
+    // keep the loop enclosing the largest area.
+    let bestLoop = null, bestArea = 0;
+    while (next.size) {
+      const start = next.keys().next().value;
+      const loop = [];
+      let cur = start;
+      for (;;) {
+        loop.push(cur);
+        const out = next.get(cur);
+        if (!out) break;
+        const to = out.pop();
+        if (!out.length) next.delete(cur);
+        cur = to;
+        if (cur === start) break;
+      }
+      let area = 0;
+      for (let i = 0; i < loop.length; i++) {
+        const a = loop[i], b = loop[(i + 1) % loop.length];
+        area += (a % vw) * Math.floor(b / vw) - (b % vw) * Math.floor(a / vw);
+      }
+      if (Math.abs(area) > bestArea) { bestArea = Math.abs(area); bestLoop = loop; }
+    }
+    if (!bestLoop) return [];
+    let pts = bestLoop.map((k) => [photo.minU + (x0 - 1 + (k % vw)) * photo.px, photo.maxV - (y0 - 1 + Math.floor(k / vw)) * photo.px]);
+    for (let pass = 0; pass < 2; pass++) {
+      const out = [];
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        out.push([0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]], [0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]]);
+      }
+      pts = out;
+    }
+    if (pts.length > MAX_OUTLINE_PTS) {
+      const step = pts.length / MAX_OUTLINE_PTS;
+      pts = Array.from({ length: MAX_OUTLINE_PTS }, (_, i) => pts[Math.floor(i * step)]);
+    }
+    // Millimetre precision like scene.json; a repeated point after rounding would give the triangulator a zero-length edge.
+    const out = [];
+    for (const [u, v] of pts) {
+      const p = [Math.round(u * 1000) / 1000, Math.round(v * 1000) / 1000];
+      const last = out[out.length - 1];
+      if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) >= 0.002) out.push(p);
+    }
+    while (out.length > 1 && Math.hypot(out[0][0] - out[out.length - 1][0], out[0][1] - out[out.length - 1][1]) < 0.002) out.pop();
+    return out;
+  };
+  // Pixels inside an outline (a hold's, or one being drawn), rasterised by the canvas.
+  const outlineMask = (outline) => {
+    const pts = outline.map(([u, v]) => [(u - photo.minU) / photo.px, (photo.maxV - v) / photo.px]);
+    const x0 = Math.max(0, Math.floor(Math.min(...pts.map((p) => p[0])))), x1 = Math.min(photo.w - 1, Math.ceil(Math.max(...pts.map((p) => p[0]))));
+    const y0 = Math.max(0, Math.floor(Math.min(...pts.map((p) => p[1])))), y1 = Math.min(photo.h - 1, Math.ceil(Math.max(...pts.map((p) => p[1]))));
+    const mask = new Uint8Array(photo.w * photo.h);
+    if (x1 < x0 || y1 < y0) return mask;
+    const c = document.createElement('canvas');
+    c.width = x1 - x0 + 1; c.height = y1 - y0 + 1;
+    const ctx = c.getContext('2d');
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => { if (i) ctx.lineTo(x - x0, y - y0); else ctx.moveTo(x - x0, y - y0); });
+    ctx.closePath();
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    const a = ctx.getImageData(0, 0, c.width, c.height).data;
+    for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (a[(y * c.width + x) * 4 + 3] > 127) mask[(y + y0) * photo.w + x + x0] = 1;
+    return mask;
+  };
+  const nextHoldId = () => scene.holds.reduce((m, h) => Math.max(m, h.id), 0) + 1;
+  // A hold record (scene.json v3 fields) from a pixel region; image-only, so voxels is 0.
+  const holdFromRegion = (region, id, height, outline = traceOutline(region)) => {
+    const { w } = photo;
+    let su = 0, sv = 0, sr = 0, sg = 0, sb = 0, n = 0;
+    for (let y = region.y0; y <= region.y1; y++) for (let x = region.x0; x <= region.x1; x++) {
+      const i = y * w + x;
+      if (!region.mask[i]) continue;
+      const [u, v] = uvOfPixel(x, y);
+      const c = colorAt(i);
+      su += u; sv += v; sr += c[0]; sg += c[1]; sb += c[2]; n++;
+    }
+    const uv = [Math.round(su / n * 10000) / 10000, Math.round(sv / n * 10000) / 10000];
+    const color = [Math.round(sr / n), Math.round(sg / n), Math.round(sb / n)];
+    const p = wallPoint(uv[0], uv[1], height);
+    return {
+      id, center: [p.x, p.y, p.z], uv, size: [(region.x1 - region.x0 + 1) * photo.px, (region.y1 - region.y0 + 1) * photo.px, height],
+      color, hsv: rgbToHsv(color), voxels: 0, routeId: -1, routeIds: [], role: 'any', tape: null, outline,
+    };
+  };
+  // [hold] takes the shape of [rec] and keeps its id, routes, role, tape and voxels.
+  const reshape = (hold, rec) => Object.assign(hold, { center: rec.center, uv: rec.uv, size: rec.size, color: rec.color, hsv: rec.hsv, outline: rec.outline });
+  // Edge strength of the photo (Sobel on luma) over a box, scaled so the box's 90th percentile is 1.
+  const edgesIn = (x0, y0, x1, y1) => {
+    const { w } = photo;
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    const luma = (x, y) => { const i = (Math.min(Math.max(y, 0), photo.h - 1) * w + Math.min(Math.max(x, 0), w - 1)) * 4; return 0.299 * photo.data[i] + 0.587 * photo.data[i + 1] + 0.114 * photo.data[i + 2]; };
+    const g = new Float32Array(bw * bh);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+      const X = x + x0, Y = y + y0;
+      const gx = luma(X + 1, Y - 1) + 2 * luma(X + 1, Y) + luma(X + 1, Y + 1) - luma(X - 1, Y - 1) - 2 * luma(X - 1, Y) - luma(X - 1, Y + 1);
+      const gy = luma(X - 1, Y + 1) + 2 * luma(X, Y + 1) + luma(X + 1, Y + 1) - luma(X - 1, Y - 1) - 2 * luma(X, Y - 1) - luma(X + 1, Y - 1);
+      g[y * bw + x] = Math.hypot(gx, gy);
+    }
+    const p90 = Float32Array.from(g).sort()[Math.floor(g.length * 0.9)] || 1;
+    for (let i = 0; i < g.length; i++) g[i] = Math.min(1, g[i] / p90);
+    return g;
+  };
+  // The split through the pressed pixel: cheapest paths (Dijkstra, 8-connected) from it to the outside, where
+  // a pixel on a photo edge costs CUT_EDGE_COST and one on a flat face 1, so a path runs along a visible
+  // seam when there is one and is the shortest otherwise. The cheapest exit in each CUT_BINS direction is a
+  // candidate end; of all pairs of ends that cut the hold in two, the one with the least cost per
+  // sqrt(smaller part) wins (a normalised cut: a cheap path that only nicks a corner off loses).
+  // Returns the two parts, larger first, or null.
+  const CUT_EDGE_COST = 0.1;
+  const CUT_BINS = 24;
+  const CUT_MIN_APART_BINS = 4;  // ends at least 60° apart as seen from the press
+  const CUT_MIN_THICK_PX = 2;    // a part with fewer pixels per edge pixel is a strip along the rim, not a hold
+  const splitThrough = (inside, box, sx, sy) => {
+    const { w } = photo;
+    const bw = box.x1 - box.x0 + 3, bh = box.y1 - box.y0 + 3;  // one pixel of outside around the hold
+    const ox = box.x0 - 1, oy = box.y0 - 1;
+    const edge = edgesIn(ox, oy, ox + bw - 1, oy + bh - 1);
+    const isIn = (x, y) => x >= 0 && y >= 0 && x < w && y < photo.h && inside[y * w + x] === 1;
+    const dist = new Float32Array(bw * bh).fill(Infinity);
+    const prev = new Int32Array(bw * bh).fill(-1);
+    // Binary min-heap of (cost, index) in typed arrays; a pixel is pushed once per improvement.
+    let hc = new Float32Array(1024), hi = new Int32Array(1024), hn = 0;
+    const push = (c, i) => {
+      if (hn === hc.length) { const nc = new Float32Array(hn * 2), ni = new Int32Array(hn * 2); nc.set(hc); ni.set(hi); hc = nc; hi = ni; }
+      let k = hn++;
+      while (k) { const p = (k - 1) >> 1; if (hc[p] <= c) break; hc[k] = hc[p]; hi[k] = hi[p]; k = p; }
+      hc[k] = c; hi[k] = i;
+    };
+    const pop = () => {
+      const top = hi[0], c = hc[--hn], i = hi[hn];
+      let k = 0;
+      for (;;) { let m = 2 * k + 1; if (m >= hn) break; if (m + 1 < hn && hc[m + 1] < hc[m]) m++; if (hc[m] >= c) break; hc[k] = hc[m]; hi[k] = hi[m]; k = m; }
+      hc[k] = c; hi[k] = i;
+      return top;
+    };
+    const s = (sy - oy) * bw + (sx - ox);
+    dist[s] = 0;
+    push(0, s);
+    const exits = [];  // outside pixels next to the hold, reached from inside
+    const done = new Uint8Array(bw * bh);
+    while (hn) {
+      const i = pop();
+      if (done[i]) continue;
+      done[i] = 1;
+      const c = dist[i];
+      const x = i % bw, y = (i - x) / bw;
+      if (!isIn(x + ox, y + oy)) { exits.push(i); continue; }
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if ((!dx && !dy) || nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue;
+        const j = ny * bw + nx;
+        const step = (dx && dy ? Math.SQRT2 : 1) * (CUT_EDGE_COST + (1 - CUT_EDGE_COST) * (1 - edge[j]));
+        if (c + step < dist[j]) { dist[j] = c + step; prev[j] = i; push(c + step, j); }
+      }
+    }
+    const ends = new Map();  // direction bin -> cheapest exit
+    for (const i of exits) {
+      const bin = Math.floor((Math.atan2(Math.floor(i / bw) + oy - sy, (i % bw) + ox - sx) + Math.PI) / (2 * Math.PI) * CUT_BINS) % CUT_BINS;
+      if (!ends.has(bin) || dist[i] < dist[ends.get(bin)]) ends.set(bin, i);
+    }
+    // Candidates are scored on box-sized arrays: label[] numbers the 4-connected parts left after the cut.
+    const local = new Uint8Array(bw * bh);
+    for (let i = 0; i < local.length; i++) local[i] = isIn((i % bw) + ox, Math.floor(i / bw) + oy) ? 1 : 0;
+    const label = new Int32Array(bw * bh);
+    const cutApart = (a, b) => {
+      const rest = local.slice();
+      for (const end of [a, b]) for (let i = end; i !== -1; i = prev[i]) {
+        const cx = i % bw, cy = (i - cx) / bw;
+        for (let ry = -CUT_HALF_PX; ry <= CUT_HALF_PX; ry++) for (let rx = -CUT_HALF_PX; rx <= CUT_HALF_PX; rx++) {
+          const nx = cx + rx, ny = cy + ry;
+          if (nx >= 0 && ny >= 0 && nx < bw && ny < bh) rest[ny * bw + nx] = 0;
+        }
+      }
+      label.fill(0);
+      const sizes = [0];
+      for (let s0 = 0; s0 < rest.length; s0++) {
+        if (!rest[s0] || label[s0]) continue;
+        const id = sizes.length, stack = [s0];
+        label[s0] = id;
+        let n = 0;
+        const visit = (j) => { if (rest[j] && !label[j]) { label[j] = id; stack.push(j); } };
+        while (stack.length) {
+          const i = stack.pop(); n++;
+          const x = i % bw;
+          if (x > 0) visit(i - 1);
+          if (x < bw - 1) visit(i + 1);
+          if (i >= bw) visit(i - bw);
+          if (i + bw < rest.length) visit(i + bw);
+        }
+        sizes.push(n);
+      }
+      const order = sizes.map((n, id) => [n, id]).slice(1).sort((p, q) => q[0] - p[0]);
+      return order.length >= 2 && order[1][0] >= MIN_REGION_PX ? order.slice(0, 2) : null;
+    };
+    // Pixels per edge pixel of part [id] of the last cut: a strip of shadow peeled off along the rim is thin.
+    const thickness = (id) => {
+      let n = 0, edge = 0;
+      for (let i = 0; i < label.length; i++) {
+        if (label[i] !== id) continue;
+        n++;
+        const x = i % bw;
+        if (x === 0 || x === bw - 1 || i < bw || i + bw >= label.length || label[i - 1] !== id || label[i + 1] !== id || label[i - bw] !== id || label[i + bw] !== id) edge++;
+      }
+      return n / Math.max(1, edge);
+    };
+    // Pairs cheapest first; the smaller part is at most half the hold, so once cost / sqrt(half) cannot beat the
+    // best score no later pair can (keeps a big volume responsive without dropping any candidate).
+    const cands = [...ends.entries()];
+    const pairs = [];
+    for (let a = 0; a < cands.length; a++) for (let b = a + 1; b < cands.length; b++) {
+      const apart = Math.abs(cands[a][0] - cands[b][0]);
+      if (Math.min(apart, CUT_BINS - apart) >= CUT_MIN_APART_BINS) pairs.push([cands[a][1], cands[b][1], dist[cands[a][1]] + dist[cands[b][1]]]);
+    }
+    pairs.sort((p, q) => p[2] - q[2]);
+    const half = Math.sqrt(local.reduce((n, x) => n + x, 0) / 2);
+    let best = null;
+    for (const [a, b, cost] of pairs) {
+      if (best && cost / half >= best.score) break;
+      const two = cutApart(a, b);
+      if (!two) continue;
+      const score = cost / Math.sqrt(two[1][0]);
+      if (best && score >= best.score) continue;
+      if (thickness(two[1][1]) < CUT_MIN_THICK_PX) continue;
+      best = { score, a, b };
+    }
+    if (!best) return null;
+    return cutApart(best.a, best.b).map(([, id]) => {
+      const mask = new Uint8Array(inside.length);
+      for (let i = 0; i < label.length; i++) if (label[i] === id) mask[(Math.floor(i / bw) + oy) * w + (i % bw) + ox] = 1;
+      return regionOf(mask);
+    });
+  };
+  // Split through the pressed point (splitThrough); the larger part keeps the hold.
+  const splitHold = (hold, [u, v]) => {
+    const inside = outlineMask(hold.outline);
+    const [x, y] = pixelOf(u, v);
+    if (!inside[y * photo.w + x]) { setStatus(T.cannotSplit); return; }
+    const parts = splitThrough(inside, regionOf(inside), x, y);
+    if (!parts) { setStatus(T.cannotSplit); return; }
+    const height = hold.size[2] || 0;
+    reshape(hold, holdFromRegion(parts[0], hold.id, height));
+    const newHold = holdFromRegion(parts[1], nextHoldId(), height);
+    scene.holds.push(newHold);
+    if (selectedRouteId !== null) toggleMembership(newHold, selectedRouteId);
+    buildHolds();
+    renderRoutes();
+    showCounts();
+  };
+  // Draw a hold: taps on the wall are the outline's corners; tapping the first corner or Done closes it.
+  // Redrawing an existing hold keeps its id, routes and role.
+  let drawing = null;  // { hold, pts: [[u, v]], marks: Object3D }
+  const drawbar = document.getElementById('drawbar');
+  const showDrawing = () => {
+    if (drawing.marks) scene3.remove(drawing.marks);
+    const pts = drawing.pts.map(([u, v]) => surfacePoint(u, v, 0.012));
+    const marks = new THREE.Group();
+    const material = { color: 0xf2c14e, transparent: true, depthTest: false };
+    marks.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(pts), new THREE.PointsMaterial({ ...material, size: 0.025 })));
+    if (pts.length >= 2) marks.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial(material)));
+    scene3.add(marks);
+    drawing.marks = marks;
+  };
+  const endDraw = () => {
+    if (drawing?.marks) scene3.remove(drawing.marks);
+    drawing = null;
+    drawbar.classList.remove('open');
+    showCounts();
+  };
+  const startDraw = (hold) => {
+    if (drawing) endDraw();
+    drawing = { hold, pts: [], marks: null };
+    drawbar.classList.add('open');
+    setStatus(T.drawHint);
+  };
+  const finishDraw = () => {
+    if (drawing.pts.length < 3) { setStatus(T.drawMore); return; }
+    // Millimetres like scene.json, repeated taps dropped (a zero-length edge breaks the triangulator).
+    const outline = [];
+    for (const [u, v] of drawing.pts) {
+      const p = [Math.round(u * 1000) / 1000, Math.round(v * 1000) / 1000];
+      const last = outline[outline.length - 1];
+      if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) >= 0.002) outline.push(p);
+    }
+    while (outline.length > 1 && Math.hypot(outline[0][0] - outline[outline.length - 1][0], outline[0][1] - outline[outline.length - 1][1]) < 0.002) outline.pop();
+    if (outline.length < 3) { setStatus(T.drawMore); return; }
+    const region = regionOf(outlineMask(outline));
+    if (!region || region.count < MIN_REGION_PX) { setStatus(T.drawMore); return; }
+    const { hold } = drawing;
+    if (hold) {
+      reshape(hold, holdFromRegion(region, hold.id, hold.size[2] || 0, outline));
+    } else {
+      const added = holdFromRegion(region, nextHoldId(), 0, outline);
+      scene.holds.push(added);
+      if (selectedRouteId !== null) toggleMembership(added, selectedRouteId);
+    }
+    endDraw();
+    buildHolds();
+    renderRoutes();
+  };
+  const addDrawPoint = ([u, v]) => {
+    const first = drawing.pts[0];
+    // Closing distance: CLOSE_DRAW_M, or a quarter of the drawing's size for a small foothold.
+    const us = drawing.pts.map((p) => p[0]), vs = drawing.pts.map((p) => p[1]);
+    const close = Math.min(CLOSE_DRAW_M, 0.25 * Math.hypot(Math.max(...us) - Math.min(...us), Math.max(...vs) - Math.min(...vs)));
+    if (drawing.pts.length >= 3 && Math.hypot(u - first[0], v - first[1]) <= close) { finishDraw(); return; }
+    drawing.pts.push([u, v]);
+    showDrawing();
+  };
+  document.getElementById('drawUndo').onclick = () => { drawing.pts.pop(); showDrawing(); };
+  document.getElementById('drawDone').onclick = () => finishDraw();
+  document.getElementById('drawCancel').onclick = () => endDraw();
+  const removeHold = (hold) => {
+    for (const r of scene.routes) r.holdIds = r.holdIds.filter((id) => id !== hold.id);
+    scene.holds = scene.holds.filter((h) => h !== hold);
+    buildHolds();
+    renderRoutes();
+  };
+  // Merge: [b]'s pixels join [a] (a hold the detector cut in two), a seam up to MERGE_GAP_PX wide closed
+  // between them. [a] keeps its id and takes [b]'s routes, voxels, and its role and tape when it has none.
+  // Holds that stay apart after closing are not merged.
+  let mergeFrom = null;
+  const mergeHolds = (a, b) => {
+    const { w, h } = photo;
+    const ma = outlineMask(a.outline), mb = outlineMask(b.outline);
+    const union = new Uint8Array(w * h);
+    let x0 = w, x1 = -1, y0 = h, y1 = -1, n = 0;
+    for (let i = 0; i < union.length; i++) {
+      if (!ma[i] && !mb[i]) continue;
+      union[i] = 1; n++;
+      const x = i % w, y = (i - x) / w;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    if (!n) return;
+    const r = MERGE_GAP_PX;
+    const bx0 = Math.max(0, x0 - r), bx1 = Math.min(w - 1, x1 + r), by0 = Math.max(0, y0 - r), by1 = Math.min(h - 1, y1 + r);
+    const near = (src, x, y, all) => {
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        const nx = x + dx, ny = y + dy;
+        const on = nx >= 0 && ny >= 0 && nx < w && ny < h && src[ny * w + nx] === 1;
+        if (all !== on) return !all;
+      }
+      return all;
+    };
+    const grown = new Uint8Array(w * h), closed = new Uint8Array(w * h);
+    for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) if (near(union, x, y, false)) grown[y * w + x] = 1;
+    for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) if (union[y * w + x] || near(grown, x, y, true)) closed[y * w + x] = 1;
+    const region = components(closed, bx0, by0, bx1, by1)[0];
+    if (region.count < n) { setStatus(T.mergeApart); return; }
+    reshape(a, holdFromRegion(region, a.id, Math.max(a.size[2] || 0, b.size[2] || 0)));
+    a.voxels = (a.voxels || 0) + (b.voxels || 0);
+    if (a.role === 'any') a.role = b.role;
+    a.tape = a.tape || b.tape;
+    for (const route of scene.routes) {
+      if (!route.holdIds.includes(b.id)) continue;
+      route.holdIds = route.holdIds.filter((id) => id !== b.id);
+      if (!route.holdIds.includes(a.id)) route.holdIds.push(a.id);
+      if (!a.routeIds.includes(route.id)) a.routeIds.push(route.id);
+    }
+    primaryRoute(a);
+    scene.holds = scene.holds.filter((x) => x !== b);
+    buildHolds();
+    renderRoutes();
+    showCounts();
+  };
+
+  const hideMenu = () => { menu.classList.remove('open'); menu.innerHTML = ''; };
+  const showMenu = (x, y, hold, uv) => {
+    if (!uv) return;
+    menu.innerHTML = '';
+    const title = document.createElement('div');
+    title.className = 'title';
+    title.textContent = hold ? T.holdN(hold.id) : T.wall;
+    menu.appendChild(title);
+    const item = (label, fn) => {
+      const b = document.createElement('button');
+      b.className = 'secondary';
+      b.textContent = label;
+      b.onclick = () => { hideMenu(); fn(); };
+      menu.appendChild(b);
+    };
+    if (hold) {
+      item(T.splitHold, () => splitHold(hold, uv));
+      item(T.mergeHold, () => { mergeFrom = hold; setStatus(T.mergePick(hold.id)); });
+      item(T.redrawHold, () => startDraw(hold));
+      item(T.removeHold, () => removeHold(hold));
+    }
+    item(T.drawHold, () => startDraw(null));
+    item(T.cancel, () => {});
+    menu.style.left = `${Math.max(8, Math.min(x, innerWidth - 216))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, innerHeight - 220))}px`;
+    menu.classList.add('open');
   };
 
   const renderRoutes = () => {
@@ -175,20 +893,20 @@
       row.innerHTML =
         `<span class="swatch" style="background:${rgbCss(r.color)}"></span>` +
         `<input class="name" value="${esc(r.name)}">` +
-        `<input class="grade" placeholder="grade" value="${esc(r.grade || '')}">` +
+        `<select class="grade">${gradeOptions(r)}</select>` +
         `<span class="count">${r.holdIds.length}</span>` +
-        `<button class="send">✓ ${sendCount(r.id)}</button>` +
+        `<button class="confirm${r.confirmed ? ' on' : ''}">${r.confirmed ? '✓ ' + T.confirmed : T.confirm}</button>` +
         `<button class="del secondary">✕</button>`;
       row.querySelector('.swatch').onclick = () => select(r.id);
       row.querySelector('.count').onclick = () => select(r.id);
       row.querySelector('.name').oninput = (e) => { r.name = e.target.value; };
-      row.querySelector('.grade').oninput = (e) => { r.grade = e.target.value; };
-      row.querySelector('.send').onclick = () => {
-        scene.sends.push({ routeId: r.id, at: new Date().toISOString() });
-        renderRoutes();
+      row.querySelector('.grade').onchange = (e) => {
+        const [system, grade] = e.target.value ? e.target.value.split(':') : [null, ''];
+        r.gradeSystem = system; r.grade = grade;
       };
+      row.querySelector('.confirm').onclick = () => { r.confirmed = !r.confirmed; renderRoutes(); };
       row.querySelector('.del').onclick = () => {
-        for (const id of r.holdIds) holdOf(id).routeId = -1;
+        for (const id of r.holdIds) { const h = holdOf(id); h.routeIds = h.routeIds.filter((x) => x !== r.id); primaryRoute(h); }
         scene.routes = scene.routes.filter((x) => x !== r);
         if (selectedRouteId === r.id) selectedRouteId = null;
         renderRoutes();
@@ -197,38 +915,89 @@
       routesEl.appendChild(row);
     }
     const add = document.createElement('button');
-    add.textContent = '+ New route';
+    add.id = 'add';
+    add.className = 'secondary';
+    add.textContent = '+ ' + T.newRoute;
     add.onclick = () => {
-      const id = scene.routes.reduce((m, r) => Math.max(m, r.id), 0) + 1;
-      scene.routes.push({ id, name: `Route ${id}`, color: randomColor(), grade: '', holdIds: [] });
+      const id = scene.nextRouteId++; // never reissued: sends and ratings in sends.json are keyed by route id
+      scene.routes.push({ id, name: `${T.route} ${id}`, color: randomColor(), grade: '', gradeSystem: null, holdIds: [], confirmed: false });
       selectedRouteId = id;
       renderRoutes();
       restyle();
     };
     routesEl.appendChild(add);
+    const roles = document.createElement('div');
+    roles.id = 'roles';
+    for (const role of ROLES.slice(1)) {
+      const b = document.createElement('button');
+      b.textContent = T.roles[role];
+      b.className = 'role' + (roleMode === role ? ' active' : '');
+      b.style.borderColor = '#' + ROLE_COLORS[role].toString(16).padStart(6, '0');
+      b.onclick = () => { roleMode = roleMode === role ? null : role; renderRoutes(); };
+      roles.appendChild(b);
+    }
+    routesEl.appendChild(roles);
     const hint = document.createElement('div');
     hint.id = 'hint';
-    const unassigned = scene.holds.filter((h) => h.routeId === -1).length;
-    hint.textContent = selectedRouteId === null
-      ? `Tap a route swatch to select it, then tap holds to add or remove them. ${unassigned} unassigned holds.`
-      : `Editing "${routeOf(selectedRouteId).name}": tap holds on the wall to toggle them.`;
+    const unassigned = scene.holds.filter((h) => h.routeIds.length === 0).length;
+    const type = T.definitions[scene.definition?.type] || T.definitions.mono_color;
+    hint.textContent = (roleMode !== null
+      ? T.hintRole(T.roles[roleMode])
+      : selectedRouteId === null
+        ? T.hintSelect(type, unassigned)
+        : T.hintEditing(routeOf(selectedRouteId).name)) + (photo ? ' ' + T.hintPhoto : '');
     routesEl.appendChild(hint);
   };
 
-  // Tap (not drag) on a hold box: selects its route, or toggles membership in the selected route.
+  // Tap (not drag) on a hold: selects its route, or toggles membership in the selected route. A long press
+  // on the photo opens the edit menu for the hold under it, or for the wall.
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  let downPos = null;
-  canvas.addEventListener('pointerdown', (e) => { downPos = [e.clientX, e.clientY]; });
-  canvas.addEventListener('pointerup', (e) => {
-    if (!scene || !downPos || Math.hypot(e.clientX - downPos[0], e.clientY - downPos[1]) > 8) return;
-    pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  let down = null;
+  // Even-odd point-in-polygon on a hold's (u, v) outline.
+  const insideOutline = (outline, [u, v]) => {
+    let inside = false;
+    for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
+      const [ui, vi] = outline[i], [uj, vj] = outline[j];
+      if ((vi > v) !== (vj > v) && u < (uj - ui) * (v - vi) / (vj - vi) + ui) inside = !inside;
+    }
+    return inside;
+  };
+  const castAt = (clientX, clientY) => {
+    pointer.set((clientX / innerWidth) * 2 - 1, -(clientY / innerHeight) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects([...holdMeshes.values()])[0];
-    if (!hit) return;
-    const hold = holdOf(hit.object.userData.holdId);
-    if (selectedRouteId === null) {
-      if (hold.routeId !== -1) { selectedRouteId = hold.routeId; panel.classList.add('open'); }
+    if (!photo) {
+      const hit = raycaster.intersectObjects([...holdMeshes.values()], false)[0];
+      return { hold: hit ? holdOf(hit.object.userData.holdId) : null, uv: null };
+    }
+    // The tap lands on the (3D) photo surface; the smallest hold whose outline holds that point wins (a foothold on a volume).
+    const wall = raycaster.intersectObject(photo.mesh, false)[0];
+    const uv = wall ? [photo.minU + wall.uv.x * (photo.maxU - photo.minU), photo.minV + wall.uv.y * (photo.maxV - photo.minV)] : null;
+    const hold = uv ? scene.holds.filter((h) => h.outline && h.outline.length >= 3 && insideOutline(h.outline, uv)).sort((a, b) => holdArea(a) - holdArea(b))[0] || null : null;
+    return { hold, uv };
+  };
+  canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; hideMenu(); });
+  canvas.addEventListener('pointerup', (e) => {
+    if (!scene || !down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) return;
+    const longPress = performance.now() - down.t >= LONG_PRESS_MS;
+    const { hold, uv } = castAt(e.clientX, e.clientY);
+    if (drawing) {
+      if (!longPress && uv) addDrawPoint(uv);
+      return;
+    }
+    if (mergeFrom) {
+      const from = mergeFrom;
+      mergeFrom = null;
+      showCounts();
+      if (hold && hold !== from && !longPress) mergeHolds(from, hold);
+      return;
+    }
+    if (longPress && photo) { showMenu(e.clientX, e.clientY, hold, uv); return; }
+    if (!hold) return;
+    if (roleMode !== null) {
+      setRole(hold, roleMode);
+    } else if (selectedRouteId === null) {
+      if (hold.routeIds.length) { selectedRouteId = hold.routeIds[0]; panel.classList.add('open'); }
     } else {
       toggleMembership(hold, selectedRouteId);
     }
@@ -237,6 +1006,15 @@
   });
 
   document.getElementById('toggle').onclick = () => panel.classList.toggle('open');
+  idsBtn.onclick = () => {
+    showIds = !showIds;
+    for (const m of labelSprites.values()) m.visible = showIds;
+    idsBtn.classList.toggle('secondary', !showIds);
+  };
+  pointsBtn.onclick = () => {
+    points.visible = !points.visible;
+    pointsBtn.classList.toggle('secondary', !points.visible);
+  };
   document.getElementById('save').onclick = () => {
     if (window.WallBridge) WallBridge.saveScene(JSON.stringify(scene));
     else console.log(JSON.stringify(scene));
@@ -249,14 +1027,27 @@
       fetch(base + 'scene.json').then((r) => r.json()),
     ]);
     scene = sceneJson;
-    scene.sends = scene.sends || [];
+    delete scene.sends;                      // sends live in sends.json (RouteStore) since scene.json v3
+    for (const r of scene.routes) {
+      r.confirmed = !!r.confirmed;
+      // Free-text grades from scene.json v2: keep them if they match a known scale value, else clear.
+      if (r.grade && !r.gradeSystem) r.gradeSystem = Object.keys(GRADES).find((k) => GRADES[k].values.includes(r.grade)) || null;
+      if (r.grade && !r.gradeSystem) r.grade = '';
+    }
+    scene.definition = scene.definition || { type: 'mono_color', rules: { feet: 'follow', volumesOn: true } };
+    scene.nextRouteId = Math.max(scene.nextRouteId || 0, scene.routes.reduce((m, r) => Math.max(m, r.id), 0) + 1);
+    for (const h of scene.holds) {            // scene.json v1 compatibility
+      h.routeIds = h.routeIds || (h.routeId !== -1 ? [h.routeId] : []);
+      h.role = h.role || 'any';
+    }
     const { positions, colors, count } = parsePly(plyBuf);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.computeBoundingSphere();
     pointsMaterial = new THREE.PointsMaterial({ size: 0.012, vertexColors: true, transparent: true });
-    scene3.add(new THREE.Points(geometry, pointsMaterial));
+    points = new THREE.Points(geometry, pointsMaterial);
+    scene3.add(points);
 
     const center = geometry.boundingSphere.center;
     const radius = Math.max(geometry.boundingSphere.radius, 0.5);
@@ -266,13 +1057,26 @@
     controls.target.copy(center);
     controls.update();
 
+    await loadPhoto();
+    // With a photo the wall is shown as photographed; the point cloud stays one tap away.
+    points.visible = !photo;
+    pointsBtn.hidden = !photo;
+    idsBtn.hidden = !photo;
     buildHolds();
     renderRoutes();
-    setStatus(`${count.toLocaleString()} pts · ${scene.holds.length} holds · ${scene.routes.length} routes`);
+    pointCount = count;
+    showCounts();
   };
 
-  load().catch((err) => setStatus('Failed to load: ' + err.message));
+  load().catch((err) => setStatus(T.failed + err.message));
   renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene3, camera); });
+
+  // For driving the viewer from DevTools (adb forward to the WebView): the scene, and where a wall point lands on screen (CSS px).
+  window.viewerDebug = {
+    get scene() { return scene; },
+    project: (u, v) => { const p = (photo ? surfacePoint(u, v) : wallPoint(u, v)).project(camera); return [(p.x + 1) / 2 * innerWidth, (1 - p.y) / 2 * innerHeight]; },
+    hitAt: (u, v) => { const [x, y] = window.viewerDebug.project(u, v); const r = castAt(x, y); return { hold: r.hold ? r.hold.id : null, uv: r.uv }; },
+  };
 </script>
 </body>
 </html>

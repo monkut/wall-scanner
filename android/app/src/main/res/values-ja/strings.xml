@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wall Scanner</string>
+
+    <!-- ホーム -->
+    <string name="mode_capture">キャプチャ</string>
+    <string name="mode_logbook">ログブック</string>
+    <string name="new_scan">新規スキャン</string>
+    <string name="captures">キャプチャ一覧</string>
+    <string name="routes">ルート</string>
+    <string name="no_captures">キャプチャはまだありません。「新規スキャン」をタップして壁をスキャンしてください。</string>
+    <string name="no_routes">確定済みのルートはまだありません。キャプチャを開いてルートを特定し、「確定」をタップしてください。</string>
+    <string name="incomplete_capture">未完了（診断データのみ）</string>
+    <string name="no_scene_hint">このキャプチャには 3D シーンがありません。長押しすると診断データを共有できます。</string>
+    <string name="unknown_location">ロケーション未設定</string>
+    <string name="list_separator">"、"</string>
+    <string name="last_send">最新: %1$s %2$s</string>
+    <string name="from_capture">キャプチャ %1$s</string>
+
+    <!-- 言語 -->
+    <string name="language">言語</string>
+    <string name="language_en_us">English (US)</string>
+    <string name="language_en_gb">English (UK)</string>
+    <string name="language_ja">日本語</string>
+    <string name="language_short_en_us">EN-US</string>
+    <string name="language_short_en_gb">EN-UK</string>
+    <string name="language_short_ja">JA</string>
+
+    <!-- ロケーション -->
+    <string name="choose_location">どこでスキャンしますか？</string>
+    <string name="new_location">新しいロケーション…</string>
+    <string name="location_name_hint">名前（ジムまたは岩場）</string>
+    <string name="kind_gym">ジム</string>
+    <string name="kind_outdoor">外岩エリア</string>
+    <string name="set_location">ロケーションを設定</string>
+    <!-- ジムのセット: 壁のリセットからリセットまでのルート -->
+    <string name="choose_set">この壁はどのセットですか？</string>
+    <string name="new_set">新しいセット…</string>
+    <string name="set_name_label">セット名</string>
+    <string name="set_name_hint">例: 10月セット</string>
+    <string name="default_set_name">%1$sセット</string>
+    <string name="without_set">セットなしで続ける</string>
+    <string name="no_set">セットなし</string>
+    <string name="set_since">%1$s から</string>
+    <string name="set_retired_on">%1$s に終了</string>
+    <string name="set_retired_label">%1$s（終了）</string>
+    <string name="set_retired_checkbox">終了: 壁がリセットされた</string>
+    <string name="edit_set">セットを編集</string>
+    <string name="set_name_taken">「%1$s」というセットはすでにあります</string>
+    <string name="grade_system">グレード表記</string>
+    <string name="grades_kyu">級/段</string>
+    <string name="grades_v">V</string>
+    <string name="grades_font">Font</string>
+    <string name="grades_yds">YDS</string>
+    <string name="grade_system_kyu_dan">日本式（級/段）</string>
+    <string name="grade_system_v">V スケール</string>
+    <string name="grade_system_font">Font</string>
+    <string name="grade_system_yds">YDS</string>
+    <string name="next">次へ</string>
+
+    <!-- ルートの表示方法 -->
+    <string name="choose_definition">この壁や岩では、ルートはどのように示されていますか？</string>
+    <string name="def_mono_color">ホールドの色</string>
+    <string name="def_mono_color_desc">1 色が 1 ルート。スタートは足元のタグで表示</string>
+    <string name="def_color_taped">ホールドの色＋スタート/ゴールのテープ</string>
+    <string name="def_color_taped_desc">1 色が 1 ルート。スタートとゴールのホールドにテープ</string>
+    <string name="def_tape">テープ</string>
+    <string name="def_tape_desc">ホールド横のテープの色がルート。ホールドの色は混在</string>
+    <string name="def_circuit">サーキット</string>
+    <string name="def_circuit_desc">ホールドの色がグレード帯。同じ色に複数の課題</string>
+    <string name="def_tagged">タグ付き</string>
+    <string name="def_tagged_desc">スタートにプレート（番号・グレード）。ホールドは色別</string>
+    <string name="def_comp">コンペ形式</string>
+    <string name="def_comp_desc">テープでスタート・ゾーン・トップを表示</string>
+    <string name="def_free">フリー／スプレーウォール</string>
+    <string name="def_free_desc">設定ルートなし。課題は自分で定義</string>
+    <string name="def_board">システムボード</string>
+    <string name="def_board_desc">固定配置の LED ボード</string>
+    <string name="def_outdoor">外岩</string>
+    <string name="def_outdoor_desc">自然の岩のボルダーやルート。色やテープはなく、ラインは手動で指定</string>
+
+    <!-- ルートと記録 -->
+    <string name="sends">記録</string>
+    <string name="no_sends">記録はまだありません。次のトライのあとに「記録する」をタップしてください。</string>
+    <string name="log_send">記録する</string>
+    <string name="open_capture">キャプチャを開く</string>
+    <string name="save">保存</string>
+    <string name="no_grade">グレード未設定</string>
+    <string name="route_meta">%1$s、%2$s、%3$s</string>
+    <string name="result_flash">フラッシュ</string>
+    <string name="result_send">完登</string>
+    <string name="result_attempt">トライ</string>
+    <string name="attempts_hint">トライ数</string>
+    <string name="note_hint">メモ（ムーブ、コンディション、感想）</string>
+    <string name="delete_send">この記録を削除しますか？\n%1$s</string>
+    <string name="delete">削除</string>
+    <string name="share">共有</string>
+    <string name="reprocess">再処理</string>
+    <string name="reprocess_message">このキャプチャの保存済み点群に対して、ホールドとルートの検出をやり直します。ルートの編集と確定は置き換えられます。センドの記録はログブックに残りますが、ルートの再確定が必要です。</string>
+    <string name="reprocess_done">再処理しました: %1$s</string>
+    <string name="reprocess_failed">再処理に失敗しました: 点群または壁面が見つかりません。</string>
+
+    <!-- スキャン -->
+    <string name="start_scan">スキャン開始</string>
+    <string name="pause_scan">一時停止</string>
+    <string name="resume_scan">再開</string>
+    <string name="finish_scan">終了して処理</string>
+    <string name="processing">スキャンを処理中…</string>
+    <string name="status_initializing">カメラを初期化中…</string>
+    <string name="status_ready">準備完了</string>
+    <string name="status_scanning">スキャン中</string>
+    <string name="status_line">%1$s: %2$dk 点、深度フレーム %3$d、セグメント %4$d</string>
+    <string name="tracking_lost">トラッキングを喪失: %1$s</string>
+    <string name="scan_more">終了する前に、壁をもっとスキャンしてください</string>
+    <string name="no_wall_found">壁の面が見つかりません。1〜3 m の距離から、ゆっくり重ねながらスキャンしてください。</string>
+    <string name="camera_permission_needed">スキャンにはカメラの権限が必要です</string>
+    <string name="location_permission_denied">位置情報の権限が拒否されたため、場所の座標は記録されませんでした</string>
+    <string name="location_has_coords">GPS</string>
+    <string name="rating">評価</string>
+    <string name="not_rated">未評価</string>
+    <string name="rating_value">%2$d 点中 %1$d</string>
+    <string name="star_rating">★ %d</string>
+    <string name="clear_rating">クリア</string>
+    <string name="locations">場所</string>
+    <string name="no_locations">場所がまだありません。ここで追加するか、新規スキャンから登録してください。</string>
+    <string name="add_location">場所を追加</string>
+    <string name="location_name_taken">「%1$s」という場所はすでに登録されています</string>
+    <string name="edit">編集</string>
+    <string name="edit_location">場所を編集</string>
+    <string name="location_name_label">名前</string>
+    <string name="location_kind">種類</string>
+    <string name="coordinates">座標</string>
+    <string name="coordinates_hint">緯度, 経度</string>
+    <string name="coordinates_invalid">座標は「緯度, 経度」を十進数で入力してください</string>
+    <string name="use_phone_position">端末の位置を使う</string>
+    <string name="position_unavailable">現在、端末の位置情報を取得できません。位置情報がオンか確認してください</string>
+    <string name="delete_location">場所を削除</string>
+    <string name="delete_location_confirm">%1$s を削除しますか？%2$s は「場所なし」と表示されます。ルートと記録は残ります。</string>
+    <string name="depth_unsupported">この端末は ARCore Depth API に対応していません</string>
+    <string name="arcore_unavailable">ARCore を利用できません: %1$s</string>
+    <string name="scene_saved">ルートを保存しました</string>
+    <string name="thumbnail">スキャンのサムネイル</string>
+    <string name="route_image">壁面上のルート。ピンチで拡大</string>
+    <string name="wall_overhang">前傾 %1$d°</string>
+    <string name="wall_slab">スラブ %1$d°</string>
+    <string name="wall_vertical">垂壁</string>
+    <string name="label_start">スタート</string>
+    <string name="label_top">トップ</string>
+    <string name="marks_from_roles">スタートとトップはマーク済みのホールドから。タップで変更。</string>
+    <string name="marks_guessed">スタートとトップは高さから推定（破線）。ルートのホールドをタップしてマーク。</string>
+    <string name="marks_mixed">実線はマーク済み（テープまたは手動）、破線は高さからの推定。ホールドをタップで変更。</string>
+    <string name="hold_n">ホールド %1$d</string>
+    <string name="mark_start">スタートにする</string>
+    <string name="mark_top">トップにする</string>
+    <string name="mark_clear">マークを外す</string>
+    <string name="coverage_thin">壁の%1$sの深度データが少なめです。次回は写真だけでなく深度からもホールドを見つけられるよう、その部分もスキャンしてください。</string>
+    <string name="coverage_cell">%2$s%1$s</string>
+    <string name="row_top">上</string>
+    <string name="row_middle">中央</string>
+    <string name="row_bottom">下</string>
+    <string name="col_left">左</string>
+    <string name="col_centre">中央</string>
+    <string name="col_right">右</string>
+    <string name="points_saved_no_wall">点群は保存しましたが、壁や岩の面が見つかりませんでした。スキャンを続けるか、もう一度終了してください。</string>
+
+    <!-- 数量 -->
+    <plurals name="holds">
+        <item quantity="other">ホールド %d</item>
+    </plurals>
+    <plurals name="routes_count">
+        <item quantity="other">ルート %d</item>
+    </plurals>
+    <plurals name="confirmed_count">
+        <item quantity="other">確定 %d</item>
+    </plurals>
+    <plurals name="sends_count">
+        <item quantity="other">記録 %d 件</item>
+    </plurals>
+    <plurals name="tries">
+        <item quantity="other">%d トライ</item>
+    </plurals>
+    <plurals name="flashes">
+        <item quantity="other">フラッシュ %d 回</item>
+    </plurals>
+    <plurals name="captures_count">
+        <item quantity="other">%d 件のキャプチャ</item>
+    </plurals>
+    <plurals name="locations_count">
+        <item quantity="other">%d か所</item>
+    </plurals>
+    <!-- クライム動画 -->
+    <string name="record_climb">クライムを撮影</string>
+    <string name="mode_session">ハンズフリー</string>
+    <string name="mode_attempt">1トライずつ</string>
+    <string name="rec">録画</string>
+    <string name="stop">停止</string>
+    <string name="finish_climb">クライム終了</string>
+    <string name="camera_needed">撮影にはカメラの権限が必要です。</string>
+    <string name="attempt_n">トライ %1$d</string>
+    <string name="outcome_top">完登</string>
+    <string name="outcome_fall">落下</string>
+    <string name="climber_seen">クライマーを検出中</string>
+    <string name="climber_not_seen">クライマーが映っていません</string>
+    <string name="recording">録画中…</string>
+    <string name="session_hint">課題全体が映る場所にスマホを置き、録画を1回押してください。停止を押すと録画からトライが切り出されます。</string>
+    <string name="attempt_hint">トライの前に録画、終わったら停止。</string>
+    <string name="keep">残す</string>
+    <string name="discard">破棄</string>
+    <string name="play">再生</string>
+    <string name="share_clip">共有</string>
+    <string name="share_failed">共有用のクリップを作れませんでした。</string>
+    <string name="trim">トリム</string>
+    <string name="trim_range">%1$s – %2$s（%3$s）</string>
+    <string name="delete_attempt_confirm">トライ %1$d を削除しますか？</string>
+    <string name="route_comment">ルートのコメント</string>
+    <string name="route_comment_hint">ベータ、コンディション、スタートのテープなど</string>
+    <string name="add_route_comment">このルートにコメントを追加</string>
+    <plurals name="attempts_found">
+        <item quantity="other">これまで %d トライ</item>
+    </plurals>
+    <plurals name="keep_attempts">
+        <item quantity="other">撮影した %d トライを残しますか？トライとして記録されます。</item>
+    </plurals>
+    <plurals name="clips">
+        <item quantity="other">撮影 %d トライ</item>
+    </plurals>
+</resources>

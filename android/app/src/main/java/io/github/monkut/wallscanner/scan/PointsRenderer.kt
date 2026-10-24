@@ -17,9 +17,13 @@ class PointsRenderer {
     private var positionAttrib = 0
     private var colorAttrib = 0
     private val mvp = FloatArray(16)
+    private val viewModel = FloatArray(16)
     private var buffer: FloatBuffer? = null
+    private var staging = FloatArray(0)
 
+    /** Idempotent: safe to call every frame. */
     fun createOnGlThread() {
+        if (program != 0) return
         program = GlUtil.createProgram(VERTEX_SHADER, FRAGMENT_SHADER)
         mvpUniform = GLES20.glGetUniformLocation(program, "u_Mvp")
         pointSizeUniform = GLES20.glGetUniformLocation(program, "u_PointSize")
@@ -39,13 +43,19 @@ class PointsRenderer {
             buf = ByteBuffer.allocateDirect(floats * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
             buffer = buf
         }
-        buf.clear()
+        // Interleave into a heap array and copy once: per-float puts into a direct buffer cost ~10× more.
+        if (staging.size < floats) staging = FloatArray(floats)
+        val s = staging
+        val xyz = cloud.xyz; val rgb = cloud.rgb
         for (i in 0 until n) {
-            buf.put(cloud.xyz[i * 3]).put(cloud.xyz[i * 3 + 1]).put(cloud.xyz[i * 3 + 2])
-            buf.put((cloud.rgb[i * 3].toInt() and 0xff) / 255f)
-            buf.put((cloud.rgb[i * 3 + 1].toInt() and 0xff) / 255f)
-            buf.put((cloud.rgb[i * 3 + 2].toInt() and 0xff) / 255f)
+            val o = i * FLOATS_PER_POINT
+            s[o] = xyz[i * 3]; s[o + 1] = xyz[i * 3 + 1]; s[o + 2] = xyz[i * 3 + 2]
+            s[o + 3] = (rgb[i * 3].toInt() and 0xff) / 255f
+            s[o + 4] = (rgb[i * 3 + 1].toInt() and 0xff) / 255f
+            s[o + 5] = (rgb[i * 3 + 2].toInt() and 0xff) / 255f
         }
+        buf.clear()
+        buf.put(s, 0, floats)
         buf.position(0)
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vbo)
         GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, floats * 4, buf, GLES20.GL_DYNAMIC_DRAW)
@@ -53,9 +63,11 @@ class PointsRenderer {
         count = n
     }
 
-    fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray) {
+    /** Draws the cloud placed by [modelMatrix] (world-from-cloud, column-major). */
+    fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, modelMatrix: FloatArray) {
         if (count == 0) return
-        Matrix.multiplyMM(mvp, 0, projectionMatrix, 0, viewMatrix, 0)
+        Matrix.multiplyMM(viewModel, 0, viewMatrix, 0, modelMatrix, 0)
+        Matrix.multiplyMM(mvp, 0, projectionMatrix, 0, viewModel, 0)
         GLES20.glUseProgram(program)
         GLES20.glUniformMatrix4fv(mvpUniform, 1, false, mvp, 0)
         GLES20.glUniform1f(pointSizeUniform, POINT_SIZE_PX)

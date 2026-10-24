@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English (UK): only the strings whose spelling differs from English (US). -->
+<resources>
+    <string name="def_mono_color">Hold colour</string>
+    <string name="def_mono_color_desc">One hold colour is one route; start tag at the base</string>
+    <string name="def_color_taped">Hold colour, taped start and finish</string>
+    <string name="def_color_taped_desc">One hold colour is one route; start and finish holds are marked with tape</string>
+    <string name="def_tape_desc">Tape beside each hold; tape colour is the route, hold colours are mixed</string>
+    <string name="def_circuit_desc">Hold colour is the grade band; several problems per colour</string>
+    <string name="def_tagged_desc">Placard (number, grade) at the start; holds by colour</string>
+    <string name="def_outdoor_desc">Boulder or route on natural rock; no colour or tape, the line is marked by hand</string>
+    <string name="status_initializing">Initialising camera…</string>
+</resources>

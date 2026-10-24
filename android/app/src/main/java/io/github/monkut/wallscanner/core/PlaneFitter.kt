@@ -7,9 +7,15 @@ import kotlin.random.Random
 
 class PlaneFit(val plane: Plane, val inliers: Int)
 
-/** RANSAC fit of the dominant near-vertical plane, refined by least squares and oriented toward the camera. */
+/**
+ * RANSAC fit of the dominant near-vertical plane, refined by least squares and oriented toward the camera.
+ * [inlierDist] and [maxNormalY] default to the gym-wall thresholds; outdoor rock uses looser ones.
+ */
 object PlaneFitter {
-    fun fit(cloud: VoxelCloud, random: Random, towardX: Float, towardY: Float, towardZ: Float): PlaneFit? {
+    fun fit(
+        cloud: VoxelCloud, random: Random, towardX: Float, towardY: Float, towardZ: Float,
+        inlierDist: Float = Tuning.PLANE_INLIER_DIST, maxNormalY: Float = Tuning.MAX_WALL_NORMAL_Y,
+    ): PlaneFit? {
         val n = cloud.count
         if (n < 100) return null
         val xyz = cloud.xyz
@@ -32,11 +38,11 @@ object PlaneFitter {
                 val len = sqrt(nx * nx + ny * ny + nz * nz)
                 if (len > 1e-6f) {
                     nx /= len; ny /= len; nz /= len
-                    if (abs(ny) <= Tuning.MAX_WALL_NORMAL_Y) {
+                    if (abs(ny) <= maxNormalY) {
                         var inliers = 0
                         for (i in sample) {
                             val d = (xyz[i * 3] - ax) * nx + (xyz[i * 3 + 1] - ay) * ny + (xyz[i * 3 + 2] - az) * nz
-                            if (abs(d) < Tuning.PLANE_INLIER_DIST) inliers++
+                            if (abs(d) < inlierDist) inliers++
                         }
                         if (inliers > bestInliers) {
                             bestInliers = inliers
@@ -47,19 +53,19 @@ object PlaneFitter {
             }
         }
         val coarse = best ?: return null
-        val refined = refine(cloud, coarse) ?: return null
+        val refined = refine(cloud, coarse, inlierDist) ?: return null
         val plane = if (refined.plane.signedDistance(towardX, towardY, towardZ) < 0f) refined.plane.flipped() else refined.plane
         return PlaneFit(plane, refined.inliers)
     }
 
     /** Least-squares plane through the inliers of [coarse]: centroid + smallest covariance eigenvector. */
-    private fun refine(cloud: VoxelCloud, coarse: Plane): PlaneFit? {
+    private fun refine(cloud: VoxelCloud, coarse: Plane, inlierDist: Float): PlaneFit? {
         val xyz = cloud.xyz
         val n = cloud.count
         var count = 0
         var sx = 0.0; var sy = 0.0; var sz = 0.0
         for (i in 0 until n) {
-            if (abs(coarse.signedDistance(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])) < Tuning.PLANE_INLIER_DIST) {
+            if (abs(coarse.signedDistance(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])) < inlierDist) {
                 count++
                 sx += xyz[i * 3]; sy += xyz[i * 3 + 1]; sz += xyz[i * 3 + 2]
             }
@@ -69,7 +75,7 @@ object PlaneFitter {
         var xx = 0.0; var xy = 0.0; var xz = 0.0; var yy = 0.0; var yz = 0.0; var zz = 0.0
         for (i in 0 until n) {
             val x = xyz[i * 3]; val y = xyz[i * 3 + 1]; val z = xyz[i * 3 + 2]
-            if (abs(coarse.signedDistance(x, y, z)) < Tuning.PLANE_INLIER_DIST) {
+            if (abs(coarse.signedDistance(x, y, z)) < inlierDist) {
                 val dx = x - cx; val dy = y - cy; val dz = z - cz
                 xx += dx * dx; xy += dx * dy; xz += dx * dz
                 yy += dy * dy; yz += dy * dz; zz += dz * dz

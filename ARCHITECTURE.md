@@ -53,6 +53,8 @@ flowchart LR
 
 ## 4. Android app (Kotlin)
 
+Target design for the backend-based pipeline. The shipped v0.1 app is an on-device variant of it (ARCore raw depth instead of uploaded frames; see §9–10 and `android/README.md`); the capture bundle below is the planned upload format.
+
 | Module | Responsibility | Key tech |
 |---|---|---|
 | `capture` | ARCore session in Shared Camera mode; per-frame pose, intrinsics, timestamp, tracking state; 1920×1080 GPU stream recorded as frames/video; periodic 12 MP JPEG stills on high-end devices; raw IMU | ARCore `SharedCamera`, `Camera.getPose()`, Camera2 `ImageReader` via `setAppSurfaces()` (no `setRepeatingRequest`) |
@@ -132,12 +134,73 @@ WallVersion 1─* Route 1─* RouteHold (role: start|hand|foot|top, order)
 | GPU cost per capture | Faster-GS / FastGS-style training budgets; cache stages; batch overnight for full quality |
 | Volumes vs holds ambiguity | Size + plane-residual thresholds; manual override in app |
 
+## 9. Route definition types and route detection
+
+A gym's marking system decides what "route" means for post-processing. The type is chosen on **New scan**, stored in `capture.json` and copied into `scene.json`, and selects the detection path at Finish.
+
+| ID | Type | Physical marking | Start / finish | Hold sharing | Detection path |
+|---|---|---|---|---|---|
+| `mono_color` | Hold colour | One hold colour per route on a wall section (US default since the 2010s) | Start tag / placard at the base; finish = top hold, tag, or top-out | None; volumes usually on for all | Colour grouping (current `RouteGrouper`) |
+| `color_taped` | Hold colour, taped start and finish | One hold colour per route; tape on the start hold(s) and the finish hold (common in Japanese gyms) | Taped start and finish holds; grade often on the start tape | None | Colour grouping (as `mono_color`); start / finish roles from tape detection in keyframes later |
+| `tape` | Tape | Tape strip beside each hold; tape colour = route, hold colours mixed | Two strips / "start" label; taped bracket at the top; grade on the start tape | Yes, one hold on several routes | Tape detection in keyframes → holds grouped by tape colour |
+| `circuit` | Circuit | Hold (or tape) colour = grade band; several problems share a colour (FR/UK gyms, Bouldering Project) | Ribbon, start marker or number per problem | Within a colour, separated only by position | Colour grouping, split by position (`MAX_ROUTE_HOLD_GAP`), later by start markers |
+| `tagged` | Tagged | Placard with number, grade, setter (sometimes QR) at the base; holds by colour | Placard marks the start | As `mono_color` | Colour grouping + placard OCR/QR for grade, setter, start |
+| `comp` | Competition | Tape marks start hands/feet, zone(s), top | Explicit start, zone, top | None | Tape detection with role classification |
+| `free` | Free / spray wall | No set routes; dense mixed holds; climbers define problems (Stōkt-style) | Chosen by the climber | Every hold, any number of problems | No automatic routes; manual editing in the viewer |
+| `board` | System board | Fixed layout lit by LEDs (Kilter, MoonBoard, Tension); colour = role | Lit start / hand / foot / finish | Full sharing | No detection; layout known |
+| `outdoor` | Outdoor rock | Boulder or route on natural rock: no colour, tape or placards; the line comes from a guidebook / topo | Sit or stand start on named features; top-out or anchor | Every feature, any number of lines | No automatic routes; the line is marked by hand in the viewer. Processing differs: coarse reference plane (`OUTDOOR_PLANE_INLIER_DIST`, slabs allowed by `OUTDOOR_MAX_WALL_NORMAL_Y`) and hold relief measured against the local rock surface (`OUTDOOR_RELIEF_CELL` median grid) instead of the plane |
+
+Rule modifiers (stored in `definition.rules`, orthogonal to the type): feet policy (`follow` = feet follow hands, `open`, `chips` = foot chips only), volumes on/off, start rule (matched, two-hand, hand+foot), finish rule (match top, touch tag, top-out), hold roles and eliminates.
+
+### scene.json v3 schema additions
+
+```
+definition: { type: <id above>, rules: { feet: follow|open|chips, volumesOn: bool } }
+holds[]:    { ..., routeId: <primary or -1>, routeIds: [..], role: any|start|hand|foot|zone|finish,
+              tape: [r, g, b] | null,           colour of the start tape from this hold to its placard (the gym's grade colour)
+              outline: [[u, v], ...] }          closed polygon in the wall plane: segmented on the orthophoto when there is
+                                                 one, else traced from the hold's relief cells; voxels: 0 marks an image-only hold (photo search, colour split, or added by hand in the viewer)
+wall:       { origin, normal, up, right, inliers, color: [r, g, b], extent: [minU, minV, maxU, maxV],
+              photo: { file: "wall.png", bounds: [minU, minV, maxU, maxV], px, relief: "relief.png" } }
+                                                 color = mean surface colour; extent = scanned area (1st..99th percentile);
+                                                 photo = orthophoto from the keyframes (px metres per pixel, top row = maxV), absent when none
+                                                 relief = each photo pixel's height off the wall in mm (red × 256 + green), from the point cloud; the viewer shows the wall in 3D with it
+routes[]:   { id, name, color, grade, gradeSystem: yds|kyu_dan|v|font|null, holdIds: [..], confirmed: bool }   # a hold may appear in several routes
+nextRouteId: int   # kept by the viewer so a deleted route's id is never reissued (sends.json keys by route id)
+```
+
+`capture.json` (written at New scan, before any data): `{ version, createdAt, location, set, definition, gps? }` where `location` is a `locations.json` id (empty for captures made before locations existed; assignable later from the capture list), `set` the id of the gym set the wall was scanned in (empty outdoors or when scanned without one) and `gps` is `{ lat, lon, accuracyM, at }`, recorded when the scan requested a position fix.
+
+### Keyframes for image-based detection
+
+The depth cloud cannot resolve tape (≈ 2 cm wide) or placard text, so the scanner saves sparse colour keyframes during the scan: `frames/frame-NNNN.jpg` (1080p, every ≥ 0.7 s when the camera moved ≥ 0.25 m or turned ≥ 15°) and `frames.jsonl` (segment id, segment-local pose, intrinsics). At Finish, after segment snapping, `frames.json` resolves every frame to a world-from-camera pose, so a pixel detection can be lifted onto the wall plane by ray–plane intersection and matched to holds by (u, v).
+
+Detection stages (prototyped in `tools/tape.py`, to be ported on-device once validated):
+1. Tape candidates per keyframe: saturated, thin, elongated blobs (HSV threshold, connected components, aspect ratio and area limits), excluding pixels inside projected hold footprints.
+2. Lift each candidate centroid to the wall plane; cluster across frames (2 cm cells); keep clusters seen in ≥ 2 frames.
+3. Assign clusters to the nearest hold within `TAPE_HOLD_RADIUS`; group holds by tape hue → routes (`tape`, `comp`); tape pairs / labelled tape → `start`, bracket at the top → `finish`.
+4. Placards (`tagged`, `mono_color`): bright rectangular regions near the wall base; OCR (ML Kit on-device, Tesseract offline) for grade and number; QR via ML Kit barcode.
+
+## 10. Locations, captures, routes and sends (v0.1 data)
+
+```
+Location 1─* Capture 1─* Route 1─* Send
+```
+
+A **location** (`files/locations.json`: `{ version, nextId, locations: [{ id, name, kind: gym|outdoor, gradeSystem, coords?, sets: [{ id, name, createdAt, retiredAt? }] }] }`) is a gym or an outdoor area; it is picked or registered at New scan (and stored in `capture.json`), or added from the Logbook without scanning. `coords` (`{ lat, lon, accuracyM, at }`) is filled by scans made there: a location without coordinates makes the scan ask for location permission and take fixes from the network and GPS providers (`scan/GpsFix.kt`); each fix is written to that capture's `gps`, and the location keeps the most accurate device fix (`accuracyM` 0 marks a hand-entered position, which is never replaced). `nextId` in `locations.json` only grows, so a deleted location's id is never reissued. Locations are listed in the Logbook (tap one for its routes) and edited from the header there: name, kind, grade scale, coordinates (typed as decimal degrees, stored with `accuracyM` 0, or taken from the phone with its accuracy) and delete, which leaves captures pointing at the removed id as "No location". It is the v0.1 stand-in for `Gym` in the §6 data model. A gym's **sets** ("October Set": the routes on the wall between two resets) are the stand-in for `WallVersion`: New scan at a gym asks for the set (the last used one is preselected, else the newest open one; **New set…** opens one named after the month, unique among the open sets), the id goes into `capture.json`, the Logbook groups a gym's routes by set (open sets first, retired ones after, routes outside every set under "No set"), and a set header's **Edit** renames or retires it (`retiredAt`); retiring keeps its routes and sends, and an empty set still gets a header so it can be retired. Set location on a capture offers its own set even when retired. Outdoor areas have no sets. `Wall` is not modelled, so a route still lives with the capture it was identified in.
+
+A capture is the identification workspace: its viewer edits holds, routes and roles and ends with **Confirm** per route. Confirmed routes are the records the app lists in **Logbook** mode, grouped by location, and only they take send data, which lives beside the capture in `sends.json` (`{ version: 2, sends: [{ id, routeId, at, result: flash|send|attempt, attempts, note, clips: [{ id, attempt, file, durationMs, trimStartMs, trimEndMs, outcome: top|fall|null, auto, at }] }], ratings: { "<routeId>": 0..5 }, comments: { "<routeId>": text } }`; a rating is the climber's optional 0–5 stars for the route, a comment the climber's note on the route itself; clips are filmed attempts under `climbs/<sendId>/`, several of them playing from one hands-free session file; version-1 files read unchanged) so that re-editing the identification never touches the log. Earlier `scene.sends` entries are migrated into `sends.json` on first read.
+
+Grades are chosen from a scale (`core/GradeSystem.kt`): YDS (5.5–5.15d), Japanese Q/D (10Q … 1Q, 1D … 6D), V-scale (VB–V17) or Font (3–9A). A location carries its default scale (`locations.json`, `gradeSystem`), the viewer lists that scale first and stores the choice per route as `grade` + `gradeSystem`.
+
 ## TODO
 
 - TODO: Confirm minimum supported Android devices (ARCore + Shared Camera + 12 MP still support).
 - TODO: Legal review of SAM License and VGGT-Commercial terms before shipping.
 - TODO: Decide on-prem GPU vs cloud for M0–M1.
-- TODO: Define `scene.json` schema in M1.
+- TODO: Validate tape detection thresholds on real keyframes; port `tools/tape.py` to Kotlin.
+- TODO: Placard OCR/QR (ML Kit) for `tagged` walls.
+- TODO: Outdoor: validate the local-relief grid on a real boulder (ARCore depth in sunlight, ground and vegetation in front of the face); multi-face boulders still get one reference plane, so the thumbnail and (u, v) layout follow the dominant face.
 
 ## Sources
 
