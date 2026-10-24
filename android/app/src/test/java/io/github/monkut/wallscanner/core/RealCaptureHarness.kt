@@ -18,7 +18,8 @@ class RealCaptureHarness {
     fun rebuildPulledCaptures() {
         val root = generateSequence(File("").absoluteFile) { it.parentFile }
             .map { File(it, "captures") }.firstOrNull { it.isDirectory } ?: return
-        val captures = root.listFiles { f -> File(f, "points.ply").isFile && File(f, "frames.json").isFile }?.sortedBy { it.name } ?: return
+        val only = System.getenv("HARNESS_ONLY") // one capture id, to rebuild just that one
+        val captures = root.listFiles { f -> File(f, "points.ply").isFile && File(f, "frames.json").isFile && (only == null || f.name == only) }?.sortedBy { it.name } ?: return
         for (dir in captures) {
             val cloud = File(dir, "points.ply").inputStream().use { PlyReader.read(it) }
             val framesJson = File(dir, "frames.json").readText()
@@ -64,6 +65,8 @@ class RealCaptureHarness {
                         "starts=${result.holds.filter { it.role == HoldRole.START }.map { it.id }} routes=${result.routes.joinToString { "${it.name}(${it.holdIds.size})" }}"
                 )
                 writePpm(File(dir, "wall-new.ppm"), photo.image)
+                // Which keyframe each pixel came from, one colour per keyframe: the seams of the stitching.
+                photo.source?.let { src -> writePpm(File(dir, "wall-source.ppm"), Image(photo.image.width, photo.image.height, IntArray(src.size) { if (src[it] < 0) 0 else (src[it] * 2654435761L).toInt() or 0x404040 })) }
             } else {
                 println("HARNESS ${dir.name} orthophoto: skipped (${if (ppm.isDirectory) "no usable keyframes" else "no frames-ppm/; run tools/frames_to_ppm.py"})")
             }

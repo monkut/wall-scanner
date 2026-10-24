@@ -4,14 +4,15 @@
 # ///
 """Builds the two-class (`hold`, `tape`) YOLO-seg dataset from the public downloads and our captures.
 
-    uv run tools/holds_model/merge.py [--val 0.2]
+    uv run tools/holds_model/merge.py [--val 0.2] [--ours-repeat 6]
 
 Reads data/public/*/{train,valid,test} and data/ours; a class named `tape` becomes 1 and every other class 0
 (the Pwals set labels holds by colour, PanClimb by hold type; the Roboflow set's floor and person classes are
 dropped). Every image goes through clahe.equalize, as the app's input does. Roboflow exports hold several
 augmented copies of one photo (`<name>_jpg.rf.<hash>`), so images are grouped by their source photo and the
 groups are split into train / val (seed 42); the split is written to data/holds/{images,labels}/{train,val}
-and data/holds.yaml points at it.
+and data/holds.yaml points at it. Our own walls (data/ours) always train, each copied --ours-repeat times: they
+are few, and they are the gym the app is used in.
 """
 import argparse
 import random
@@ -62,6 +63,7 @@ def convert(label_file: Path, classes):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--val", type=float, default=0.2)
+    ap.add_argument("--ours-repeat", type=int, default=6)
     args = ap.parse_args()
     pairs = []  # (image path, label lines, source)
     for dataset in sorted((ROOT / "public").glob("*")):
@@ -76,13 +78,14 @@ def main():
     for img in sorted((ROOT / "ours" / "images").glob("*")):
         lbl = ROOT / "ours" / "labels" / (img.stem + ".txt")
         if lbl.exists():
-            pairs.append((img, lbl.read_text().splitlines(), "ours"))
+            for r in range(args.ours_repeat):
+                pairs.append((img, lbl.read_text().splitlines(), f"ours{r}"))
     groups = {}
     for pair in pairs:
         groups.setdefault((pair[2], source_photo(pair[0])), []).append(pair)
     keys = sorted(groups)
     random.Random(42).shuffle(keys)
-    val_keys = set(keys[: int(len(keys) * args.val)])
+    val_keys = set([k for k in keys if not k[0].startswith("ours")][: int(len(keys) * args.val)])
     target = ROOT / "holds"
     if target.exists():
         shutil.rmtree(target)

@@ -99,4 +99,26 @@ class HoldMergeTest {
         val kept = HoldMerge.prune(listOf(strip), listOf(hold(8, 0.5f, 0.4f, 0.07f, 0.22f)), listOf(hold(9, 0.5f, 0.4f, 0.06f, 0.22f)), p, ColorPatches.forHolds(p, wall), wall, extent)
         assertEquals(0, kept.size)
     }
+
+    /** Two touching rectangles, left (u 0.2..0.5) and right (u 0.5..0.8), on a relief of [height] (metres) by u. */
+    private fun twoPieces(rightColour: Int, height: (Float) -> Float): Pair<Orthophoto, List<Hold>> {
+        val n = (1f / px).toInt()
+        val pixels = IntArray(n * n) { i -> val u = (i % n + 0.5f) * px; val v = 1f - (i / n + 0.5f) * px; if (v in 0.4f..0.6f && u in 0.2f..0.8f) (if (u < 0.5f) red else rightColour) else tan }
+        val relief = FloatArray(n * n) { i -> val u = (i % n + 0.5f) * px; val v = 1f - (i / n + 0.5f) * px; if (v in 0.4f..0.6f && u in 0.2f..0.8f) height(u) else 0f }
+        val photo = Orthophoto(Image(n, n, pixels), 0f, 0f, 1f, 1f, px, relief)
+        val rect = { id: Int, u0: Float, u1: Float, voxels: Int -> Hold(id, 0f, 0f, 0f, (u0 + u1) / 2, 0.5f, u1 - u0, 0.2f, 0f, 194, 59, 59, voxels, floatArrayOf(u0, 0.4f, u1, 0.4f, u1, 0.6f, u0, 0.6f)) }
+        return photo to listOf(rect(1, 0.2f, 0.5f, 10), rect(2, 0.5f, 0.8f, 30))
+    }
+
+    @Test
+    fun touchingPiecesWithNoDepthValleyAreOneHold() {
+        val (ridge, pieces) = twoPieces(red) { u -> 0.10f - 0.1f * kotlin.math.abs(u - 0.5f) } // one volume, highest where they meet
+        val one = HoldMerge.byDepth(pieces, ridge, frame)
+        assertEquals(listOf(2), one.map { it.id })
+        assertEquals(40, one[0].voxels)
+        val (valley, apart) = twoPieces(red) { u -> 0.02f + 0.3f * kotlin.math.abs(u - 0.5f) } // two volumes meeting low
+        assertEquals(listOf(1, 2), HoldMerge.byDepth(apart, valley, frame).map { it.id })
+        val (blue, two) = twoPieces(0xff3A6EA5.toInt()) { u -> 0.10f - 0.1f * kotlin.math.abs(u - 0.5f) } // a ridge, but two colours
+        assertEquals(listOf(1, 2), HoldMerge.byDepth(two, blue, frame).map { it.id })
+    }
 }

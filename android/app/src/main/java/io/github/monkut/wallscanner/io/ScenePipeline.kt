@@ -22,8 +22,8 @@ import kotlin.random.Random
 
 /**
  * The whole scene pipeline for a capture directory: SceneBuilder on the point cloud, then an orthophoto of
- * the wall from the saved keyframes (written as wall.png) and hold outlines refined on it. Used at Finish
- * and by Reprocess; [log] receives one line per stage.
+ * the wall from the saved keyframes (written as wall.png) and hold outlines refined on it, last by SAM
+ * ([HoldSam]) from each hold's box. Used at Finish and by Reprocess; [log] receives one line per stage.
  */
 object ScenePipeline {
     private const val KEYFRAME_SUBSAMPLE = 2 // 960 × 540 is ~1.8 image px per 5 mm wall px at 2 m: enough, half the decode cost
@@ -70,16 +70,28 @@ object ScenePipeline {
             .onFailure { log("hold split failed: $it") }
             .getOrDefault(merged.holds)
         if (split.size != merged.holds.size) log("hold split: ${merged.holds.size} holds → ${split.size} by photo colour")
-        val holds = runCatching { HoldMerge.prune(split, masks, seen.tape, photo, patches, result.wallColor, result.extent) }
+        val pruned = runCatching { HoldMerge.prune(split, masks, seen.tape, photo, patches, result.wallColor, result.extent) }
             .onFailure { log("hold prune failed: $it") }
             .getOrDefault(split)
-        log("hold prune: ${split.size - holds.size} dropped: tape, or at the edge or made of bare wall (neither coloured nor seen by the model)")
+        log("hold prune: ${split.size - pruned.size} dropped: tape, or at the edge or made of bare wall (neither coloured nor seen by the model)")
+        val t4 = System.currentTimeMillis()
+        val sam = assets?.let { HoldSam.get(it) }
+        val refinedBySam = if (sam == null) null else runCatching { sam.refine(pruned, photo, result.frame, masks) }
+            .onFailure { log("hold outlines failed: $it") }
+            .getOrNull()
+        log(if (refinedBySam != null) "hold outlines: ${refinedBySam.redrawn} of ${pruned.size} redrawn by SAM, ${refinedBySam.merged} pieces merged into the hold around them, ${refinedBySam.added} model holds added where the outlines no longer cover them, ${refinedBySam.dropped} without contrast to the wall dropped (${System.currentTimeMillis() - t4} ms, encoder ${refinedBySam.encodeMs} ms)" else "hold outlines: SAM ${if (assets == null) "no assets" else HoldSam.loadError ?: "failed"}")
+        val outlined = refinedBySam?.holds ?: pruned
+        val holds = runCatching { HoldMerge.byDepth(outlined, photo, result.frame) }
+            .onFailure { log("hold depth merge failed: $it") }
+            .getOrDefault(outlined)
+        log("hold depth merge: ${outlined.size - holds.size} pieces joined to a touching hold with no depth valley between them")
         val starts = runCatching { TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent) }
             .onFailure { log("tape marks failed: $it") }
             .getOrDefault(0)
         log("tape marks: $starts start holds marked from tape strips")
         result = SceneBuilder.withHolds(result, holds)
         CaptureStore.writeImage(dir, SceneJson.PHOTO_FILE, photo.image)
+        CaptureStore.writeImage(dir, SceneJson.RELIEF_FILE, SceneJson.reliefImage(photo))
         result.photo = photo
         return result
     }

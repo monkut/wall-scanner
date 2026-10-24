@@ -93,3 +93,41 @@ merged, grade tape taken for holds. Findings and what was done:
 - No published work on colour-agnostic hold detection was found;
   [xiaoxiae/Indoor-Climbing-Hold-and-Route-Segmentation](https://github.com/xiaoxiae/Indoor-Climbing-Hold-and-Route-Segmentation)
   segments first and groups by colour after.
+
+## Outlines by SAM (2026-10-24, Phase 1 for the automatic outlines)
+
+Outlines from relief and colour took in shadows, chalk and bare wall: `HoldShapes.absorbGrey` absorbs grey
+pixels touching a coloured hold (its own shadow among them), the 4 cm closing fills notches up to 8 cm wide,
+and `segmentAchromatic` grows black and grey holds into shadow, which is nearer a dark hold than the lit wall.
+Compared on the two Oct 23 walls by the mean photo-edge strength on each outline (the references carry the app's
+own outlines, so they cannot score tightness) and by eye:
+
+| Outlines | 2:00 PM | 2:04 PM | By eye |
+|---|---|---|---|
+| App (detector + G1 merge) | 0.66 | 0.76 | loose on volumes and black holds, shadows in |
+| G1 alone | 0.59 | 0.72 | tight on black holds, junk boxes on concrete, volumes in fragments |
+| G1 on a grey photo | 0.56 | 0.71 | finds fewer holds (60 vs 69, 37 vs 49): grey input rejected |
+| SAM2.1-L / SAM2.1-tiny / MobileSAM, app boxes as prompts | .70 / .72 / .68 | .84 / .84 / .82 | tight everywhere, no shadows |
+| Shipped: MobileSAM int8 weights + guards (`core/SamRefine.kt`) | 0.66 | 0.81 | as MobileSAM |
+
+MobileSAM runs in the app after the prune stage (`io/HoldSam.kt`): the box prompt keeps it on the hold the
+detector found, so the detector still decides *what* is a hold and SAM only *where its edge is*. Grayscale stays
+where it helps: as training augmentation (G1) and as the edge map of the viewer's split.
+
+## Wall vs hold (2026-10-24, from the climber's corrections of Oct 23 2:04 PM)
+
+Why shadows passed as holds: `WallColor` is one global range (hue ± 10°, the wall's saturation and value spread)
+measured on the depth camera's point colours and applied to orthophoto pixels. A shadow keeps the plywood's tint
+but is darker, and at low brightness the hue turns to noise; bolt holes, grain and keyframe exposure seams fail it
+too. On 2:04 PM 23% of the photo was "not wall" outside every hold (hue 76%, saturation 56%, too dark 25%).
+A photo-derived model — chromaticity (r, g)/(r+g+b) within the wall's own 90th-percentile spread of the local
+wall (median per 20 cm tile, outside holds), brightness 0.3–1.4 of it, specks under 2 cm² ignored — leaves 9%,
+nearly all of it real: tape, placards, concrete, mats and hold parts outside their outlines (prototype in the
+session scratchpad, not in the app yet).
+
+What the app does now (after SAM): pieces merge when one's SAM mask lies ≥ 60% inside another's; image-only holds
+need CIE ΔE ≥ 6 against the wall ring around them. On the climber's list: 6 of 6 merges, both wall "holds" gone,
+48 → 40 holds (climber: ~44). Left: tape 48 (the tape class missed it), volume pair 26 and the holds on it, the hold
+above 55, the black hold 24 only partly outlined. A search of uncovered not-wall blobs with SAM finds the hold
+above 55 and the rest of 24, but also ~15 tape strips, placards and edge blobs: it needs tape and placard
+suppression first.

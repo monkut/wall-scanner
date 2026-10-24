@@ -12,7 +12,7 @@ class Keyframe(val file: String, val worldFromCamera: Rigid, val fx: Float, val 
  * Front view of the wall assembled from keyframes: [px] metres per pixel, top row at [maxV]. [relief] is the
  * depth-measured height above the plane at each pixel (0 where the scan has no points), one float per pixel.
  */
-class Orthophoto(val image: Image, val minU: Float, val minV: Float, val maxU: Float, val maxV: Float, val px: Float, val relief: FloatArray) {
+class Orthophoto(val image: Image, val minU: Float, val minV: Float, val maxU: Float, val maxV: Float, val px: Float, val relief: FloatArray, val source: IntArray? = null) {
     fun x(u: Float): Float = (u - minU) / px
     fun y(v: Float): Float = (maxV - v) / px
     fun u(x: Float): Float = minU + x * px
@@ -64,8 +64,9 @@ object OrthophotoBuilder {
         }
         val best = FloatArray(n)
         val out = IntArray(n)
+        val source = IntArray(n) { -1 }
         var used = 0
-        for (k in keyframes) {
+        for ((ki, k) in keyframes.withIndex()) {
             val img = decode(k) ?: continue
             val sx = img.width.toFloat() / k.width; val sy = img.height.toFloat() / k.height
             val fx = k.fx * sx; val fy = k.fy * sy; val cx = k.cx * sx; val cy = k.cy * sy
@@ -89,12 +90,13 @@ object OrthophotoBuilder {
                 if (score <= best[i]) continue
                 best[i] = score
                 out[i] = bilinear(img, ix, iy)
+                source[i] = ki
                 hits++
             }
             if (hits > 0) used++
         }
         if (used == 0) return null
-        return Orthophoto(Image(w, h, out), minU, minV, maxU, maxV, px, reliefPx)
+        return Orthophoto(Image(w, h, out), minU, minV, maxU, maxV, px, reliefPx, source)
     }
 
     private fun bilinear(img: Image, x: Float, y: Float): Int {

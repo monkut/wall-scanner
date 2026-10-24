@@ -8,6 +8,18 @@ object SceneJson {
     /** Orthophoto of the wall next to scene.json; `wall.photo.bounds` maps it into the wall frame. */
     const val PHOTO_FILE = "wall.png"
 
+    /**
+     * The orthophoto's relief (each pixel's height off the wall, from the point cloud) next to it, for the viewer's
+     * 3D wall: millimetres as red × 256 + green, so 1 mm steps up to 65 m; `wall.photo.relief` names it.
+     */
+    const val RELIEF_FILE = "relief.png"
+
+    fun reliefImage(photo: Orthophoto): Image =
+        Image(photo.image.width, photo.image.height, IntArray(photo.relief.size) {
+            val mm = (photo.relief[it] * 1000f + 0.5f).toInt().coerceIn(0, 65535)
+            (0xff shl 24) or ((mm shr 8) shl 16) or ((mm and 0xff) shl 8)
+        })
+
     fun write(result: SceneResult, pointCount: Int, createdAt: String, device: String): String {
         val sb = StringBuilder(64 * 1024)
         val p = result.frame.plane
@@ -32,7 +44,7 @@ object SceneJson {
         sb.append(", \"extent\": [").append(num(e[0])).append(", ").append(num(e[1])).append(", ").append(num(e[2])).append(", ").append(num(e[3])).append("]")
         result.photo?.let { p ->
             sb.append(", \"photo\": {\"file\": ").append(str(PHOTO_FILE)).append(", \"bounds\": [").append(num(p.minU)).append(", ").append(num(p.minV))
-                .append(", ").append(num(p.maxU)).append(", ").append(num(p.maxV)).append("], \"px\": ").append(num(p.px)).append("}")
+                .append(", ").append(num(p.maxU)).append(", ").append(num(p.maxV)).append("], \"px\": ").append(num(p.px)).append(", \"relief\": ").append(str(RELIEF_FILE)).append("}")
         }
         sb.append("},\n")
         sb.append("  \"holds\": [\n")

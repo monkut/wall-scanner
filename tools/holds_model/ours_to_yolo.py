@@ -6,7 +6,8 @@
 
     uv run tools/holds_model/ours_to_yolo.py captures/<id> [captures/<id2> …] [--out tools/holds_model/data/ours]
 
-Uses `reference.json` (a corrected scene) when present, else `scene.json`. Every hold is class 0 (`hold`).
+Uses `reference.json` (a corrected scene) when present, else `scene.json`. Every hold is class 0 (`hold`); a
+reference's `tape` outlines (grade tape the climber marked) are class 1 (`tape`).
 Writes images/<id>.png and labels/<id>.txt; the split into train / val happens in merge.py.
 """
 import argparse
@@ -35,8 +36,7 @@ def main():
         im = Image.open(image).convert("RGB")
         w, h = im.size
         lines = []
-        for hold in scene["holds"]:
-            pts = hold.get("outline") or []
+        for cls, pts in [(0, hold.get("outline") or []) for hold in scene["holds"]] + [(1, t) for t in scene.get("tape", [])]:
             if len(pts) < 3:
                 continue
             coords = []
@@ -44,10 +44,10 @@ def main():
                 x = min(max((u - min_u) / (max_u - min_u), 0.0), 1.0)
                 y = min(max((max_v - v) / (max_v - min_v), 0.0), 1.0)
                 coords.append(f"{x:.5f} {y:.5f}")
-            lines.append("0 " + " ".join(coords))
+            lines.append(f"{cls} " + " ".join(coords))
         im.save(args.out / "images" / f"{cap.name}.png")
         (args.out / "labels" / f"{cap.name}.txt").write_text("\n".join(lines) + "\n")
-        print(f"{cap.name}: {w}x{h}, {len(lines)} holds from {scene_file.name}")
+        print(f"{cap.name}: {w}x{h}, {len(scene['holds'])} holds, {len(scene.get('tape', []))} tape from {scene_file.name}")
 
 
 if __name__ == "__main__":

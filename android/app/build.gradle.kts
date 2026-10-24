@@ -32,7 +32,7 @@ android {
     }
 
     androidResources {
-        noCompress += "tflite" // the hold model is memory-mapped from assets
+        noCompress += "tflite" // the hold model and SAM are memory-mapped from assets
     }
 }
 

@@ -103,6 +103,70 @@ object HoldMerge {
         }
     }
 
+    private const val DEPTH_MAX_DE = 25f      // pieces of one hold are about one colour (CIE ΔE of the medians) …
+    private const val DEPTH_MIN_HEIGHT = 0.015f // … both stand off the wall (75th percentile of relief) above the depth noise …
+    private const val DEPTH_RIDGE = 0.005f    // … and their shared edge is this much higher than the lower piece: no valley
+    private const val DEPTH_TOUCH_PX = 2
+
+    /**
+     * [holds] with touching pieces of one object joined, judged by depth: two holds of about one colour, both
+     * standing off the wall, whose shared edge lies at least [DEPTH_RIDGE] above the lower of them are one hold
+     * (a volume's two faces, a hold's lit horn and its base); separate holds meet in a valley. Colour alone cannot
+     * tell (two red volumes side by side differ by ΔE 2, one blue hold's horn and base by 11–22). On Oct 23 2:04 PM
+     * this joins exactly the four pairs the climber named and none of the 19 other touching pairs. The joined hold
+     * keeps the id of the piece with most voxels, sums the voxels, takes the first role and tape.
+     */
+    fun byDepth(holds: List<Hold>, photo: Orthophoto, frame: WallFrame): List<Hold> {
+        val w = photo.image.width; val h = photo.image.height
+        val px = holds.map { Raster.fillPolygon(ImageHold.polygon(it), photo) }
+        val height = px.map { p -> if (p.isEmpty()) 0f else FloatArray(p.size) { photo.relief[p[it]] }.also { it.sort() }[p.size * 3 / 4] }
+        val lab = px.map { p -> medianLab(p, photo.image) }
+        val owner = IntArray(w * h) { -1 }
+        for ((k, p) in px.withIndex()) for (i in p) owner[i] = k
+        // Pixels within DEPTH_TOUCH_PX of another hold: the shared edge of each touching pair.
+        val edges = HashMap<Long, HashSet<Int>>()
+        for ((k, p) in px.withIndex()) for (i in p) {
+            val x = i % w; val y = i / w
+            for (dy in -DEPTH_TOUCH_PX..DEPTH_TOUCH_PX) for (dx in -DEPTH_TOUCH_PX..DEPTH_TOUCH_PX) {
+                val nx = x + dx; val ny = y + dy
+                if (nx !in 0 until w || ny !in 0 until h) continue
+                val o = owner[ny * w + nx]
+                if (o >= 0 && o != k) edges.getOrPut(minOf(k, o).toLong() * holds.size + maxOf(k, o)) { HashSet() }.add(i)
+            }
+        }
+        val parent = IntArray(holds.size) { it }
+        fun find(i: Int): Int { var r = i; while (parent[r] != r) r = parent[r]; return r }
+        for ((key, edge) in edges) {
+            val a = (key / holds.size).toInt(); val b = (key % holds.size).toInt()
+            val lower = minOf(height[a], height[b])
+            if (lower < DEPTH_MIN_HEIGHT || deltaE(lab[a], lab[b]) > DEPTH_MAX_DE) continue
+            val ridge = edge.map { photo.relief[it] }.sorted()[edge.size / 2]
+            if (ridge - lower >= DEPTH_RIDGE) parent[find(a)] = find(b)
+        }
+        val groups = holds.indices.groupBy { find(it) }.values
+        if (groups.size == holds.size) return holds
+        val joined = HashMap<Int, Hold>()
+        for (g in groups) {
+            if (g.size == 1) continue
+            val primary = g.maxBy { holds[it].voxels }
+            val pixels = g.flatMap { px[it].asList() }.distinct().toIntArray()
+            joined[primary] = ImageHold.fromPixels(holds[primary].id, pixels, g.sumOf { holds[it].voxels }, photo, frame).also { hold ->
+                hold.role = (listOf(primary) + g).map { holds[it].role }.firstOrNull { it != HoldRole.ANY } ?: HoldRole.ANY
+                hold.tape = (listOf(primary) + g).firstNotNullOfOrNull { holds[it].tape }
+            }
+        }
+        return holds.indices.mapNotNull { i -> joined[i] ?: holds[i].takeIf { groups.first { i in it }.size == 1 } }
+    }
+
+    private fun medianLab(pixels: IntArray, image: Image): FloatArray {
+        if (pixels.isEmpty()) return floatArrayOf(0f, 0f, 0f)
+        val lab = pixels.map { val p = image.pixels[it]; ColorUtil.rgbToLab(p shr 16 and 0xff, p shr 8 and 0xff, p and 0xff) }
+        return FloatArray(3) { c -> lab.map { it[c] }.sorted()[lab.size / 2] }
+    }
+
+    private fun deltaE(a: FloatArray, b: FloatArray): Float =
+        kotlin.math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2]))
+
     /** Whether the smaller of two pixel sets has at least [TOUCH] of its outline pixels within [TOUCH_PX] of the other. */
     private fun touching(a: IntArray, b: IntArray, w: Int, h: Int): Boolean {
         val (small, other) = if (a.size <= b.size) a to b else b to a

@@ -161,9 +161,10 @@ holds[]:    { ..., routeId: <primary or -1>, routeIds: [..], role: any|start|han
               outline: [[u, v], ...] }          closed polygon in the wall plane: segmented on the orthophoto when there is
                                                  one, else traced from the hold's relief cells; voxels: 0 marks an image-only hold (photo search, colour split, or added by hand in the viewer)
 wall:       { origin, normal, up, right, inliers, color: [r, g, b], extent: [minU, minV, maxU, maxV],
-              photo: { file: "wall.png", bounds: [minU, minV, maxU, maxV], px } }
+              photo: { file: "wall.png", bounds: [minU, minV, maxU, maxV], px, relief: "relief.png" } }
                                                  color = mean surface colour; extent = scanned area (1st..99th percentile);
                                                  photo = orthophoto from the keyframes (px metres per pixel, top row = maxV), absent when none
+                                                 relief = each photo pixel's height off the wall in mm (red × 256 + green), from the point cloud; the viewer shows the wall in 3D with it
 routes[]:   { id, name, color, grade, gradeSystem: yds|kyu_dan|v|font|null, holdIds: [..], confirmed: bool }   # a hold may appear in several routes
 nextRouteId: int   # kept by the viewer so a deleted route's id is never reissued (sends.json keys by route id)
 ```
