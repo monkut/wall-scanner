@@ -197,4 +197,43 @@
         <item quantity="one">%d location</item>
         <item quantity="other">%d locations</item>
     </plurals>
+    <!-- Climb video (CLIMB-VIDEO.md) -->
+    <string name="record_climb">Record climb</string>
+    <string name="mode_session">Hands-free</string>
+    <string name="mode_attempt">One attempt</string>
+    <string name="rec">REC</string>
+    <string name="stop">STOP</string>
+    <string name="finish_climb">Finish climb</string>
+    <string name="camera_needed">Filming needs the camera permission.</string>
+    <string name="attempt_n">Attempt %1$d</string>
+    <string name="outcome_top">Top</string>
+    <string name="outcome_fall">Fall</string>
+    <string name="climber_seen">Climber in view</string>
+    <string name="climber_not_seen">No climber in view</string>
+    <string name="recording">Recording…</string>
+    <string name="session_hint">Set the phone where it sees the whole problem and press REC once. Your attempts are cut out of the recording when you press STOP.</string>
+    <string name="attempt_hint">REC before each attempt, STOP after it.</string>
+    <string name="keep">Keep</string>
+    <string name="discard">Discard</string>
+    <string name="play">Play</string>
+    <string name="share_clip">Share</string>
+    <string name="share_failed">Could not make the clip to share.</string>
+    <string name="trim">Trim</string>
+    <string name="trim_range">%1$s – %2$s (%3$s)</string>
+    <string name="delete_attempt_confirm">Delete attempt %1$d?</string>
+    <string name="route_comment">Route comment</string>
+    <string name="route_comment_hint">Beta, conditions, which tape is the start…</string>
+    <string name="add_route_comment">Add a comment on this route</string>
+    <plurals name="attempts_found">
+        <item quantity="one">%d attempt so far</item>
+        <item quantity="other">%d attempts so far</item>
+    </plurals>
+    <plurals name="keep_attempts">
+        <item quantity="one">Keep the filmed attempt? It is logged as an attempt.</item>
+        <item quantity="other">Keep the %d filmed attempts? They are logged as an attempt.</item>
+    </plurals>
+    <plurals name="clips">
+        <item quantity="one">%d filmed attempt</item>
+        <item quantity="other">%d filmed attempts</item>
+    </plurals>
 </resources>

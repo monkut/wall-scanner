@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
@@ -39,6 +40,15 @@
 
         <activity
             android:name=".routes.RouteActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".climbs.ClimbRecordActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <activity
+            android:name=".climbs.ClimbPlaybackActivity"
             android:exported="false" />
 
         <service

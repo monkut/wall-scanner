@@ -3,7 +3,9 @@
 Record a climber's attempts on a confirmed route as video, attached to the route's send log, with the
 smallest useful set of edits. Status: design agreed 2026-10-23 (CameraX in-app recording; v1 edits = trim,
 delete, outcome, share one attempt; 1080p at ~8 Mb/s); hands-free attempt detection and the route comment
-proposed 2026-10-24; not implemented. Builds on the logbook
+added 2026-10-24. **v1 implemented 2026-10-24** on `feature/climb-video` (tested on a Pixel 9a: hands-free and
+one-attempt recording at 1080p, finish/keep/discard, playback, trim, outcome, delete, share); the detector's
+thresholds still need tuning on a filmed session. Builds on the logbook
 (`RouteActivity`, `io/RouteStore.kt`, `sends.json`, ARCHITECTURE §10).
 
 ## Terms

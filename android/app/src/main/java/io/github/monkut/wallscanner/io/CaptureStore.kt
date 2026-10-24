@@ -252,7 +252,9 @@ object CaptureStore {
         val shareDir = File(activity.cacheDir, "share").apply { mkdirs() }
         val zip = File(shareDir, "${dir.name}.zip")
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zip))).use { out ->
-            val entries = dir.walkTopDown().filter { it.isFile }.map { "${dir.name}/${it.relativeTo(dir).path}" to it }.toList() +
+            // Climb videos stay out: one climb can be hundreds of MB (each clip is shared on its own from playback).
+            val climbs = File(dir, RouteStore.CLIMBS_DIR)
+            val entries = dir.walkTopDown().onEnter { it != climbs }.filter { it.isFile }.map { "${dir.name}/${it.relativeTo(dir).path}" to it }.toList() +
                 CrashLog.files(activity).map { "crashes/${it.name}" to it }
             for ((name, file) in entries) {
                 out.putNextEntry(ZipEntry(name))
