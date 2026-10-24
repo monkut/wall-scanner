@@ -131,3 +131,13 @@ need CIE ΔE ≥ 6 against the wall ring around them. On the climber's list: 6 o
 above 55, the black hold 24 only partly outlined. A search of uncovered not-wall blobs with SAM finds the hold
 above 55 and the rest of 24, but also ~15 tape strips, placards and edge blobs: it needs tape and placard
 suppression first.
+
+## Train run 3 (2026-10-24 evening): our own walls
+
+G1 fine-tuned with the climber-corrected Oct 23 walls (`merge.py --ours-repeat 6`, 45 epochs). Honest check first
+(run 3a: 2:00 PM only, scored on the 2:04 PM reference it never saw): G1 P .80 R .91 IoU .84 → G3a P .93 R .88 IoU
+.85 — false holds 10 → 3 for one more miss. Run 3 (both walls) is installed (assets/holds.tflite). By eye on Oct 21 6:21 PM: olive volume and big blue hold whole, white volume fuller, top junk gone; the
+crash pad still counts as a hold. On the phone, 2:00 PM with run 3 finds all 68 reference holds, including the two
+edge holds the climber added (+3 extra; it trained on that wall). Oct 21 5:20 PM (same wall face as 2:04 PM, other
+scan): volumes right, outlines tight; junk left on the concrete column, two loose depth outlines on bare wall, red
+tape, neighbouring faces at the edges; the black banana's dark part still missing.
