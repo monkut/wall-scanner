@@ -5,6 +5,12 @@ builds a coloured point cloud on the device, finds the wall plane and the holds,
 according to how the gym marks them, and keeps a logbook of sends per confirmed route and location.
 The longer-term plan (photoreal splats from a GPU backend) is in `ARCHITECTURE.md`.
 
+## Install
+
+Every merge to `main` publishes a release with the signed APK (GitHub → Releases). How to install it on a phone,
+update it without losing scans, and check the download: [`docs/INSTALL-ANDROID.md`](docs/INSTALL-ANDROID.md).
+Releases are built by `.github/workflows/release.yml` (pull requests run the tests and a release build only).
+
 ## What the app does (v0.1)
 
 | Area | Feature |
