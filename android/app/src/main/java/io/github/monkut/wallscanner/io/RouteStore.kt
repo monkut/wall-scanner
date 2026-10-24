@@ -32,19 +32,55 @@ enum class SendResult(val id: String) {
     }
 }
 
-class Send(val id: Int, val routeId: Int, val at: String, val result: SendResult, val attempts: Int, val note: String)
+/** How a filmed attempt ended, when the climber says (or the detector suggests and the climber keeps it). */
+enum class ClipOutcome(val id: String) {
+    TOP("top"), FALL("fall");
 
-/** One capture's log: every send plus the climber's star rating per route id (absent = not rated). */
-class SendLog(val sends: List<Send>, val ratings: Map<Int, Int>)
+    companion object {
+        fun fromId(id: String?): ClipOutcome? = entries.firstOrNull { it.id == id }
+    }
+}
 
 /**
- * Routes come from scene.json (identification, edited in the capture viewer); sends and the climber's star
- * ratings live in the capture's sends.json (`{ version, sends: [...], ratings: { "<routeId>": 0..5 } }`) so
- * that re-editing the identification never touches the log.
+ * One filmed attempt: [file] (relative to the capture directory) played from [trimStartMs] to [trimEndMs]. A
+ * session recording holds several attempts, so several clips can share one file; [auto] marks clips the attempt
+ * detector cut out of one. [attempt] is the attempt number when filmed and is not renumbered after a delete.
+ */
+class Clip(
+    val id: Int, val attempt: Int, val file: String, val durationMs: Long,
+    val trimStartMs: Long, val trimEndMs: Long, val outcome: ClipOutcome?, val auto: Boolean, val at: String,
+) {
+    fun with(trimStartMs: Long = this.trimStartMs, trimEndMs: Long = this.trimEndMs, outcome: ClipOutcome? = this.outcome): Clip =
+        Clip(id, attempt, file, durationMs, trimStartMs, trimEndMs, outcome, auto, at).clamped()
+
+    /** Trim points inside the file, the in-point before the out-point (at least [MIN_CLIP_MS] apart when the file allows). */
+    fun clamped(): Clip {
+        val end = trimEndMs.coerceIn(0, durationMs)
+        val start = trimStartMs.coerceIn(0, maxOf(0, end - MIN_CLIP_MS))
+        return if (start == trimStartMs && end == trimEndMs) this else Clip(id, attempt, file, durationMs, start, end, outcome, auto, at)
+    }
+
+    companion object {
+        const val MIN_CLIP_MS = 500L
+    }
+}
+
+/** A climb: one session on one route (result, tries, note) and the attempts filmed in it. */
+class Send(val id: Int, val routeId: Int, val at: String, val result: SendResult, val attempts: Int, val note: String, val clips: List<Clip> = emptyList())
+
+/** One capture's log: every send, the climber's star rating per route id (absent = not rated) and route comments. */
+class SendLog(val sends: List<Send>, val ratings: Map<Int, Int>, val comments: Map<Int, String> = emptyMap())
+
+/**
+ * Routes come from scene.json (identification, edited in the capture viewer); sends, the climber's star ratings
+ * and route comments live in the capture's sends.json (`{ version: 2, sends: [{…, clips: […]}], ratings:
+ * { "<routeId>": 0..5 }, comments: { "<routeId>": text } }`) so that re-editing the identification never touches
+ * the log. Version-1 files (no clips, no comments) read unchanged. Clip files live under `climbs/<sendId>/`.
  */
 object RouteStore {
     const val SENDS_FILE = "sends.json"
     const val MAX_RATING = 5
+    const val CLIMBS_DIR = "climbs"
 
     fun routes(dir: File): List<RouteRecord> {
         if (!CaptureStore.hasScene(dir)) return emptyList()
@@ -83,7 +119,7 @@ object RouteStore {
     fun confirmedRoutes(context: Context): List<RouteRecord> =
         CaptureStore.list(context).flatMap { dir -> routes(dir).filter { it.confirmed } }
 
-    private val EMPTY = SendLog(emptyList(), emptyMap())
+    private val EMPTY = SendLog(emptyList(), emptyMap(), emptyMap())
 
     /**
      * A capture's log in one read; a scene.json written before sends.json existed is migrated first. A rating
@@ -104,7 +140,14 @@ object RouteStore {
                     if (stars in 0..MAX_RATING) ratings[routeId] = stars
                 }
             }
-            SendLog((0 until arr.length()).map { i -> fromJson(arr.getJSONObject(i)) }, ratings)
+            val comments = HashMap<Int, String>()
+            json.optJSONObject("comments")?.let { c ->
+                for (key in c.keys()) {
+                    val routeId = key.toIntOrNull() ?: continue
+                    c.optString(key).takeIf { it.isNotBlank() }?.let { comments[routeId] = it }
+                }
+            }
+            SendLog((0 until arr.length()).map { i -> fromJson(arr.getJSONObject(i)) }, ratings, comments)
         }.getOrDefault(EMPTY)
     }
 
@@ -119,38 +162,116 @@ object RouteStore {
         val log = log(dir)
         val ratings = log.ratings.toMutableMap()
         if (stars == null) ratings.remove(routeId) else ratings[routeId] = stars.coerceIn(0, MAX_RATING)
-        write(dir, log.sends, ratings)
+        write(dir, log.copy(ratings = ratings))
+    }
+
+    /** The climber's comment on a route (beta, conditions), or null when there is none. */
+    fun comment(dir: File, routeId: Int): String? = log(dir).comments[routeId]
+
+    /** Sets or, with a blank text, clears the comment on a route. */
+    fun setComment(dir: File, routeId: Int, text: String) {
+        val log = log(dir)
+        val comments = log.comments.toMutableMap()
+        if (text.isBlank()) comments.remove(routeId) else comments[routeId] = text.trim()
+        write(dir, log.copy(comments = comments))
     }
 
     fun sendsFor(dir: File, routeId: Int): List<Send> = sends(dir).filter { it.routeId == routeId }
 
-    fun addSend(dir: File, routeId: Int, result: SendResult, attempts: Int, note: String): Send {
+    /**
+     * Logs a climb. Clip files recorded before the climb had an id ([pendingDir], relative to the capture) move to
+     * `climbs/<sendId>/` and the clips are rewritten to point there.
+     */
+    fun addSend(dir: File, routeId: Int, result: SendResult, attempts: Int, note: String, clips: List<Clip> = emptyList(), pendingDir: String? = null): Send {
         val log = log(dir)
-        val send = Send((log.sends.maxOfOrNull { it.id } ?: 0) + 1, routeId, CaptureStore.nowIso(), result, attempts, note)
-        write(dir, log.sends + send, log.ratings)
+        val id = (log.sends.maxOfOrNull { it.id } ?: 0) + 1
+        val moved = if (pendingDir == null) clips else {
+            val target = File(dir, clipDir(id)).apply { mkdirs() }
+            val renamed = HashMap<String, String>()
+            for (file in clips.map { it.file }.distinct()) {
+                val src = File(dir, file)
+                val dst = File(target, src.name)
+                renamed[file] = if (src.exists() && src.renameTo(dst)) dst.relativeTo(dir).path else file
+            }
+            File(dir, pendingDir).delete() // only when empty
+            clips.map { c -> Clip(c.id, c.attempt, renamed[c.file] ?: c.file, c.durationMs, c.trimStartMs, c.trimEndMs, c.outcome, c.auto, c.at) }
+        }
+        val send = Send(id, routeId, CaptureStore.nowIso(), result, attempts, note, moved.map { it.clamped() })
+        write(dir, log.copy(sends = log.sends + send))
         return send
     }
 
+    /** Deletes a climb and its clip files. */
     fun deleteSend(dir: File, sendId: Int) {
         val log = log(dir)
-        write(dir, log.sends.filter { it.id != sendId }, log.ratings)
+        write(dir, log.copy(sends = log.sends.filter { it.id != sendId }))
+        File(dir, clipDir(sendId)).deleteRecursively()
     }
 
-    private fun write(dir: File, sends: List<Send>, ratings: Map<Int, Int>) {
+    /** Replaces a clip of a climb (trim points clamped to its file); no-op when either is gone. */
+    fun updateClip(dir: File, sendId: Int, clip: Clip) {
+        val log = log(dir)
+        write(dir, log.copy(sends = log.sends.map { s -> if (s.id != sendId) s else s.withClips(s.clips.map { if (it.id == clip.id) clip.clamped() else it }) }))
+    }
+
+    /** Removes a clip; its file goes too unless another clip of the climb still plays from it (a session recording). */
+    fun deleteClip(dir: File, sendId: Int, clipId: Int) {
+        val log = log(dir)
+        val send = log.sends.firstOrNull { it.id == sendId } ?: return
+        val clip = send.clips.firstOrNull { it.id == clipId } ?: return
+        val rest = send.clips.filter { it.id != clipId }
+        write(dir, log.copy(sends = log.sends.map { if (it.id == sendId) it.withClips(rest) else it }))
+        if (rest.none { it.file == clip.file }) File(dir, clip.file).delete()
+    }
+
+    /** Where a climb's clip files live, relative to the capture directory. */
+    fun clipDir(sendId: Int): String = "$CLIMBS_DIR/$sendId"
+
+    /** Where clips recorded before the climb is saved live, relative to the capture directory. */
+    const val PENDING_DIR = "$CLIMBS_DIR/pending"
+
+    private fun Send.withClips(clips: List<Clip>) = Send(id, routeId, at, result, attempts, note, clips)
+
+    private fun SendLog.copy(sends: List<Send> = this.sends, ratings: Map<Int, Int> = this.ratings, comments: Map<Int, String> = this.comments) =
+        SendLog(sends, ratings, comments)
+
+    private fun write(dir: File, log: SendLog) {
         val arr = JSONArray()
-        for (s in sends) {
-            arr.put(JSONObject().put("id", s.id).put("routeId", s.routeId).put("at", s.at)
-                .put("result", s.result.id).put("attempts", s.attempts).put("note", s.note))
+        for (s in log.sends) {
+            val clips = JSONArray()
+            for (c in s.clips) {
+                clips.put(JSONObject().put("id", c.id).put("attempt", c.attempt).put("file", c.file).put("durationMs", c.durationMs)
+                    .put("trimStartMs", c.trimStartMs).put("trimEndMs", c.trimEndMs).put("outcome", c.outcome?.id ?: JSONObject.NULL)
+                    .put("auto", c.auto).put("at", c.at))
+            }
+            val o = JSONObject().put("id", s.id).put("routeId", s.routeId).put("at", s.at)
+                .put("result", s.result.id).put("attempts", s.attempts).put("note", s.note)
+            if (s.clips.isNotEmpty()) o.put("clips", clips)
+            arr.put(o)
         }
         val rated = JSONObject()
-        for ((routeId, stars) in ratings.toSortedMap()) rated.put(routeId.toString(), stars)
-        File(dir, SENDS_FILE).writeText(JSONObject().put("version", 1).put("sends", arr).put("ratings", rated).toString(2))
+        for ((routeId, stars) in log.ratings.toSortedMap()) rated.put(routeId.toString(), stars)
+        val comments = JSONObject()
+        for ((routeId, text) in log.comments.toSortedMap()) comments.put(routeId.toString(), text)
+        File(dir, SENDS_FILE).writeText(JSONObject().put("version", 2).put("sends", arr).put("ratings", rated).put("comments", comments).toString(2))
     }
 
-    private fun fromJson(o: JSONObject) = Send(
-        o.getInt("id"), o.getInt("routeId"), o.optString("at"), SendResult.fromId(o.optString("result")),
-        o.optInt("attempts", 1), o.optString("note"),
-    )
+    private fun fromJson(o: JSONObject): Send {
+        val clips = o.optJSONArray("clips")?.let { arr ->
+            (0 until arr.length()).map { i ->
+                val c = arr.getJSONObject(i)
+                Clip(
+                    c.getInt("id"), c.optInt("attempt", i + 1), c.getString("file"), c.optLong("durationMs"),
+                    c.optLong("trimStartMs"), c.optLong("trimEndMs", c.optLong("durationMs")),
+                    ClipOutcome.fromId(if (c.isNull("outcome")) null else c.optString("outcome")), c.optBoolean("auto"), c.optString("at"),
+                ).clamped()
+            }
+        } ?: emptyList()
+        return Send(
+            o.getInt("id"), o.getInt("routeId"), o.optString("at"), SendResult.fromId(o.optString("result")),
+            o.optInt("attempts", 1), o.optString("note"), clips,
+        )
+    }
 
     /** scene.json v2 kept `sends: [{routeId, at}]`; move them out so the viewer can drop the field. */
     private fun migrateLegacySends(dir: File) {
@@ -162,7 +283,7 @@ object RouteStore {
                 val s = legacy.getJSONObject(i)
                 Send(i + 1, s.getInt("routeId"), s.optString("at"), SendResult.SEND, 1, "")
             }
-            write(dir, sends, emptyMap())
+            write(dir, SendLog(sends, emptyMap(), emptyMap()))
         }
     }
 }

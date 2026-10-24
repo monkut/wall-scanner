@@ -188,4 +188,40 @@
     <plurals name="locations_count">
         <item quantity="other">%d か所</item>
     </plurals>
+    <!-- クライム動画 -->
+    <string name="record_climb">クライムを撮影</string>
+    <string name="mode_session">ハンズフリー</string>
+    <string name="mode_attempt">1トライずつ</string>
+    <string name="rec">録画</string>
+    <string name="stop">停止</string>
+    <string name="finish_climb">クライム終了</string>
+    <string name="camera_needed">撮影にはカメラの権限が必要です。</string>
+    <string name="attempt_n">トライ %1$d</string>
+    <string name="outcome_top">完登</string>
+    <string name="outcome_fall">落下</string>
+    <string name="climber_seen">クライマーを検出中</string>
+    <string name="climber_not_seen">クライマーが映っていません</string>
+    <string name="recording">録画中…</string>
+    <string name="session_hint">課題全体が映る場所にスマホを置き、録画を1回押してください。停止を押すと録画からトライが切り出されます。</string>
+    <string name="attempt_hint">トライの前に録画、終わったら停止。</string>
+    <string name="keep">残す</string>
+    <string name="discard">破棄</string>
+    <string name="play">再生</string>
+    <string name="share_clip">共有</string>
+    <string name="share_failed">共有用のクリップを作れませんでした。</string>
+    <string name="trim">トリム</string>
+    <string name="trim_range">%1$s – %2$s（%3$s）</string>
+    <string name="delete_attempt_confirm">トライ %1$d を削除しますか？</string>
+    <string name="route_comment">ルートのコメント</string>
+    <string name="route_comment_hint">ベータ、コンディション、スタートのテープなど</string>
+    <string name="add_route_comment">このルートにコメントを追加</string>
+    <plurals name="attempts_found">
+        <item quantity="other">これまで %d トライ</item>
+    </plurals>
+    <plurals name="keep_attempts">
+        <item quantity="other">撮影した %d トライを残しますか？トライとして記録されます。</item>
+    </plurals>
+    <plurals name="clips">
+        <item quantity="other">撮影 %d トライ</item>
+    </plurals>
 </resources>

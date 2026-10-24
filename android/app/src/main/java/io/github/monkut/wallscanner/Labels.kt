@@ -120,4 +120,7 @@ object Labels {
     fun isoDate(c: Context, iso: String): String = runCatching {
         ZonedDateTime.parse(iso).withZoneSameInstant(JST).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale(c)))
     }.getOrDefault(iso.take(10))
+
+    /** A clip's length as m:ss. */
+    fun duration(ms: Long): String = "%d:%02d".format(ms / 60_000, ms / 1_000 % 60)
 }

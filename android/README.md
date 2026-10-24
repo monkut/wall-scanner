@@ -125,6 +125,21 @@ in JST. Sends are listed newest first; long-press one to delete it. The star row
 (optional: "Not rated" until set, **Clear** removes it; the rating shows as "★ n" in the logbook route row).
 **Capture** opens the source capture in the viewer for re-editing; the send log and rating are kept separately
 and are not affected.
+Under the rating, the route's own **comment** (beta, conditions; tap to add or edit) is kept beside the rating, apart
+from each climb's note.
+
+**Record climb** films the climb (`climbs/ClimbRecordActivity.kt`, CameraX, 1080p at ~8 Mb/s, sound when the
+microphone is allowed). **Hands-free** (default): press REC once and leave the phone where it sees the whole problem;
+the pose model (MediaPipe Pose Landmarker lite, `io/PoseTracker.kt`, ~10 preview frames a second — a third camera
+stream would cap the recording at 720p) shows whether the climber is in view and how many attempts it has found;
+on STOP, `core/AttemptDetector.kt` cuts the attempts out of the recording (feet off the floor line for 0.7 s to
+feet back on it, 2 s before and after; outcome hint Top when both hands were held at their highest for 1 s, Fall
+when the hips dropped fast). **One attempt**: REC/STOP per attempt. **Finish climb** logs the climb with the send
+dialog (tries prefilled); Back with filmed attempts offers to keep them as an attempt or discard them. A climb
+with clips shows "n filmed attempts"; tap it for playback (`climbs/ClimbPlaybackActivity.kt`): a tab per attempt,
+the trim range (stored, the file is never changed), outcome Top / Fall, Delete, and Share (a trimmed copy without
+re-encoding, from the keyframe at or before the in-point; `io/ClipExport.kt`). Detector thresholds are a first
+guess until tuned on filmed sessions (CLIMB-VIDEO.md).
 
 ### Segments and snapping
 
@@ -164,7 +179,7 @@ Each capture has a `scan.log`. Key lines, all with JST timestamps:
 | `RESULT: plane … wallColor=… holds=… unassigned=… routes=…` or `RESULT: no wall plane` | Processing outcome (unassigned = holds left out of every route) |
 
 Uncaught exceptions are written to `files/crashes/` and included in every share. **Share** (long-press a
-capture, or the viewer's Share button) zips the capture directory, including `sends.json`, for export. Pull a
+capture, or the viewer's Share button) zips the capture directory, including `sends.json`, for export (climb videos stay out). Pull a
 capture over USB with:
 
 ```bash
@@ -183,7 +198,8 @@ files/captures/<JST timestamp>/
   frames.json                             keyframes with world poses (after snapping)
   points.ply                              merged cloud (binary little-endian: float x y z, uchar r g b)
   scene.json                              wall frame, holds, routes (schema: ARCHITECTURE.md §9)
-  sends.json                              { version, sends: [{ id, routeId, at, result, attempts, note }], ratings: { "<routeId>": 0..5 } }
+  sends.json                              { version: 2, sends: [{ id, routeId, at, result, attempts, note, clips?: [...] }], ratings: { "<routeId>": 0..5 }, comments: { "<routeId>": text } }
+  climbs/<sendId>/*.mp4                   filmed attempts (left out of the capture's share zip)
   thumbnail.png                           front view used in the lists
   wall.png                                orthophoto of the wall from the keyframes (5 mm/px; bounds in scene.json wall.photo)
 ```

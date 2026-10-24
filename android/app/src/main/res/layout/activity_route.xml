@@ -98,17 +98,36 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <!-- The route's own comment (beta, conditions); tap to add or edit. -->
+    <TextView
+        android:id="@+id/comment"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="?attr/selectableItemBackground"
+        android:minHeight="40dp"
+        android:gravity="center_vertical"
+        android:textAppearance="?attr/textAppearanceBody2" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:orientation="horizontal">
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnLogSend"
+            android:id="@+id/btnRecordClimb"
             android:layout_width="0dp"
             android:layout_height="52dp"
             android:layout_weight="1"
+            android:text="@string/record_climb" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnLogSend"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:layout_marginStart="8dp"
             android:text="@string/log_send" />
 
         <com.google.android.material.button.MaterialButton

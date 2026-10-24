@@ -13,20 +13,20 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.ListView
-import android.widget.RadioGroup
 import android.widget.RatingBar
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import io.github.monkut.wallscanner.Labels
 import io.github.monkut.wallscanner.R
+import io.github.monkut.wallscanner.climbs.ClimbPlaybackActivity
+import io.github.monkut.wallscanner.climbs.ClimbRecordActivity
 import io.github.monkut.wallscanner.core.HoldRole
 import io.github.monkut.wallscanner.io.CaptureStore
 import io.github.monkut.wallscanner.io.LocationStore
 import io.github.monkut.wallscanner.io.RouteRecord
 import io.github.monkut.wallscanner.io.RouteStore
 import io.github.monkut.wallscanner.io.Send
-import io.github.monkut.wallscanner.io.SendResult
 import io.github.monkut.wallscanner.viewer.ViewerActivity
 import java.io.File
 import kotlin.concurrent.thread
@@ -40,6 +40,7 @@ class RouteActivity : AppCompatActivity() {
     private lateinit var ratingBar: RatingBar
     private lateinit var ratingLabel: TextView
     private lateinit var btnClearRating: View
+    private lateinit var commentText: TextView
     private lateinit var routeImage: ZoomImageView
     private lateinit var routeHint: TextView
     private var hits: List<RouteImage.Hit> = emptyList()
@@ -69,6 +70,9 @@ class RouteActivity : AppCompatActivity() {
             setStroke(2, Color.WHITE)
         }
         findViewById<View>(R.id.btnLogSend).setOnClickListener { handleLogSend() }
+        findViewById<View>(R.id.btnRecordClimb).setOnClickListener { startActivity(ClimbRecordActivity.intent(this, route.captureId, route.routeId)) }
+        commentText = findViewById(R.id.comment)
+        commentText.setOnClickListener { handleEditComment() }
         findViewById<View>(R.id.btnOpenCapture).setOnClickListener { startActivity(ViewerActivity.intent(this, route.captureId)) }
         sendList = findViewById(R.id.sendList)
         emptyText = findViewById(R.id.emptyText)
@@ -87,6 +91,10 @@ class RouteActivity : AppCompatActivity() {
         }
         btnClearRating.setOnClickListener { handleRate(null) }
         sendList.setOnItemLongClickListener { _, _, position, _ -> handleDeleteSend(sends[position]); true }
+        sendList.setOnItemClickListener { _, _, position, _ ->
+            val send = sends[position]
+            if (send.clips.isNotEmpty()) startActivity(ClimbPlaybackActivity.intent(this, route.captureId, send.id))
+        }
     }
 
     override fun onResume() {
@@ -131,6 +139,24 @@ class RouteActivity : AppCompatActivity() {
         emptyText.visibility = if (sends.isEmpty()) View.VISIBLE else View.GONE
         sendList.adapter = SendAdapter(sends)
         refreshRating()
+        val comment = RouteStore.comment(captureDir, route.routeId)
+        commentText.text = comment ?: getString(R.string.add_route_comment)
+        commentText.setTextColor(getColor(if (comment == null) R.color.dust else R.color.chalk))
+    }
+
+    /** The route's own comment (beta, conditions), separate from each climb's note. */
+    private fun handleEditComment() {
+        val input = EditText(this).apply {
+            setText(RouteStore.comment(captureDir, route.routeId) ?: "")
+            setHint(R.string.route_comment_hint)
+            minLines = 2
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.route_comment)
+            .setView(input)
+            .setPositiveButton(R.string.save) { _, _ -> RouteStore.setComment(captureDir, route.routeId, input.text.toString()); refresh() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun refreshRating() {
@@ -152,24 +178,10 @@ class RouteActivity : AppCompatActivity() {
     }
 
     private fun handleLogSend() {
-        val view = LayoutInflater.from(this).inflate(R.layout.dialog_send, null)
-        val results = view.findViewById<RadioGroup>(R.id.result)
-        val attempts = view.findViewById<EditText>(R.id.attempts)
-        val note = view.findViewById<EditText>(R.id.note)
-        AlertDialog.Builder(this)
-            .setTitle(R.string.log_send)
-            .setView(view)
-            .setPositiveButton(R.string.save) { _, _ ->
-                val result = when (results.checkedRadioButtonId) {
-                    R.id.resultFlash -> SendResult.FLASH
-                    R.id.resultAttempt -> SendResult.ATTEMPT
-                    else -> SendResult.SEND
-                }
-                RouteStore.addSend(captureDir, route.routeId, result, attempts.text.toString().toIntOrNull() ?: 1, note.text.toString().trim())
-                refresh()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        SendDialog.show(this, R.string.log_send, null, onSave = { result, tries, note ->
+            RouteStore.addSend(captureDir, route.routeId, result, tries, note)
+            refresh()
+        })
     }
 
     private fun handleDeleteSend(send: Send) {
@@ -193,6 +205,10 @@ class RouteActivity : AppCompatActivity() {
             view.findViewById<TextView>(R.id.note).apply {
                 text = send.note
                 visibility = if (send.note.isBlank()) View.GONE else View.VISIBLE
+            }
+            view.findViewById<TextView>(R.id.clips).apply {
+                text = Labels.plural(this@RouteActivity, R.plurals.clips, send.clips.size)
+                visibility = if (send.clips.isEmpty()) View.GONE else View.VISIBLE
             }
             return view
         }

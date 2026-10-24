@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One logged send: result and tries, the date, an optional note. -->
+<!-- One logged send: result and tries, the date, an optional note, its filmed attempts. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -32,5 +32,16 @@
         android:layout_marginTop="2dp"
         android:textAppearance="?attr/textAppearanceBody2"
         android:textColor="@color/chalk"
+        android:visibility="gone" />
+
+    <!-- Filmed attempts; tap the row to play them. -->
+    <TextView
+        android:id="@+id/clips"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:drawablePadding="6dp"
+        android:textAppearance="?attr/textAppearanceBody2"
+        android:textColor="@color/tape"
         android:visibility="gone" />
 </LinearLayout>
