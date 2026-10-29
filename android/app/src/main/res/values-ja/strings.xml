@@ -22,9 +22,25 @@
     <string name="language_en_us">English (US)</string>
     <string name="language_en_gb">English (UK)</string>
     <string name="language_ja">日本語</string>
-    <string name="language_short_en_us">EN-US</string>
-    <string name="language_short_en_gb">EN-UK</string>
-    <string name="language_short_ja">JA</string>
+
+    <!-- Settings and profile -->
+    <string name="settings">設定</string>
+    <string name="profile">プロフィール</string>
+    <string name="profile_not_set">未設定</string>
+    <string name="profile_username">ユーザー名</string>
+    <string name="profile_username_hint">記録に表示される名前</string>
+    <string name="profile_height">身長</string>
+    <string name="profile_reach">リーチ</string>
+    <string name="profile_reach_hint">立って腕を上に伸ばしたときの床から指先まで</string>
+    <string name="profile_height_value">身長 %1$s</string>
+    <string name="profile_reach_value">リーチ %1$s</string>
+    <string name="length_invalid">%1$s〜%2$s の範囲で入力してください</string>
+    <string name="units">単位</string>
+    <string name="units_metric">メートル法 (cm)</string>
+    <string name="units_imperial">ヤード・ポンド法 (ft・in)</string>
+    <string name="unit_cm">cm</string>
+    <string name="unit_ft">ft</string>
+    <string name="unit_in">in</string>
 
     <!-- ロケーション -->
     <string name="choose_location">どこでスキャンしますか？</string>

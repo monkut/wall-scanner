@@ -21,8 +21,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ### Home screen: Capture and Logbook modes
 
-A **Capture | Logbook** switch at the top selects the mode; the choice is remembered. The button to its right
-shows the app language (EN-US, EN-UK or JA) and opens the language picker.
+A **Capture | Logbook** switch at the top selects the mode; the choice is remembered. The gear button to its
+right opens **Settings** (see below).
 
 - **Capture** mode is for scanning and identifying routes: the **New scan** button and the list of captures
   (thumbnail, timestamp, location, set, wall type, hold / route / confirmed counts). Tap a capture to open it in the
@@ -43,6 +43,17 @@ shows the app language (EN-US, EN-UK or JA) and opens the language picker.
   routes on the wall between two resets): open sets first, newest first, then retired ones, then "No set" for
   routes scanned without one; a set header shows its dates and route count, and its **Edit** renames the set
   or marks it retired once the wall has been reset (its routes and sends stay). Tap a route to open its record.
+
+### Settings and profile
+
+The gear button lists three settings, each with its current value:
+
+- **Profile**: username, height and reach, all optional. Reach is standing reach (floor to fingertips, arm
+  raised). Lengths are entered in the chosen units (cm, or feet and inches) and stored in centimetres in
+  `files/profile.json` (`io/ProfileStore.kt`); a length outside 50–300 cm keeps the form open with an error.
+- **Units**: Metric (cm) or Imperial (ft, in), the units the profile's lengths are shown and entered in
+  (`Settings.kt`, "settings" shared preferences; default metric). Switching units does not change stored values.
+- **Language**: see below.
 
 ### Language
 
@@ -228,14 +239,14 @@ counts are written out with locale plurals ("1 try", "2 tries", "記録 2 件").
 
 | Path | Role |
 |---|---|
-| `core/` | Pure Kotlin pipeline (no Android deps): `VoxelMap`, `PlaneFitter`, `SegmentSnapper`, `Rigid`, `HoldDetector`, `RouteGrouper`, `RouteDefinition`, `GradeSystem`, `SceneJson`, `PlyWriter`, `Thumbnail`. Thresholds in `Tuning.kt`. |
+| `core/` | Pure Kotlin pipeline (no Android deps): `VoxelMap`, `PlaneFitter`, `SegmentSnapper`, `Rigid`, `HoldDetector`, `RouteGrouper`, `RouteDefinition`, `GradeSystem`, `SceneJson`, `PlyWriter`, `Thumbnail`, `Length` (cm ↔ ft, in). Thresholds in `Tuning.kt`. |
 | `scan/` | ARCore session, GL camera background, per-segment point overlay, `Segment` (anchor + voxel map), `DepthFrameProcessor` (raw depth → anchor-local points), `KeyframeWriter`. |
 | `viewer/` | WebView host for `assets/viewer/index.html` (three.js) with a JS bridge for saving and sharing. |
 | `routes/RouteActivity.kt` | Route record screen: send log for one confirmed route. |
 | `io/CaptureStore.kt` | Capture directories, `capture.json`, PLY / scene / thumbnail files, share zip. |
-| `io/RouteStore.kt`, `io/LocationStore.kt` | Confirmed routes read from `scene.json`; sends in `sends.json`; locations in `locations.json`. |
-| `MainActivity.kt` | Home screen: mode switch, language button, capture list, logbook, New scan dialogs. |
-| `Labels.kt`, `Language.kt` | Localized names for the core enums, dates in the app language; per-app locale handling. |
+| `io/RouteStore.kt`, `io/LocationStore.kt`, `io/ProfileStore.kt` | Confirmed routes read from `scene.json`; sends in `sends.json`; locations in `locations.json`; the user profile in `profile.json`. |
+| `MainActivity.kt` | Home screen: mode switch, Settings (profile, units, language), capture list, logbook, New scan dialogs. |
+| `Labels.kt`, `Language.kt`, `Settings.kt` | Localized names for the core enums, dates in the app language; per-app locale handling; the units setting. |
 | `res/values*/strings.xml` | English (US) defaults, `values-en-rGB` spellings, `values-ja` translations. |
 
 ## Known limits (v0.1)

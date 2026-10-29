@@ -23,9 +23,25 @@
     <string name="language_en_us">English (US)</string>
     <string name="language_en_gb">English (UK)</string>
     <string name="language_ja">日本語</string>
-    <string name="language_short_en_us">EN-US</string>
-    <string name="language_short_en_gb">EN-UK</string>
-    <string name="language_short_ja">JA</string>
+
+    <!-- Settings and profile -->
+    <string name="settings">Settings</string>
+    <string name="profile">Profile</string>
+    <string name="profile_not_set">Not set</string>
+    <string name="profile_username">Username</string>
+    <string name="profile_username_hint">Name shown in your logbook</string>
+    <string name="profile_height">Height</string>
+    <string name="profile_reach">Reach</string>
+    <string name="profile_reach_hint">Standing, arm raised: floor to fingertips</string>
+    <string name="profile_height_value">height %1$s</string>
+    <string name="profile_reach_value">reach %1$s</string>
+    <string name="length_invalid">Enter a length between %1$s and %2$s</string>
+    <string name="units">Units</string>
+    <string name="units_metric">Metric (cm)</string>
+    <string name="units_imperial">Imperial (ft, in)</string>
+    <string name="unit_cm">cm</string>
+    <string name="unit_ft">ft</string>
+    <string name="unit_in">in</string>
 
     <!-- Locations -->
     <string name="choose_location">Where are you scanning?</string>

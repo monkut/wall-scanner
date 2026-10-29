@@ -7,7 +7,7 @@
     android:paddingHorizontal="20dp"
     android:paddingTop="12dp">
 
-    <!-- Mode switch (Capture: scan and identify; Logbook: confirmed routes and sends) and the language button. -->
+    <!-- Mode switch (Capture: scan and identify; Logbook: confirmed routes and sends) and the Settings button (profile, units, language). -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -41,15 +41,17 @@
         </com.google.android.material.button.MaterialButtonToggleGroup>
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnLanguage"
+            android:id="@+id/btnSettings"
             style="?attr/materialButtonOutlinedStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:minWidth="0dp"
             android:paddingHorizontal="12dp"
-            android:contentDescription="@string/language"
-            android:textSize="14sp" />
+            android:contentDescription="@string/settings"
+            app:icon="@drawable/ic_settings"
+            app:iconPadding="0dp"
+            app:iconTint="@color/chalk" />
     </LinearLayout>
 
     <com.google.android.material.button.MaterialButton
