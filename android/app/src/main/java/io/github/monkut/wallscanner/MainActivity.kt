@@ -1,6 +1,9 @@
 package io.github.monkut.wallscanner
 
 import android.content.Intent
+import android.net.Uri
+import android.text.Editable
+import android.text.TextWatcher
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -27,6 +30,10 @@ import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.core.UnitSystem
 import io.github.monkut.wallscanner.io.CaptureStore
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.material.imageview.ShapeableImageView
+import com.google.android.material.textfield.TextInputLayout
 import androidx.annotation.StringRes
 import io.github.monkut.wallscanner.io.GeoPoint
 import io.github.monkut.wallscanner.io.Location
@@ -55,8 +62,8 @@ import kotlin.math.roundToInt
  * (name, kind, grade scale, coordinates, delete); at a gym the routes are grouped by set (the routes on the
  * wall between two resets), each under a header with **Edit** (rename, retire). New scan asks for the location
  * (a registered gym or outdoor area, or a new one), at a gym the set (an open one or a new one), and then the
- * wall type. The Settings button opens the profile (username, height, reach), the units its lengths are shown
- * in, and the app language.
+ * wall type. The climber's picture in the header opens Settings: the profile (picture, username, height, reach),
+ * the units its lengths are shown in, and the app language.
  */
 class MainActivity : AppCompatActivity() {
     private lateinit var list: ListView
@@ -77,6 +84,9 @@ class MainActivity : AppCompatActivity() {
     /** Logbook drill-down: null lists the locations, otherwise the routes of this location ("" = no location). */
     private var selectedLocationId: String? = null
     private var gps: GpsFix? = null
+    /** Receives the photo picker's result for the open profile form; null when no form is waiting. */
+    private var onPhotoPicked: ((Uri) -> Unit)? = null
+    private val pickPhoto = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) onPhotoPicked?.invoke(uri) }
     private val backToLocations = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() { selectedLocationId = null; refresh() }
     }
@@ -127,8 +137,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        bindHeaderAvatar()
         refresh()
     }
+
+    private fun bindHeaderAvatar() = Avatar.bind(findViewById(R.id.btnSettings), ProfileStore.read(this), ProfileStore.picture(this))
 
     override fun onDestroy() {
         super.onDestroy()
@@ -232,24 +245,31 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleOpenRoute(route: RouteRecord) = startActivity(RouteActivity.intent(this, route.captureId, route.routeId))
 
-    /** Settings menu, each row with its current value; reopens after a profile or units change so the values update. */
+    /**
+     * Settings: the climber (picture, name, height and reach) above the app's preferences, each with its current
+     * value. Choosing one closes this dialog; it reopens after a profile or units change so the values update.
+     */
     private fun handleSettings() {
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_settings, null)
+        val profile = ProfileStore.read(this)
         val units = Settings.units(this)
-        val items = arrayOf(
-            "${getString(R.string.profile)}\n${Labels.profile(this, ProfileStore.read(this), units)}",
-            "${getString(R.string.units)}\n${Labels.units(this, units)}",
-            "${getString(R.string.language)}\n${getString(Language.current().label)}",
-        )
-        AlertDialog.Builder(this)
-            .setTitle(R.string.settings)
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> handleEditProfile()
-                    1 -> handleUnits()
-                    2 -> handleLanguage()
-                }
-            }
-            .show()
+        Avatar.bind(view.findViewById(R.id.settingsAvatar), profile, ProfileStore.picture(this))
+        view.findViewById<TextView>(R.id.settingsName).text = profile.username.ifEmpty { getString(R.string.profile_add) }
+        view.findViewById<TextView>(R.id.settingsDetail).text =
+            if (profile.username.isEmpty() && profile.heightCm == null && profile.reachCm == null) getString(R.string.profile_add_hint)
+            else Labels.profileDetail(this, profile, units).ifEmpty { getString(R.string.profile) }
+        bindSetting(view.findViewById(R.id.settingsUnits), R.string.units, Labels.units(this, units))
+        bindSetting(view.findViewById(R.id.settingsLanguage), R.string.language, getString(Language.current().label))
+        val dialog = AlertDialog.Builder(this).setTitle(R.string.settings).setView(view).show()
+        fun open(id: Int, action: () -> Unit) = view.findViewById<View>(id).setOnClickListener { dialog.dismiss(); action() }
+        open(R.id.settingsProfile) { handleEditProfile() }
+        open(R.id.settingsUnits) { handleUnits() }
+        open(R.id.settingsLanguage) { handleLanguage() }
+    }
+
+    private fun bindSetting(row: View, @StringRes title: Int, value: String) {
+        row.findViewById<TextView>(R.id.settingTitle).setText(title)
+        row.findViewById<TextView>(R.id.settingValue).text = value
     }
 
     private fun handleUnits() {
@@ -265,25 +285,58 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /** Username, height and reach, all optional; a length outside [Length.RANGE_CM] keeps the form open with an error on it. */
+    /**
+     * Picture, username, height and reach, all optional. A chosen or removed picture is kept with the form until
+     * Save (Cancel leaves the stored one); a length outside [Length.RANGE_CM] keeps the form open with an error on it.
+     */
     private fun handleEditProfile() {
         val profile = ProfileStore.read(this)
         val units = Settings.units(this)
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_profile, null)
+        val avatar = view.findViewById<ShapeableImageView>(R.id.profileAvatar)
+        val remove = view.findViewById<View>(R.id.btnRemovePhoto)
         val username = view.findViewById<EditText>(R.id.username).apply { setText(profile.username) }
-        val height = LengthField(view.findViewById(R.id.height), units, profile.heightCm)
-        val reach = LengthField(view.findViewById(R.id.reach), units, profile.reachCm)
+        val height = LengthField(view.findViewById(R.id.height), units, profile.heightCm, getString(R.string.profile_height), null)
+        val reach = LengthField(view.findViewById(R.id.reach), units, profile.reachCm, getString(R.string.profile_reach), getString(R.string.profile_reach_hint))
+        var photo = ProfileStore.picture(this)
+        var photoChanged = false
+        fun showPhoto() {
+            Avatar.bind(avatar, Profile(username.text.toString()), photo)
+            remove.visibility = if (photo != null) View.VISIBLE else View.GONE
+        }
+        showPhoto()
+        username.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) { if (photo == null) showPhoto() } // the initial follows the name
+        })
+        onPhotoPicked = { uri ->
+            thread(name = "profile-photo") {
+                val picked = ProfileStore.decodePicture(this, uri)
+                runOnUiThread {
+                    if (picked == null) Toast.makeText(this, R.string.profile_photo_unreadable, Toast.LENGTH_LONG).show()
+                    else { photo = picked; photoChanged = true; showPhoto() }
+                }
+            }
+        }
+        val choose = View.OnClickListener { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+        avatar.setOnClickListener(choose)
+        view.findViewById<View>(R.id.btnChoosePhoto).setOnClickListener(choose)
+        remove.setOnClickListener { photo = null; photoChanged = true; showPhoto() }
         val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.profile)
             .setView(view)
             .setPositiveButton(R.string.save, null)
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+        dialog.setOnDismissListener { onPhotoPicked = null }
         // Set after show(): the builder's listener always dismisses the dialog.
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val error = getString(R.string.length_invalid, Length.format(Length.RANGE_CM.start, units), Length.format(Length.RANGE_CM.endInclusive, units))
             if (false in listOf(height, reach).map { it.validate(error) }) return@setOnClickListener
             ProfileStore.write(this, Profile(username.text.toString().trim(), height.value(), reach.value()))
+            if (photoChanged) ProfileStore.writePicture(this, photo)
+            bindHeaderAvatar()
             dialog.dismiss()
             handleSettings()
         }
@@ -716,18 +769,24 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-/** A height or reach input ([R.layout.field_length]): the cm box, or the feet and inches boxes, by [units]. */
-private class LengthField(root: View, private val units: UnitSystem, private val initialCm: Double?) {
+/**
+ * A height or reach input ([R.layout.field_length]): one cm field, or feet and inches fields, by [units]; [label] on
+ * the first field, [help] (if any) below them.
+ */
+private class LengthField(root: View, private val units: UnitSystem, private val initialCm: Double?, label: String, help: String?) {
     private val metric = units == UnitSystem.METRIC
     private val cm: EditText = root.findViewById(R.id.lengthCm)
     private val feet: EditText = root.findViewById(R.id.lengthFeet)
     private val inches: EditText = root.findViewById(R.id.lengthInches)
     private val boxes = if (metric) listOf(cm) else listOf(feet, inches)
+    private val first: TextInputLayout = root.findViewById(if (metric) R.id.lengthCmLayout else R.id.lengthFeetLayout)
     private val initialText: List<String>
 
     init {
-        listOf(R.id.lengthCm, R.id.unitCm).forEach { root.findViewById<View>(it).visibility = if (metric) View.VISIBLE else View.GONE }
-        listOf(R.id.lengthFeet, R.id.unitFeet, R.id.lengthInches, R.id.unitInches).forEach { root.findViewById<View>(it).visibility = if (metric) View.GONE else View.VISIBLE }
+        root.findViewById<View>(R.id.lengthCmLayout).visibility = if (metric) View.VISIBLE else View.GONE
+        listOf(R.id.lengthFeetLayout, R.id.lengthInchesLayout).forEach { root.findViewById<View>(it).visibility = if (metric) View.GONE else View.VISIBLE }
+        first.hint = label
+        root.findViewById<TextView>(R.id.lengthHelp).apply { text = help; visibility = if (help == null) View.GONE else View.VISIBLE }
         if (initialCm != null) {
             if (metric) cm.setText(initialCm.roundToInt().toString())
             else Length.feetInches(initialCm).let { (f, i) -> feet.setText(f.toString()); inches.setText(i.toString()) }
@@ -747,10 +806,10 @@ private class LengthField(root: View, private val units: UnitSystem, private val
         else -> Length.parseFeetInches(feet.text.toString(), inches.text.toString())
     }
 
-    /** Blank or a length in [Length.RANGE_CM]; otherwise shows [error] on the first box. */
+    /** Blank or a length in [Length.RANGE_CM]; otherwise shows [error] under the first field. */
     fun validate(error: String): Boolean {
         val ok = blank || value() != null
-        boxes[0].error = if (ok) null else error
+        first.error = if (ok) null else error
         return ok
     }
 }

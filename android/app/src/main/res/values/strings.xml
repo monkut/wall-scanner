@@ -27,9 +27,12 @@
     <!-- Settings and profile -->
     <string name="settings">Settings</string>
     <string name="profile">Profile</string>
-    <string name="profile_not_set">Not set</string>
+    <string name="profile_add">Add your profile</string>
+    <string name="profile_add_hint">Name, height, reach and a photo</string>
+    <string name="profile_choose_photo">Choose photo</string>
+    <string name="profile_remove_photo">Remove photo</string>
+    <string name="profile_photo_unreadable">That photo could not be opened. Choose another one.</string>
     <string name="profile_username">Username</string>
-    <string name="profile_username_hint">Name shown in your logbook</string>
     <string name="profile_height">Height</string>
     <string name="profile_reach">Reach</string>
     <string name="profile_reach_hint">Standing, arm raised: floor to fingertips</string>

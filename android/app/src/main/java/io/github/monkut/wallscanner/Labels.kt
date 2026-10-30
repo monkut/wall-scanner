@@ -100,14 +100,13 @@ object Labels {
         }
     )
 
-    /** "monkut, height 178 cm, reach 225 cm" with the lengths in [units], or "Not set". */
-    fun profile(c: Context, profile: Profile, units: UnitSystem): String =
-        if (profile.empty) c.getString(R.string.profile_not_set)
-        else join(
-            c, profile.username,
+    /** "Height 178 cm, reach 225 cm" with the lengths in [units]; "" when neither is set. */
+    fun profileDetail(c: Context, profile: Profile, units: UnitSystem): String =
+        join(
+            c,
             profile.heightCm?.let { c.getString(R.string.profile_height_value, Length.format(it, units)) } ?: "",
             profile.reachCm?.let { c.getString(R.string.profile_reach_value, Length.format(it, units)) } ?: "",
-        )
+        ).replaceFirstChar { it.titlecase() }
 
     /** "top right" / "右上": a cell of the depth-coverage grid (row 0 = top, col 0 = left). */
     fun coverageCell(c: Context, cell: Coverage.Cell): String {

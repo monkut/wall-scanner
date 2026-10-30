@@ -23,6 +23,8 @@
         <item name="materialButtonStyle">@style/Widget.WallScanner.Button</item>
         <item name="materialButtonOutlinedStyle">@style/Widget.WallScanner.Button.Outlined</item>
         <item name="alertDialogTheme">@style/ThemeOverlay.WallScanner.Dialog</item>
+        <!-- Forms in dialogs are inflated with the activity's context, so field styles live here, not in the dialog overlay. -->
+        <item name="textInputStyle">@style/Widget.WallScanner.TextInput</item>
         <item name="textAppearanceHeadline6">@style/TextAppearance.WallScanner.Title</item>
         <item name="textAppearanceSubtitle1">@style/TextAppearance.WallScanner.Body</item>
         <item name="textAppearanceSubtitle2">@style/TextAppearance.WallScanner.Strong</item>
@@ -105,5 +107,36 @@
         <item name="buttonBarPositiveButtonStyle">@style/Widget.WallScanner.DialogButton</item>
         <item name="buttonBarNegativeButtonStyle">@style/Widget.WallScanner.DialogButton</item>
         <item name="buttonBarNeutralButtonStyle">@style/Widget.WallScanner.DialogButton</item>
+    </style>
+
+    <!-- Text fields in forms: outlined, label inside, unit as a suffix, help and errors below the box. -->
+    <style name="Widget.WallScanner.TextInput" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="boxStrokeColor">@color/text_input_stroke</item>
+        <item name="boxCornerRadiusTopStart">8dp</item>
+        <item name="boxCornerRadiusTopEnd">8dp</item>
+        <item name="boxCornerRadiusBottomStart">8dp</item>
+        <item name="boxCornerRadiusBottomEnd">8dp</item>
+        <item name="hintTextColor">@color/tape</item>
+        <item name="android:textColorHint">@color/dust</item>
+        <item name="helperTextTextColor">@color/dust</item>
+        <item name="suffixTextColor">@color/dust</item>
+    </style>
+
+    <!-- A circle: the climber's picture. -->
+    <style name="ShapeAppearance.WallScanner.Circle" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
+    <!-- Text button for a quiet secondary action in a form (Remove photo); its text lines up with an outlined button's above it. -->
+    <style name="Widget.WallScanner.Button.Quiet" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:textColor">@color/dust</item>
+        <item name="android:paddingLeft">16dp</item>
+        <item name="android:paddingRight">16dp</item>
+        <item name="rippleColor">@color/tape_wash</item>
     </style>
 </resources>

@@ -1,53 +1,73 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A height or reach input in the profile form: the cm box (metric) or the feet and inches boxes (imperial). -->
+<!-- A height or reach input in the profile form: one cm field (metric) or feet and inches fields (imperial), with
+     an optional line of help below. The label is set from code and stays on the outline so the units always show. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:gravity="center_vertical">
+    android:orientation="vertical">
 
-    <EditText
-        android:id="@+id/lengthCm"
-        android:layout_width="0dp"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:inputType="numberDecimal"
-        android:importantForAutofill="no" />
+        android:orientation="horizontal">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/lengthCmLayout"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            app:expandedHintEnabled="false"
+            app:suffixText="@string/unit_cm">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/lengthCm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:importantForAutofill="no"
+                android:inputType="numberDecimal" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/lengthFeetLayout"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            app:expandedHintEnabled="false"
+            app:suffixText="@string/unit_ft">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/lengthFeet"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:importantForAutofill="no"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/lengthInchesLayout"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            app:expandedHintEnabled="false"
+            app:suffixText="@string/unit_in">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/lengthInches"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:importantForAutofill="no"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+    </LinearLayout>
 
     <TextView
-        android:id="@+id/unitCm"
-        android:layout_width="wrap_content"
+        android:id="@+id/lengthHelp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="8dp"
-        android:text="@string/unit_cm" />
-
-    <EditText
-        android:id="@+id/lengthFeet"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:inputType="number"
-        android:importantForAutofill="no" />
-
-    <TextView
-        android:id="@+id/unitFeet"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="8dp"
-        android:text="@string/unit_ft" />
-
-    <EditText
-        android:id="@+id/lengthInches"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:inputType="number"
-        android:importantForAutofill="no" />
-
-    <TextView
-        android:id="@+id/unitInches"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:text="@string/unit_in" />
+        android:layout_marginTop="4dp"
+        android:paddingHorizontal="16dp"
+        android:textAppearance="?attr/textAppearanceBody2"
+        android:visibility="gone" />
 </LinearLayout>

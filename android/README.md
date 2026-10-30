@@ -21,8 +21,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ### Home screen: Capture and Logbook modes
 
-A **Capture | Logbook** switch at the top selects the mode; the choice is remembered. The gear button to its
-right opens **Settings** (see below).
+A **Capture | Logbook** switch at the top selects the mode; the choice is remembered. The circle to its right is
+the climber: their photo, else the first letter of their username, else a gear before a profile exists; it opens
+**Settings** (see below).
 
 - **Capture** mode is for scanning and identifying routes: the **New scan** button and the list of captures
   (thumbnail, timestamp, location, set, wall type, hold / route / confirmed counts). Tap a capture to open it in the
@@ -46,9 +47,12 @@ right opens **Settings** (see below).
 
 ### Settings and profile
 
-The gear button lists three settings, each with its current value:
+Settings shows the climber first (picture, name, height and reach), then the app's preferences, each with its current
+value:
 
-- **Profile**: username, height and reach, all optional. Reach is standing reach (floor to fingertips, arm
+- **Profile**: picture, username, height and reach, all optional. **Choose photo** (or tapping the picture) opens
+  the system photo picker (no permission needed); the photo is cropped to a centred 512 px square and stored as
+  `files/profile.jpg` on Save, and Cancel keeps the previous one. Reach is standing reach (floor to fingertips, arm
   raised). Lengths are entered in the chosen units (cm, or feet and inches) and stored in centimetres in
   `files/profile.json` (`io/ProfileStore.kt`); a length outside 50–300 cm keeps the form open with an error.
 - **Units**: Metric (cm) or Imperial (ft, in), the units the profile's lengths are shown and entered in
