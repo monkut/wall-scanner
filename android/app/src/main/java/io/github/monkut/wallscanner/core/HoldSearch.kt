@@ -94,7 +94,7 @@ object TapeMarks {
     private const val PLACARD_MAX_W = 0.25f
     private const val PLACARD_MIN_H = 0.025f
     private const val PLACARD_MAX_H = 0.1f
-    private const val PLACARD_FILL = 0.5f // the grade text leaves holes in the card
+    private const val PLACARD_FILL = 0.5f // of the card's box, its enclosed holes (grade text, a coloured header) counted as card
     private const val PLACARD_GAP = 0.015f // tape is traced from this far above the card, clear of its blurred edge
     private const val MIN_TAPE = 0.02f
     private const val TAPE_COLOR_TOL = 48f // RGB distance from the tape's colour where it leaves the card
@@ -208,7 +208,9 @@ object TapeMarks {
      * Placards are 4-connected [white] components of card size. From [PLACARD_GAP] above each card's top edge,
      * tape is grown upward through off-wall pixels, any colour, up to [MAX_LONG]; each growth that stays
      * tape-wide and ends on a hold marks that hold START and records the tape's median colour on it. [stop]
-     * pixels (holds and hold-sized patches) end the growth; [holdAt] says which hold was reached.
+     * pixels (holds and hold-sized patches) bound the card; only hold outlines ([holdAt]) end the tape, since
+     * tape joins the card's coloured header into a hold-sized patch (Oct 29 5:24 PM: 35 × 13 cm). The tape's
+     * colour, width and [MAX_LONG] bound the growth instead.
      */
     private fun markFromPlacards(holds: List<Hold>, photo: Orthophoto, holdAt: IntArray, stop: BooleanArray, white: BooleanArray, offWall: BooleanArray): Int {
         val w = photo.image.width; val h = photo.image.height
@@ -241,18 +243,18 @@ object TapeMarks {
             }
             val cardW = (x1 - x0 + 1) * photo.px; val cardH = (y1 - y0 + 1) * photo.px
             if (cardW !in PLACARD_MIN_W..PLACARD_MAX_W || cardH !in PLACARD_MIN_H..PLACARD_MAX_H || cardW < cardH) continue
-            if (tail < PLACARD_FILL * (x1 - x0 + 1) * (y1 - y0 + 1)) continue
+            if (tail + enclosed(queue, tail, x0, y0, x1, y1, w) < PLACARD_FILL * (x1 - x0 + 1) * (y1 - y0 + 1)) continue
             val top = y0 - gapPx
             if (top < 0) continue
             val minY = max(0, top - longPx)
             for (sx in x0..x1) {
                 val s = top * w + sx
-                if (tapeSeen[s] || !offWall[s] || white[s] || stop[s]) continue
+                if (tapeSeen[s] || !offWall[s] || white[s] || holdAt[s] >= 0) continue
                 // Tape is one even colour: the run of off-wall pixels where it leaves the card sets it, which keeps
                 // the growth out of the hold's shadow beside it.
                 var th = 0; var tt = 0
                 var ex = sx
-                while (ex <= x1 && offWall[top * w + ex] && !white[top * w + ex] && !stop[top * w + ex]) { tape[tt++] = top * w + ex; tapeSeen[top * w + ex] = true; ex++ }
+                while (ex <= x1 && offWall[top * w + ex] && !white[top * w + ex] && holdAt[top * w + ex] < 0) { tape[tt++] = top * w + ex; tapeSeen[top * w + ex] = true; ex++ }
                 val ref = medianColor(pixels, tape, tt)
                 val contacts = HashMap<Int, Int>()
                 while (th < tt && tt < maxTapePx) {
@@ -263,7 +265,7 @@ object TapeMarks {
                         if (nx !in 0 until w || ny !in minY..top) continue
                         val j = ny * w + nx
                         if (holdAt[j] >= 0) { contacts.merge(holdAt[j], 1, Int::plus); continue }
-                        if (tapeSeen[j] || !offWall[j] || white[j] || stop[j] || colorDistance(pixels[j], ref) > TAPE_COLOR_TOL) continue
+                        if (tapeSeen[j] || !offWall[j] || white[j] || colorDistance(pixels[j], ref) > TAPE_COLOR_TOL) continue
                         tapeSeen[j] = true; tape[tt++] = j
                     }
                 }
@@ -300,6 +302,26 @@ object TapeMarks {
         val axisY = if (Math.abs(sxy) > 1e-9) sxy else (if (sxx >= syy) 0.0 else 1.0)
         val tilt = Math.toDegrees(Math.atan2(Math.abs(axisX), Math.abs(axisY)))
         return floatArrayOf(mx.toFloat(), my.toFloat(), (Math.sqrt(12 * l1) * px).toFloat(), (Math.sqrt(12 * l2) * px).toFloat(), tilt.toFloat())
+    }
+
+    /** Pixels of the box [x0]..[x1] × [y0]..[y1] that the component ([count] indices of [idx]) encloses: not reachable from the box's border without crossing it. */
+    private fun enclosed(idx: IntArray, count: Int, x0: Int, y0: Int, x1: Int, y1: Int, w: Int): Int {
+        val bw = x1 - x0 + 1; val bh = y1 - y0 + 1
+        val card = BooleanArray(bw * bh)
+        for (q in 0 until count) card[(idx[q] / w - y0) * bw + idx[q] % w - x0] = true
+        val outside = BooleanArray(bw * bh)
+        val stack = ArrayDeque<Int>()
+        for (i in 0 until bw * bh) {
+            val x = i % bw; val y = i / bw
+            if ((x == 0 || y == 0 || x == bw - 1 || y == bh - 1) && !card[i]) { outside[i] = true; stack.add(i) }
+        }
+        while (stack.isNotEmpty()) {
+            val i = stack.removeLast(); val x = i % bw; val y = i / bw
+            for (j in intArrayOf(if (x > 0) i - 1 else -1, if (x < bw - 1) i + 1 else -1, if (y > 0) i - bw else -1, if (y < bh - 1) i + bw else -1)) {
+                if (j >= 0 && !card[j] && !outside[j]) { outside[j] = true; stack.add(j) }
+            }
+        }
+        return (0 until bw * bh).count { !card[it] && !outside[it] }
     }
 
     /** Per-channel median of [count] pixels, as 0xRRGGBB. */
