@@ -81,10 +81,12 @@ object ScenePipeline {
             .getOrNull()
         log(if (refinedBySam != null) "hold outlines: ${refinedBySam.redrawn} of ${pruned.size} redrawn by SAM, ${refinedBySam.merged} pieces merged into the hold around them, ${refinedBySam.added} model holds added where the outlines no longer cover them, ${refinedBySam.dropped} without contrast to the wall dropped (${System.currentTimeMillis() - t4} ms, encoder ${refinedBySam.encodeMs} ms)" else "hold outlines: SAM ${if (assets == null) "no assets" else HoldSam.loadError ?: "failed"}")
         val outlined = refinedBySam?.holds ?: pruned
-        val holds = runCatching { HoldMerge.byDepth(outlined, photo, result.frame) }
+        val joined = runCatching { HoldMerge.byDepth(outlined, photo, result.frame) }
             .onFailure { log("hold depth merge failed: $it") }
             .getOrDefault(outlined)
-        log("hold depth merge: ${outlined.size - holds.size} pieces joined to a touching hold with no depth valley between them")
+        log("hold depth merge: ${outlined.size - joined.size} pieces joined to a touching hold with no depth valley between them")
+        val holds = HoldMerge.dropStrips(joined)
+        if (holds.size != joined.size) log("hold strips: ${joined.size - holds.size} dropped (under 3 cm across, 6× as long: a column or panel edge)")
         val starts = runCatching { TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent) }
             .onFailure { log("tape marks failed: $it") }
             .getOrDefault(0)

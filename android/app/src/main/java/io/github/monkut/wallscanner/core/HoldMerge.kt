@@ -17,6 +17,8 @@ object HoldMerge {
     private const val MIN_SUPPORT = 0.5f  // … or the model's masks cover this share of it
     private const val MAX_WALL = 0.5f     // a hold this much the wall's colour is bare wall unless vouched for
     private const val MAX_TAPE = 0.5f     // a hold this much covered by the model's tape strips is tape
+    private const val STRIP_MAX_WIDTH = 0.03f // an outline narrower than this …
+    private const val STRIP_MIN_ASPECT = 6f   // … and this many times as long is a strip, not a hold
 
     class Merged(val holds: List<Hold>, val split: Int, val added: Int)
 
@@ -101,6 +103,17 @@ object HoldMerge {
             }
             edge < EDGE_SHARE * px.size && px.count { wall.matches(patches.hue[it], patches.sat[it], patches.value[it]) } < MAX_WALL * px.size
         }
+    }
+
+    /**
+     * [holds] without strips: outlines under [STRIP_MAX_WIDTH] across and at least [STRIP_MIN_ASPECT] times as
+     * long, the edge of a column or panel past the wall (2.5 × 53 cm on Oct 29 5:22 PM). Real holds in the four
+     * references are at least 4 cm across and at most 4.7 times as long as wide. Runs on the final outlines:
+     * SAM can redraw a hold into a strip after [prune].
+     */
+    fun dropStrips(holds: List<Hold>): List<Hold> = holds.filter { hold ->
+        val thin = minOf(hold.width, hold.tall)
+        thin >= STRIP_MAX_WIDTH || maxOf(hold.width, hold.tall) < STRIP_MIN_ASPECT * thin
     }
 
     private const val DEPTH_MAX_DE = 25f      // pieces of one hold are about one colour (CIE ΔE of the medians) …
