@@ -94,6 +94,30 @@ class HoldSearchTest {
         assertEquals(null, holds[2].tape)
     }
 
+    @Test
+    fun placardWithAColouredHeaderStillLeadsItsTapeToTheHold() {
+        // Oct 29 5:24 PM: a 9 × 8 cm card whose purple header leaves under half of it white, and purple tape
+        // from its top that joins the header into one hold-sized colour patch.
+        val card = 0xffF4F2EE.toInt()
+        val green = 0xff5D783C.toInt()
+        val paint: (Float, Float) -> Int? = { u, v ->
+            when {
+                hypot(u - 1.0f, v - 1.45f) <= 0.05f -> green                                // the start hold
+                u in 0.99f..1.01f && v in 1.28f..1.40f -> purple                           // 2 × 12 cm tape up to it
+                u in 0.965f..1.035f && v in 1.215f..1.27f -> purple                        // the card's header
+                u in 0.985f..1.015f && v in 1.20f..1.215f -> 0xff202020.toInt()            // grade text
+                u in 0.955f..1.045f && v in 1.19f..1.28f -> card                           // 9 × 9 cm placard
+                else -> null
+            }
+        }
+        val photo = photo(paint)
+        val tanWall = WallColor(0xC9, 0xB4, 0x96, 36f, 0.25f, 0.1f, 0.6f, 0.95f)
+        val holds = listOf(seedHold(1, 1.0f, 1.45f, green, 0.1f))
+        assertEquals(1, TapeMarks.markStarts(holds, photo, tanWall, ColorPatches.forHolds(photo, tanWall), extent))
+        assertEquals(HoldRole.START, holds[0].role)
+        assertEquals(purple and 0xffffff, holds[0].tape)
+    }
+
     private fun seedHold(id: Int, u: Float, v: Float, color: Int, size: Float = 0.2f): Hold =
         Hold(id, u, v, 0f, u, v, size, size, 0.05f, color shr 16 and 0xff, color shr 8 and 0xff, color and 0xff, 100, Raster.ellipse(u, v, size, size))
 

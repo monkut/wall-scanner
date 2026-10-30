@@ -121,4 +121,13 @@ class HoldMergeTest {
         val (blue, two) = twoPieces(0xff3A6EA5.toInt()) { u -> 0.10f - 0.1f * kotlin.math.abs(u - 0.5f) } // a ridge, but two colours
         assertEquals(listOf(1, 2), HoldMerge.byDepth(two, blue, frame).map { it.id })
     }
+
+    @Test
+    fun stripsAreDroppedRealHoldsStay() {
+        val edge = hold(1, 0.1f, 0.5f, 0.025f, 0.53f)  // column edge, Oct 29 5:22 PM
+        val crimp = hold(2, 0.5f, 0.5f, 0.04f, 0.10f)  // thinnest reference hold
+        val rail = hold(3, 0.5f, 0.3f, 0.45f, 0.095f)  // most elongated reference hold (4.7×)
+        val chip = hold(4, 0.8f, 0.5f, 0.02f, 0.03f)   // small, not elongated
+        assertEquals(listOf(2, 3, 4), HoldMerge.dropStrips(listOf(edge, crimp, rail, chip)).map { it.id })
+    }
 }

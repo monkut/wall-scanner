@@ -76,6 +76,10 @@ object Tuning {
     const val MIN_ROUTE_VALUE = 0.15f
     const val HUE_GAP_DEG = 30f
     const val MAX_ROUTE_HUE_SPAN = 35f // a hue cluster wider than this (red chained to orange) splits at its largest gap
+    const val PALE_MIN_SAT = 0.2f // a pale hold (under MIN_ROUTE_SATURATION) may join a hue cluster from this saturation …
+    const val PALE_MIN_CHROMA = 0.1f // … when saturation × value shows a hue (a dark hold's hue is noise) …
+    const val PALE_HUE_TOL = 15f // … within this of the cluster's hue range …
+    const val PALE_WALL_HUE_TOL = 20f // … and not this close to a coloured wall's hue (bare wall bled into the hold)
     const val MIN_ROUTE_HOLDS = 2
     const val MAX_ROUTE_HOLD_GAP = 1.4f // circuit walls: holds of one colour further apart than this are different problems
 }

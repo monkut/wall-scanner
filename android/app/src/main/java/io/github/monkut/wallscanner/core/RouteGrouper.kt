@@ -10,21 +10,28 @@ class Route(val id: Int, var name: String, val r: Int, val g: Int, val b: Int, v
 
 /**
  * Groups holds into candidate routes by color: circular hue clusters for saturated holds, value bands otherwise.
+ * Pale holds that still show a hue join the nearest hue cluster (see [attachPale]).
  * With [splitByPosition] (circuit walls) each colour group is further split into spatially connected problems.
  * Holds the colour of the [wall] (depth streaks at mats and edges, or wall seen through a sparse hold) stay
  * unassigned instead of bridging unrelated hues into one route.
  */
 object RouteGrouper {
+    private const val BLACK_BELOW = 0.25f
+    private const val WHITE_FROM = 0.65f
+
     fun group(holds: List<Hold>, splitByPosition: Boolean = false, wall: WallColor? = null): List<Route> {
         val candidates = holds.filter { wall?.matches(it.hsv) != true }
         val chromatic = candidates.filter { it.sat >= Tuning.MIN_ROUTE_SATURATION && it.value >= Tuning.MIN_ROUTE_VALUE }
         val achromatic = candidates.filter { it !in chromatic }
 
         val groups = ArrayList<List<Hold>>()
-        groups.addAll(hueClusters(chromatic))
-        val black = achromatic.filter { it.value < 0.25f }
-        val white = achromatic.filter { it.value >= 0.65f }
-        val gray = achromatic.filter { it !in black && it !in white }
+        val clusters = hueClusters(chromatic).map { it.toMutableList() }
+        groups.addAll(clusters)
+        val attached = attachPale(clusters, achromatic, wall)
+        val rest = achromatic.filter { it !in attached }
+        val black = rest.filter { it.value < BLACK_BELOW }
+        val white = rest.filter { it.value >= WHITE_FROM }
+        val gray = rest.filter { it !in black && it !in white }
         if (black.isNotEmpty()) groups.add(black)
         if (white.isNotEmpty()) groups.add(white)
         if (gray.isNotEmpty()) groups.add(gray)
@@ -35,7 +42,7 @@ object RouteGrouper {
                 colorGroup === black -> "Black"
                 colorGroup === white -> "White"
                 colorGroup === gray -> "Gray"
-                else -> ColorUtil.hueName(meanHue(colorGroup))
+                else -> ColorUtil.hueName(meanHue(colorGroup.filter { it in chromatic }))
             }
             val problems = if (splitByPosition) connectedProblems(colorGroup) else listOf(colorGroup)
             for (members in problems) {
@@ -55,6 +62,35 @@ object RouteGrouper {
         disambiguateNames(routes)
         return routes
     }
+
+    /**
+     * Adds pale holds (saturation under [Tuning.MIN_ROUTE_SATURATION]) to the hue cluster whose hue range is
+     * nearest, within [Tuning.PALE_HUE_TOL]; returns the holds added. Warm gym light washes greens and purples
+     * out to 0.2–0.3 saturation, which left them in Gray. Only clusters of at least [Tuning.MIN_ROUTE_HOLDS]
+     * saturated holds take them, so a pale hold never starts a route (a lower route threshold only added noise
+     * routes). A hold stays out below [Tuning.PALE_MIN_SAT] or [Tuning.PALE_MIN_CHROMA] (dark holds: hue is
+     * noise), in the white band (pale routes are white), or within [Tuning.PALE_WALL_HUE_TOL] of a coloured
+     * wall's hue.
+     */
+    private fun attachPale(clusters: List<MutableList<Hold>>, holds: List<Hold>, wall: WallColor?): Set<Hold> {
+        // Ranges are taken before any hold is added; clusters are in ascending circular hue order.
+        val targets = clusters.filter { it.size >= Tuning.MIN_ROUTE_HOLDS }.map { Triple(it, it.first().hue, it.last().hue) }
+        val wallHue = wall?.takeIf { it.sat >= Tuning.WALL_GREY_SAT }?.hue
+        val attached = HashSet<Hold>()
+        for (hold in holds) {
+            if (hold.sat < Tuning.PALE_MIN_SAT || hold.sat * hold.value < Tuning.PALE_MIN_CHROMA || hold.value >= WHITE_FROM) continue
+            if (wallHue != null && ColorUtil.hueDistance(hold.hue, wallHue) <= Tuning.PALE_WALL_HUE_TOL) continue
+            val (cluster, distance) = targets.map { (c, lo, hi) -> c to distanceToRange(hold.hue, lo, hi) }.minByOrNull { it.second } ?: continue
+            if (distance > Tuning.PALE_HUE_TOL) continue
+            cluster.add(hold)
+            attached.add(hold)
+        }
+        return attached
+    }
+
+    /** 0 inside the circular hue range [lo]..[hi], otherwise the distance to its nearer end. */
+    private fun distanceToRange(hue: Float, lo: Float, hi: Float): Float =
+        if (circularGap(lo, hue) <= circularGap(lo, hi)) 0f else minOf(circularGap(hue, lo), circularGap(hi, hue))
 
     /** Splits holds into groups whose members chain together within [Tuning.MAX_ROUTE_HOLD_GAP] in the wall plane. */
     private fun connectedProblems(holds: List<Hold>): List<List<Hold>> {
