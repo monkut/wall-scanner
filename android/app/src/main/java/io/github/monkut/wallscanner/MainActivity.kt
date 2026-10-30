@@ -22,7 +22,9 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import io.github.monkut.wallscanner.core.GradeSystem
+import io.github.monkut.wallscanner.core.Length
 import io.github.monkut.wallscanner.core.RouteDefinition
+import io.github.monkut.wallscanner.core.UnitSystem
 import io.github.monkut.wallscanner.io.CaptureStore
 import androidx.activity.OnBackPressedCallback
 import androidx.annotation.StringRes
@@ -30,6 +32,8 @@ import io.github.monkut.wallscanner.io.GeoPoint
 import io.github.monkut.wallscanner.io.Location
 import io.github.monkut.wallscanner.io.LocationKind
 import io.github.monkut.wallscanner.io.LocationStore
+import io.github.monkut.wallscanner.io.Profile
+import io.github.monkut.wallscanner.io.ProfileStore
 import io.github.monkut.wallscanner.io.RouteRecord
 import io.github.monkut.wallscanner.io.RouteStore
 import io.github.monkut.wallscanner.io.SendLog
@@ -42,6 +46,7 @@ import io.github.monkut.wallscanner.viewer.ViewerActivity
 import org.json.JSONObject
 import java.io.File
 import kotlin.concurrent.thread
+import kotlin.math.roundToInt
 
 /**
  * Home screen with a mode switch. **Capture** mode: New scan plus the capture list (scan sessions opened in
@@ -50,7 +55,8 @@ import kotlin.concurrent.thread
  * (name, kind, grade scale, coordinates, delete); at a gym the routes are grouped by set (the routes on the
  * wall between two resets), each under a header with **Edit** (rename, retire). New scan asks for the location
  * (a registered gym or outdoor area, or a new one), at a gym the set (an open one or a new one), and then the
- * wall type. A language button switches the app language.
+ * wall type. The Settings button opens the profile (username, height, reach), the units its lengths are shown
+ * in, and the app language.
  */
 class MainActivity : AppCompatActivity() {
     private lateinit var list: ListView
@@ -59,7 +65,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var summary: TextView
     /** The screen's one primary action: New scan in Capture mode, Add location on the Logbook's locations level. */
     private lateinit var btnPrimary: MaterialButton
-    private lateinit var btnLanguage: MaterialButton
     private lateinit var mode: MaterialButtonToggleGroup
     private var captures: List<File> = emptyList()
     private var routeRows: List<RouteRow> = emptyList()
@@ -98,10 +103,8 @@ class MainActivity : AppCompatActivity() {
         heading = findViewById(R.id.heading)
         summary = findViewById(R.id.summary)
         btnPrimary = findViewById(R.id.btnPrimary)
-        btnLanguage = findViewById(R.id.btnLanguage)
         mode = findViewById(R.id.mode)
-        btnLanguage.setText(Language.current().short)
-        btnLanguage.setOnClickListener { handleLanguage() }
+        findViewById<View>(R.id.btnSettings).setOnClickListener { handleSettings() }
         mode.check(if (getPreferences(MODE_PRIVATE).getBoolean(PREF_MODE, false)) R.id.modeLogbook else R.id.modeCapture)
         mode.addOnButtonCheckedListener { _, _, checked ->
             if (!checked) return@addOnButtonCheckedListener
@@ -228,6 +231,63 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleOpenRoute(route: RouteRecord) = startActivity(RouteActivity.intent(this, route.captureId, route.routeId))
+
+    /** Settings menu, each row with its current value; reopens after a profile or units change so the values update. */
+    private fun handleSettings() {
+        val units = Settings.units(this)
+        val items = arrayOf(
+            "${getString(R.string.profile)}\n${Labels.profile(this, ProfileStore.read(this), units)}",
+            "${getString(R.string.units)}\n${Labels.units(this, units)}",
+            "${getString(R.string.language)}\n${getString(Language.current().label)}",
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> handleEditProfile()
+                    1 -> handleUnits()
+                    2 -> handleLanguage()
+                }
+            }
+            .show()
+    }
+
+    private fun handleUnits() {
+        val choices = UnitSystem.entries
+        AlertDialog.Builder(this)
+            .setTitle(R.string.units)
+            .setSingleChoiceItems(choices.map { Labels.units(this, it) }.toTypedArray(), choices.indexOf(Settings.units(this))) { dialog, which ->
+                dialog.dismiss()
+                Settings.setUnits(this, choices[which])
+                handleSettings()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Username, height and reach, all optional; a length outside [Length.RANGE_CM] keeps the form open with an error on it. */
+    private fun handleEditProfile() {
+        val profile = ProfileStore.read(this)
+        val units = Settings.units(this)
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_profile, null)
+        val username = view.findViewById<EditText>(R.id.username).apply { setText(profile.username) }
+        val height = LengthField(view.findViewById(R.id.height), units, profile.heightCm)
+        val reach = LengthField(view.findViewById(R.id.reach), units, profile.reachCm)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.profile)
+            .setView(view)
+            .setPositiveButton(R.string.save, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+        // Set after show(): the builder's listener always dismisses the dialog.
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val error = getString(R.string.length_invalid, Length.format(Length.RANGE_CM.start, units), Length.format(Length.RANGE_CM.endInclusive, units))
+            if (false in listOf(height, reach).map { it.validate(error) }) return@setOnClickListener
+            ProfileStore.write(this, Profile(username.text.toString().trim(), height.value(), reach.value()))
+            dialog.dismiss()
+            handleSettings()
+        }
+    }
 
     private fun handleLanguage() {
         val languages = Language.entries
@@ -653,5 +713,44 @@ class MainActivity : AppCompatActivity() {
             bindRow(view, title, subtitle, meta, thumbnails[route.captureId], route.color)
             return view
         }
+    }
+}
+
+/** A height or reach input ([R.layout.field_length]): the cm box, or the feet and inches boxes, by [units]. */
+private class LengthField(root: View, private val units: UnitSystem, private val initialCm: Double?) {
+    private val metric = units == UnitSystem.METRIC
+    private val cm: EditText = root.findViewById(R.id.lengthCm)
+    private val feet: EditText = root.findViewById(R.id.lengthFeet)
+    private val inches: EditText = root.findViewById(R.id.lengthInches)
+    private val boxes = if (metric) listOf(cm) else listOf(feet, inches)
+    private val initialText: List<String>
+
+    init {
+        listOf(R.id.lengthCm, R.id.unitCm).forEach { root.findViewById<View>(it).visibility = if (metric) View.VISIBLE else View.GONE }
+        listOf(R.id.lengthFeet, R.id.unitFeet, R.id.lengthInches, R.id.unitInches).forEach { root.findViewById<View>(it).visibility = if (metric) View.GONE else View.VISIBLE }
+        if (initialCm != null) {
+            if (metric) cm.setText(initialCm.roundToInt().toString())
+            else Length.feetInches(initialCm).let { (f, i) -> feet.setText(f.toString()); inches.setText(i.toString()) }
+        }
+        initialText = text()
+    }
+
+    private fun text() = boxes.map { it.text.toString().trim() }
+
+    private val blank get() = text().all { it.isEmpty() }
+
+    /** Centimetres entered, null when blank or invalid; untouched boxes keep [initialCm] exactly (no rounding drift through the shown units). */
+    fun value(): Double? = when {
+        text() == initialText -> initialCm
+        blank -> null
+        metric -> Length.parseCm(cm.text.toString())
+        else -> Length.parseFeetInches(feet.text.toString(), inches.text.toString())
+    }
+
+    /** Blank or a length in [Length.RANGE_CM]; otherwise shows [error] on the first box. */
+    fun validate(error: String): Boolean {
+        val ok = blank || value() != null
+        boxes[0].error = if (ok) null else error
+        return ok
     }
 }

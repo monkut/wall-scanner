@@ -4,9 +4,12 @@ import android.content.Context
 import androidx.annotation.PluralsRes
 import io.github.monkut.wallscanner.core.Coverage
 import io.github.monkut.wallscanner.core.GradeSystem
+import io.github.monkut.wallscanner.core.Length
 import io.github.monkut.wallscanner.core.RouteDefinition
+import io.github.monkut.wallscanner.core.UnitSystem
 import io.github.monkut.wallscanner.io.Location
 import io.github.monkut.wallscanner.io.LocationKind
+import io.github.monkut.wallscanner.io.Profile
 import io.github.monkut.wallscanner.io.SendResult
 import io.github.monkut.wallscanner.io.WallSet
 import java.time.LocalDateTime
@@ -89,6 +92,22 @@ object Labels {
     fun plural(c: Context, @PluralsRes id: Int, n: Int): String = c.resources.getQuantityString(id, n, n)
 
     fun join(c: Context, vararg parts: String): String = parts.filter { it.isNotEmpty() }.joinToString(c.getString(R.string.list_separator))
+
+    fun units(c: Context, units: UnitSystem): String = c.getString(
+        when (units) {
+            UnitSystem.METRIC -> R.string.units_metric
+            UnitSystem.IMPERIAL -> R.string.units_imperial
+        }
+    )
+
+    /** "monkut, height 178 cm, reach 225 cm" with the lengths in [units], or "Not set". */
+    fun profile(c: Context, profile: Profile, units: UnitSystem): String =
+        if (profile.empty) c.getString(R.string.profile_not_set)
+        else join(
+            c, profile.username,
+            profile.heightCm?.let { c.getString(R.string.profile_height_value, Length.format(it, units)) } ?: "",
+            profile.reachCm?.let { c.getString(R.string.profile_reach_value, Length.format(it, units)) } ?: "",
+        )
 
     /** "top right" / "右上": a cell of the depth-coverage grid (row 0 = top, col 0 = left). */
     fun coverageCell(c: Context, cell: Coverage.Cell): String {

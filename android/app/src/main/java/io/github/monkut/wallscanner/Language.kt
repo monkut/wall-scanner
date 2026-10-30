@@ -8,10 +8,10 @@ import androidx.core.os.LocaleListCompat
  * App language, independent of the device language. Stored by AppCompat (per-app locales on Android 13+,
  * `AppLocalesMetadataHolderService` below that) and applied to every activity and the viewer page.
  */
-enum class Language(val tag: String, @StringRes val label: Int, @StringRes val short: Int) {
-    EN_US("en-US", R.string.language_en_us, R.string.language_short_en_us),
-    EN_GB("en-GB", R.string.language_en_gb, R.string.language_short_en_gb),
-    JA("ja", R.string.language_ja, R.string.language_short_ja);
+enum class Language(val tag: String, @StringRes val label: Int) {
+    EN_US("en-US", R.string.language_en_us),
+    EN_GB("en-GB", R.string.language_en_gb),
+    JA("ja", R.string.language_ja);
 
     companion object {
         val DEFAULT = EN_US

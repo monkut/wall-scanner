@@ -30,9 +30,9 @@ Install the newer APK the same way, over the installed app. Scans, routes, sends
 
 If Android says **App not installed** or **package conflicts with an existing package**, the installed copy was
 signed with a different key (for example a development build installed from a computer). Uninstalling it deletes
-all scans and logs on the phone, so first export what you want to keep: in **Capture**, long-press each scan →
-**Share** (the zip holds the scan and its sends; climb videos are shared one by one from playback). Then
-uninstall and install the release.
+all scans and logs on the phone. The app has no import: an export is an off-phone copy and cannot be loaded back
+into the app. To keep a copy, in **Capture** long-press each scan → **Share** (the zip holds the scan and its
+sends; climb videos are shared one by one from playback). Then uninstall and install the release.
 
 ## Check the download (optional)
 

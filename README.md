@@ -20,10 +20,16 @@ Releases are built by `.github/workflows/release.yml` (pull requests run the tes
 | Scan | Live point overlay; Start / Pause / Resume / Finish; the screen stays on; every tracking interval is an anchored segment that is snapped onto the rest at Finish. |
 | Processing (on device) | Wall plane fit → holds as bumps in a median relief map of the wall (above the plane, or above the local rock surface for outdoor) → routes by the chosen marking type (colour groups minus the wall's own colour, colour + position for circuits, none for tape / free / board / outdoor). |
 | Capture viewer | 3D point cloud with hold boxes; rename, grade (YDS, Japanese Q/D, V-scale, Font), create or delete routes; tap holds to edit membership; mark roles (start, hand, foot, zone, finish); **Confirm** a route once identified. |
+| Gym sets | A gym's routes grouped by set (the routes between two wall resets); retire a set when the wall is reset, its routes and sends stay. |
 | Logbook | Confirmed routes grouped by location with a progress line (routes, sends, flashes, locations); per route a send log (flash / send / attempt, tries, note). |
+| Climb video | Film attempts per route (hands-free start/end by pose, or one at a time); playback with trim, top / fall, share, delete (`CLIMB-VIDEO.md`). |
+| Profile | Username, height and reach; Settings chooses metric (cm) or imperial (ft, in). |
 | Language | English (US) by default, English (UK) and Japanese selectable in the app; dates follow the language and are JST. |
 | Diagnostics | Per-capture `scan.log` with button taps, lifecycle pauses, tracking changes, segment snaps and processing results; crash traces; **Share** zips the whole capture. |
 | Keyframes | Sparse 1080p JPEG keyframes with poses for image-based tape / placard detection (`tools/tape.py`, prototype). |
+
+Not planned: importing data into the app (backups, shared capture zips). **Share** zips and `adb` pulls are
+one-way copies for keeping and offline analysis.
 
 Usage, screen by screen, is in [`android/README.md`](android/README.md).
 
