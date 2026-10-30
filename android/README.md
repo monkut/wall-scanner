@@ -51,7 +51,8 @@ Settings shows the climber first (picture, name, height and reach), then the app
 value:
 
 - **Profile**: picture, username, height and reach, all optional. **Choose photo** (or tapping the picture) opens
-  the system photo picker (no permission needed); the photo is cropped to a centred 512 px square and stored as
+  the system photo picker (no permission needed); the photo is decoded at no more than 4 megapixels, cropped to a
+  centred 512 px square (JPEG, typically 40–120 KB) and stored as
   `files/profile.jpg` on Save, and Cancel keeps the previous one. Reach is standing reach (floor to fingertips, arm
   raised). Lengths are entered in the chosen units (cm, or feet and inches) and stored in centimetres in
   `files/profile.json` (`io/ProfileStore.kt`); a length outside 50–300 cm keeps the form open with an error.

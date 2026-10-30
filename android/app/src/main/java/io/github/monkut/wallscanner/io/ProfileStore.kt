@@ -32,6 +32,7 @@ object ProfileStore {
     private const val FILE = "profile.json"
     private const val PICTURE = "profile.jpg"
     private const val PICTURE_PX = 512
+    private const val MAX_DECODE_PIXELS = 4_000_000L // ~16 MB while decoding, whatever the source
 
     fun read(context: Context): Profile {
         val file = File(context.filesDir, FILE)
@@ -50,10 +51,13 @@ object ProfileStore {
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
     }
 
-    /** The image at [uri] as a centred [PICTURE_PX] square, upright; null when it cannot be decoded. Slow: call off the main thread. */
+    /**
+     * The image at [uri] as a centred [PICTURE_PX] square, upright; null when it cannot be decoded. At most
+     * [MAX_DECODE_PIXELS] are decoded (see [Crop.sampleSize]). Slow: call off the main thread.
+     */
     fun decodePicture(context: Context, uri: Uri): Bitmap? = runCatching {
         val decoded = ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
-            decoder.setTargetSampleSize(maxOf(1, minOf(info.size.width, info.size.height) / PICTURE_PX))
+            decoder.setTargetSampleSize(Crop.sampleSize(info.size.width, info.size.height, PICTURE_PX, MAX_DECODE_PIXELS))
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
         }
         val (left, top, side) = Crop.centreSquare(decoded.width, decoded.height)
