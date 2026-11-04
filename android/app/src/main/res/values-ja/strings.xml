@@ -244,7 +244,7 @@
     <string name="face_mask_climber">自分の顔</string>
     <string name="face_mask_bystanders">周囲の人の顔</string>
     <string name="face_masks_off">オフ</string>
-    <string name="face_masks_hint">撮影中に検出した顔を再生時と共有時に隠します。録画そのものは撮影したまま、この端末にだけ残ります。スキャンの写真では周囲の人の顔を隠します。</string>
+    <string name="face_masks_hint">再生時と共有時にマスクを表示します。録画そのものは撮影したまま、この端末にだけ残ります。スキャンの写真でも周囲の人の顔を隠します。</string>
     <string name="masking_faces">顔を隠しています… %1$d%%</string>
     <string name="masking_faces_wait">顔を隠しています…</string>
     <string name="trim">トリム</string>
