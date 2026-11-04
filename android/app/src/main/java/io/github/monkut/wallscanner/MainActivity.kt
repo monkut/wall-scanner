@@ -108,6 +108,9 @@ class MainActivity : AppCompatActivity() {
         const val PREF_MODE = "mode"
         val NO_SET = WallSet("", "", "")
         val NO_WALL = Wall("", "")
+        /** Logbook header sizes: location and wall headers, and set headers nested under a wall (item_header.xml sets 18sp). */
+        const val HEADER_SP = 18f
+        const val SUBHEADER_SP = 16f
     }
 
     private val logbook get() = mode.checkedButtonId == R.id.modeLogbook
@@ -857,12 +860,13 @@ class MainActivity : AppCompatActivity() {
         val c = this@MainActivity
         val real = wall.id.isNotEmpty()
         view.setPaddingRelative(0, view.paddingTop, view.paddingEnd, view.paddingBottom)
-        view.findViewById<TextView>(R.id.header).text = if (real) wall.name else getString(R.string.no_wall)
-        view.findViewById<TextView>(R.id.headerDetail).text = Labels.join(c, *location.sets.filter { it.active && it.covers(wall.id) }.map { it.name }.toTypedArray())
+        view.findViewById<TextView>(R.id.header).apply { text = if (real) wall.name else getString(R.string.no_wall); textSize = HEADER_SP }
+        // The open sets on this wall, newest first; nothing for No wall, whose routes are under their own set headers.
+        view.findViewById<TextView>(R.id.headerDetail).text = if (!real) "" else Labels.join(c, *WallSet.ordered(location.sets.filter { it.active && it.covers(wall.id) }).map { it.name }.toTypedArray())
         view.findViewById<TextView>(R.id.headerCounts).apply { text = Labels.plural(c, R.plurals.routes_count, routes); visibility = View.VISIBLE }
         view.findViewById<View>(R.id.chevron).visibility = View.GONE
         view.findViewById<View>(R.id.btnEditLocation).apply {
-            visibility = if (real) View.VISIBLE else View.GONE
+            visibility = if (real) View.VISIBLE else View.INVISIBLE // keeps the count aligned with the other headers
             setOnClickListener { handleEditWall(location, wall) }
         }
     }
@@ -880,7 +884,8 @@ class MainActivity : AppCompatActivity() {
         val real = set.id.isNotEmpty()
         val indent = if (location.walls.isEmpty()) 0 else (16 * resources.displayMetrics.density).toInt()
         view.setPaddingRelative(indent, view.paddingTop, view.paddingEnd, view.paddingBottom)
-        view.findViewById<TextView>(R.id.header).text = if (real) Labels.set(c, set) else getString(R.string.no_set)
+        // Under a wall header the set is one level down: indented and a step smaller.
+        view.findViewById<TextView>(R.id.header).apply { text = if (real) Labels.set(c, set) else getString(R.string.no_set); textSize = if (indent > 0) SUBHEADER_SP else HEADER_SP }
         view.findViewById<TextView>(R.id.headerDetail).text = if (!real) "" else Labels.join(
             c, getString(R.string.set_since, Labels.isoDate(c, set.createdAt)),
             set.retiredAt?.let { getString(R.string.set_retired_on, Labels.isoDate(c, it)) } ?: "",
@@ -889,7 +894,7 @@ class MainActivity : AppCompatActivity() {
         view.findViewById<TextView>(R.id.headerCounts).apply { text = Labels.plural(c, R.plurals.routes_count, routes); visibility = View.VISIBLE }
         view.findViewById<View>(R.id.chevron).visibility = View.GONE
         view.findViewById<View>(R.id.btnEditLocation).apply {
-            visibility = if (real) View.VISIBLE else View.GONE
+            visibility = if (real) View.VISIBLE else View.INVISIBLE // keeps the count aligned with the other headers
             setOnClickListener { handleEditSet(location, set) }
         }
     }
