@@ -66,11 +66,16 @@ value:
   frame whole and in 2 × 2 tiles); the face on the pose's head is the climber's, every other face a bystander's,
   and a head the face model missed (back turned, too far) is masked from the pose alone. The boxes are saved
   beside each video as `<name>.faces.json` (`io/FaceStore.kt`); the recording itself is never changed and never
-  leaves the phone unmasked. Playback draws the masks (solid panel-colour pills, `climbs/FaceMaskView.kt`) and
-  Share re-encodes the trimmed range with them burnt in (`climbs/MaskedExport.kt`, media3 Transformer, progress
-  shown; a clip with nothing to mask is still copied without re-encoding). A scan with the bystander mask on
+  leaves the phone unmasked. Playback draws the masks (solid panel-colour pills, `climbs/ClipOverlayView.kt`) and
+  Share re-encodes the trimmed range with them burnt in (`climbs/OverlayExport.kt`, media3 Transformer, progress
+  shown; a clip with nothing to draw is still copied without re-encoding). A scan with the bystander mask on
   pixelates faces in its keyframes at Finish (`io/KeyframeFaces.kt`), before the orthophoto is built. Switching a
   mask on later masks clips filmed with it on; clips filmed with both off have no face data.
+- **Caption** (issue #13): the route (name and grade) over the gym, wall and set, written in a corner of climb
+  videos on playback and in shared copies, on by default. **Corner** picks upper or lower, left or right (default
+  lower left); **Font** picks the app's Atkinson Hyperlegible or a system family (sans, condensed, serif,
+  monospace, casual, handwriting), each shown in itself. Drawn by `climbs/CaptionPainter.kt` on the same overlay
+  as the face masks (CLIMB-VIDEO.md § Caption).
 - **Units**: Metric (cm) or Imperial (ft, in), the units the profile's lengths are shown and entered in
   (`Settings.kt`, "settings" shared preferences; default metric). Switching units does not change stored values.
 - **Language**: see below.

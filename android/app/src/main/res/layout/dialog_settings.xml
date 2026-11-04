@@ -68,6 +68,10 @@
         layout="@layout/item_setting" />
 
     <include
+        android:id="@+id/settingsCaption"
+        layout="@layout/item_setting" />
+
+    <include
         android:id="@+id/settingsUnits"
         layout="@layout/item_setting" />
 
