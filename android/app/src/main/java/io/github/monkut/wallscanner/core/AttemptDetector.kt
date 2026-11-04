@@ -7,7 +7,11 @@ import io.github.monkut.wallscanner.io.ClipOutcome
  * foot ([foot], the lowest visible heel, toe or ankle of either side), the hip centre ([hip]) and the lower wrist
  * ([wrist]); [leg] is the hip–ankle length, the scale. Null where the pose model did not see the part (or nobody).
  */
-class PoseSample(val tMs: Long, val foot: Float?, val hip: Float?, val wrist: Float?, val leg: Float?)
+class PoseSample(
+    val tMs: Long, val foot: Float?, val hip: Float?, val wrist: Float?, val leg: Float?,
+    /** Where the climber's face is (around the nose, eyes, ears and mouth landmarks, [FaceMask.HEAD_MARGIN] added), for the face mask; null without a pose. */
+    val head: Box? = null,
+)
 
 /** An attempt found in a session recording: [startMs]..[endMs] with pre- and post-roll, and the outcome it looks like. */
 class Attempt(val startMs: Long, val endMs: Long, val outcome: ClipOutcome?)

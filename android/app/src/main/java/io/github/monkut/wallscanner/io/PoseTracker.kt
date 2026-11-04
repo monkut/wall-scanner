@@ -7,6 +7,9 @@ import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
+import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
+import io.github.monkut.wallscanner.core.Box
+import io.github.monkut.wallscanner.core.FaceMask
 import io.github.monkut.wallscanner.core.PoseSample
 import kotlin.math.hypot
 
@@ -34,12 +37,25 @@ class PoseTracker(context: Context) : AutoCloseable {
     companion object {
         const val MODEL = "pose_landmarker_lite.task"
         private const val MIN_VISIBILITY = 0.5f
+        /** Face landmarks are often hidden (climber facing the wall) but still placed; a low bar keeps the head box on the head. */
+        private const val HEAD_VISIBILITY = 0.2f
+        private const val HEAD_LANDMARKS = 11 // BlazePose 0–10: nose, eyes (inner, centre, outer), ears, mouth
         // BlazePose landmark indices.
         private const val L_WRIST = 15; private const val R_WRIST = 16
         private const val L_HIP = 23; private const val R_HIP = 24
         private const val L_ANKLE = 27; private const val R_ANKLE = 28
         private const val L_HEEL = 29; private const val R_HEEL = 30
         private const val L_TOE = 31; private const val R_TOE = 32
+
+        /** The box around the face landmarks that are placed with some confidence (all of them when fewer than three are), grown by [FaceMask.HEAD_MARGIN]. */
+        private fun headBox(pose: List<NormalizedLandmark>): Box? {
+            val head = pose.take(HEAD_LANDMARKS)
+            val sure = head.filter { it.visibility().orElse(1f) >= HEAD_VISIBILITY }
+            val used = if (sure.size >= 3) sure else head
+            if (used.isEmpty()) return null
+            val l = used.minOf { it.x() }; val r = used.maxOf { it.x() }; val t = used.minOf { it.y() }; val b = used.maxOf { it.y() }
+            return Box(l, t, r - l, b - t).expand(FaceMask.HEAD_MARGIN).clamp()
+        }
 
         fun toSample(result: PoseLandmarkerResult, tMs: Long): PoseSample {
             val pose = result.landmarks().firstOrNull() ?: return PoseSample(tMs, null, null, null, null)
@@ -56,7 +72,7 @@ class PoseTracker(context: Context) : AutoCloseable {
                 if (y(h) == null || y(a) == null) null else hypot(pose[h].x() - pose[a].x(), pose[h].y() - pose[a].y())
             }
             val leg = if (legs.isEmpty()) null else legs.max()
-            return PoseSample(tMs, foot, hip, wrist, leg)
+            return PoseSample(tMs, foot, hip, wrist, leg, headBox(pose))
         }
     }
 }

@@ -64,6 +64,10 @@
         android:background="@color/hairline" />
 
     <include
+        android:id="@+id/settingsFaceMasks"
+        layout="@layout/item_setting" />
+
+    <include
         android:id="@+id/settingsUnits"
         layout="@layout/item_setting" />
 

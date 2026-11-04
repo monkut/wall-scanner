@@ -240,6 +240,13 @@
     <string name="play">再生</string>
     <string name="share_clip">共有</string>
     <string name="share_failed">共有用のクリップを作れませんでした。</string>
+    <string name="face_masks">顔マスク</string>
+    <string name="face_mask_climber">自分の顔</string>
+    <string name="face_mask_bystanders">周囲の人の顔</string>
+    <string name="face_masks_off">オフ</string>
+    <string name="face_masks_hint">クライムの撮影中に顔を検出し、再生時と共有時に隠します。録画そのものは撮影したまま、この端末にだけ保存されます。スキャンの写真では周囲の人の顔を隠します。</string>
+    <string name="masking_faces">顔を隠しています… %1$d%%</string>
+    <string name="masking_faces_wait">顔を隠しています…</string>
     <string name="trim">トリム</string>
     <string name="trim_range">%1$s – %2$s（%3$s）</string>
     <string name="delete_attempt_confirm">トライ %1$d を削除しますか？</string>

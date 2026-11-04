@@ -61,7 +61,9 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-video:1.4.2")
     implementation("androidx.camera:camera-view:1.4.2")
-    implementation("com.google.mediapipe:tasks-vision:0.10.29") // pose landmarks (assets/pose_landmarker_lite.task) to find attempts in a session
+    implementation("com.google.mediapipe:tasks-vision:0.10.29") // pose landmarks (assets/pose_landmarker_lite.task) to find attempts in a session; faces (assets/blaze_face_short_range.tflite) for the face masks
+    implementation("androidx.media3:media3-transformer:1.4.1") // shared climb clips with face masks: re-encodes the trimmed range with the masks drawn on (io/MaskedExport)
+    implementation("androidx.media3:media3-effect:1.4.1")
     implementation("com.google.ai.edge.litert:litert:1.4.2") // hold detector (assets/holds.tflite, see tools/holds_model); TF Lite 2.16 cannot run its int8-weight transpose_conv
 
     testImplementation("junit:junit:4.13.2")

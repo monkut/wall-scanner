@@ -64,8 +64,9 @@ import kotlin.math.roundToInt
  * registered walls, each under a header with **Edit**: rename, delete) and inside by set (the routes on the wall
  * between two resets), each under a header with **Edit** (rename, retire, walls covered). New scan asks for the
  * location (a registered gym or outdoor area, or a new one), at a gym the wall and the set (an open one covering
- * that wall, or a new one), and then the wall type. The climber's picture in the header opens Settings: the profile (picture, username, height, reach),
- * the units its lengths are shown in, and the app language.
+ * that wall, or a new one), and then the wall type. The climber's picture in the header opens Settings: the profile
+ * (picture, username, height, reach), the units its lengths are shown in, the face masks for climb videos, and the
+ * app language.
  */
 class MainActivity : AppCompatActivity() {
     private lateinit var list: ListView
@@ -278,11 +279,13 @@ class MainActivity : AppCompatActivity() {
         view.findViewById<TextView>(R.id.settingsDetail).text =
             if (profile.username.isEmpty() && profile.heightCm == null && profile.reachCm == null) getString(R.string.profile_add_hint)
             else Labels.profileDetail(this, profile, units).ifEmpty { getString(R.string.profile) }
+        bindSetting(view.findViewById(R.id.settingsFaceMasks), R.string.face_masks, Labels.faceMasks(this, Settings.maskClimber(this), Settings.maskBystanders(this)))
         bindSetting(view.findViewById(R.id.settingsUnits), R.string.units, Labels.units(this, units))
         bindSetting(view.findViewById(R.id.settingsLanguage), R.string.language, getString(Language.current().label))
         val dialog = AlertDialog.Builder(this).setTitle(R.string.settings).setView(view).show()
         fun open(id: Int, action: () -> Unit) = view.findViewById<View>(id).setOnClickListener { dialog.dismiss(); action() }
         open(R.id.settingsProfile) { handleEditProfile() }
+        open(R.id.settingsFaceMasks) { handleFaceMasks() }
         open(R.id.settingsUnits) { handleUnits() }
         open(R.id.settingsLanguage) { handleLanguage() }
     }
@@ -290,6 +293,22 @@ class MainActivity : AppCompatActivity() {
     private fun bindSetting(row: View, @StringRes title: Int, value: String) {
         row.findViewById<TextView>(R.id.settingTitle).setText(title)
         row.findViewById<TextView>(R.id.settingValue).text = value
+    }
+
+    /** Face masks (issue #12): whether the climber's face and bystanders' faces are hidden in climb videos; both on by default. */
+    private fun handleFaceMasks() {
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_face_masks, null)
+        val climber = view.findViewById<CheckBox>(R.id.maskClimber).apply { isChecked = Settings.maskClimber(this@MainActivity) }
+        val bystanders = view.findViewById<CheckBox>(R.id.maskBystanders).apply { isChecked = Settings.maskBystanders(this@MainActivity) }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.face_masks)
+            .setView(view)
+            .setPositiveButton(R.string.save) { _, _ ->
+                Settings.setFaceMasks(this, climber.isChecked, bystanders.isChecked)
+                handleSettings()
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> handleSettings() }
+            .show()
     }
 
     private fun handleUnits() {

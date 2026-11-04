@@ -56,6 +56,14 @@ object ClipExport {
         }
     }
 
+    /** Width and height of a video file as displayed (its rotation applied); 0 × 0 when unreadable. */
+    fun frameSize(file: File): Pair<Int, Int> = runCatching {
+        val w = metadata(file, MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+        val h = metadata(file, MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+        val rotation = metadata(file, MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+        if (rotation % 180 == 0) w to h else h to w
+    }.getOrDefault(0 to 0)
+
     /** Duration of a video file in ms (0 when unreadable). */
     fun durationMs(file: File): Long = runCatching { metadata(file, MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() }.getOrNull() ?: 0L
 

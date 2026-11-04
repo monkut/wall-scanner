@@ -194,6 +194,7 @@ object RouteStore {
                 val src = File(dir, file)
                 val dst = File(target, src.name)
                 renamed[file] = if (src.exists() && src.renameTo(dst)) dst.relativeTo(dir).path else file
+                FaceStore.sidecar(src).takeIf { it.exists() }?.renameTo(FaceStore.sidecar(dst)) // the faces seen in it travel with the video
             }
             File(dir, pendingDir).delete() // only when empty
             clips.map { c -> Clip(c.id, c.attempt, renamed[c.file] ?: c.file, c.durationMs, c.trimStartMs, c.trimEndMs, c.outcome, c.auto, c.at) }
@@ -223,7 +224,7 @@ object RouteStore {
         val clip = send.clips.firstOrNull { it.id == clipId } ?: return
         val rest = send.clips.filter { it.id != clipId }
         write(dir, log.copy(sends = log.sends.map { if (it.id == sendId) it.withClips(rest) else it }))
-        if (rest.none { it.file == clip.file }) File(dir, clip.file).delete()
+        if (rest.none { it.file == clip.file }) { File(dir, clip.file).delete(); FaceStore.sidecar(File(dir, clip.file)).delete() }
     }
 
     /** Where a climb's clip files live, relative to the capture directory. */
