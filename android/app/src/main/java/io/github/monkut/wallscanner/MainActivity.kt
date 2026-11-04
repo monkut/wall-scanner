@@ -185,7 +185,8 @@ class MainActivity : AppCompatActivity() {
                 // A gym split into walls: each wall's routes under its header; routes with no (or a deleted) wall last under "No wall".
                 val orphans = shown.filter { location.wall(it.wallId) == null }
                 val byWall = location.walls.map { wall -> wall to shown.filter { it.wallId == wall.id } } + (if (orphans.isEmpty()) emptyList() else listOf(NO_WALL to orphans))
-                val emptyShown = HashSet<String>() // a set with no routes on a wall gets one header, under the first wall it covers, not one per wall
+                // A set gets an empty header only where it has no routes at all in the gym, once, under the first wall it covers.
+                val emptyShown = HashSet(shown.map { it.setId })
                 byWall.flatMap { (wall, routes) -> listOf(RouteRow(wall = wall)) + setRows(location, routes, wall.id, emptyShown) }
             }
         }
@@ -225,8 +226,8 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Set headers with their routes: the sets with routes here, plus (so it can be edited or retired) a set
-     * covering [wallId] that has none, once per gym ([emptyShown] remembers which have had their header); open
-     * sets first, newest first, then retired. Routes outside every set come last under "No set". A gym without
+     * covering [wallId] that has routes nowhere in the gym, once ([emptyShown] holds the sets already placed);
+     * open sets first, newest first, then retired. Routes outside every set come last under "No set". A gym without
      * walls lists every set.
      */
     private fun setRows(location: Location, routes: List<RouteRecord>, wallId: String, emptyShown: MutableSet<String>? = null): List<RouteRow> {
