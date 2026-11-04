@@ -27,40 +27,51 @@ import io.github.monkut.wallscanner.io.ClipExport
 import java.io.File
 
 /**
- * A clip's trimmed range re-encoded with its face masks burnt in (media3 Transformer): the decoded, upright
- * frames get a bitmap overlay the size of the frame, redrawn from the sidecar's boxes as the clip's time moves
- * (frame times are relative to the trim start). Audio is copied. The unmasked path is [ClipExport.trimmedCopy].
+ * A clip's trimmed range re-encoded with its overlay burnt in (media3 Transformer): face masks from the sidecar
+ * and the caption, drawn on a bitmap the size of the decoded, upright frame and uploaded again only when what it
+ * shows changes (frame times are relative to the trim start). Audio is copied. A clip with nothing to draw goes
+ * through [ClipExport.trimmedCopy] instead.
  */
 @OptIn(UnstableApi::class)
-object MaskedExport {
-    private const val TAG = "MaskedExport"
-    /** Masks are redrawn when the clip's time moves to a new step of this size; between steps the same overlay is reused. */
+object OverlayExport {
+    private const val TAG = "OverlayExport"
+    /** Masks are re-read when the clip's time moves to a new step of this size. */
     private const val STEP_MS = 40L
     private const val PROGRESS_MS = 300L
 
+    /** Whether [start] would draw anything on [startMs]..[endMs]: the roles chosen have faces there, or a caption is on. */
+    fun hasOverlay(frames: List<FaceFrame>, startMs: Long, endMs: Long, climber: Boolean, bystanders: Boolean, caption: CaptionPainter?): Boolean =
+        (caption != null && !caption.caption.empty) || FaceMask.any(frames, startMs, endMs, climber, bystanders)
+
     /**
-     * Starts the export of [source]'s [startMs]..[endMs] to [target], masking the roles chosen, and returns the
-     * running job (cancel it when the screen goes). [onProgress] gets 0–100 and [onDone] the outcome, both on the
-     * main thread. Call on the main thread.
+     * Starts the export of [source]'s [startMs]..[endMs] to [target] and returns the running job (cancel it when
+     * the screen goes). [onProgress] gets 0–100 and [onDone] the outcome, both on the main thread. Call on the
+     * main thread.
      */
     fun start(
         context: Context, source: File, startMs: Long, endMs: Long, frames: List<FaceFrame>, climber: Boolean, bystanders: Boolean,
-        target: File, onProgress: (Int) -> Unit, onDone: (Boolean) -> Unit,
+        caption: CaptionPainter?, target: File, onProgress: (Int) -> Unit, onDone: (Boolean) -> Unit,
     ): Transformer {
         val (width, height) = ClipExport.frameSize(source)
         val overlay = object : BitmapOverlay() {
             private val bitmap = Bitmap.createBitmap(width.coerceAtLeast(2), height.coerceAtLeast(2), Bitmap.Config.ARGB_8888)
             private val canvas = Canvas(bitmap)
             private var step = Long.MIN_VALUE
+            private var drawn: List<String>? = null // the boxes on the bitmap; a static caption alone is drawn once
 
             override fun getBitmap(presentationTimeUs: Long): Bitmap {
                 val tMs = startMs + presentationTimeUs / 1000
                 val now = tMs / STEP_MS
-                if (now != step) {
-                    step = now
-                    bitmap.eraseColor(Color.TRANSPARENT) // bumps the bitmap's generation id, so the texture is uploaded again
-                    MaskPainter.draw(canvas, FaceMask.boxesAt(frames, tMs, climber, bystanders), 0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat())
-                }
+                if (now == step) return bitmap
+                step = now
+                val boxes = FaceMask.boxesAt(frames, tMs, climber, bystanders)
+                val key = boxes.map { "${it.role.id}:${"%.3f,%.3f,%.3f,%.3f".format(it.box.x, it.box.y, it.box.w, it.box.h)}" }
+                if (key == drawn) return bitmap
+                drawn = key
+                bitmap.eraseColor(Color.TRANSPARENT) // bumps the bitmap's generation id, so the texture is uploaded again
+                val w = bitmap.width.toFloat(); val h = bitmap.height.toFloat()
+                if (boxes.isNotEmpty()) MaskPainter.draw(canvas, boxes, 0f, 0f, w, h)
+                caption?.draw(canvas, 0f, 0f, w, h)
                 return bitmap
             }
         }
@@ -76,7 +87,7 @@ object MaskedExport {
             .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) { handler.removeCallbacks(poll); onDone(true) }
                 override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
-                    Log.e(TAG, "masked export failed", exportException)
+                    Log.e(TAG, "overlay export failed", exportException)
                     handler.removeCallbacks(poll)
                     onDone(false)
                 }

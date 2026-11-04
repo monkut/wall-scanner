@@ -22,7 +22,7 @@ import io.github.monkut.wallscanner.Labels
 import io.github.monkut.wallscanner.R
 import io.github.monkut.wallscanner.Settings
 import io.github.monkut.wallscanner.core.FaceFrame
-import io.github.monkut.wallscanner.core.FaceMask
+import io.github.monkut.wallscanner.io.LocationStore
 import io.github.monkut.wallscanner.io.FaceStore
 import io.github.monkut.wallscanner.io.CaptureStore
 import io.github.monkut.wallscanner.io.Clip
@@ -36,8 +36,8 @@ import kotlin.concurrent.thread
 /**
  * A climb's filmed attempts: a tab per attempt, played between its trim points (the file is never changed; a
  * session recording holds several attempts), the trim range, the outcome (Top / Fall), delete, and share (a
- * trimmed copy, [ClipExport]). Faces seen while filming ([FaceStore]) are masked on playback ([FaceMaskView])
- * and burnt into the shared copy ([MaskedExport]) by the Settings switches.
+ * trimmed copy, [ClipExport]). Faces seen while filming ([FaceStore]) are masked and the caption (route, gym, set)
+ * drawn on playback ([ClipOverlayView]) and burnt into the shared copy ([OverlayExport]) by the Settings switches.
  */
 class ClimbPlaybackActivity : AppCompatActivity() {
     private lateinit var captureDir: File
@@ -48,7 +48,7 @@ class ClimbPlaybackActivity : AppCompatActivity() {
     private lateinit var trimLabel: TextView
     private lateinit var outcome: MaterialButtonToggleGroup
     private lateinit var chips: ChipGroup
-    private lateinit var masks: FaceMaskView
+    private lateinit var overlay: ClipOverlayView
     private var clip: Clip? = null
     /** The faces of the shown clip's file. */
     private var faces: List<FaceFrame> = emptyList()
@@ -57,7 +57,7 @@ class ClimbPlaybackActivity : AppCompatActivity() {
     private val stopAtOut = object : Runnable {
         override fun run() {
             val c = clip ?: return
-            masks.timeMs = video.currentPosition.toLong()
+            overlay.timeMs = video.currentPosition.toLong()
             if (video.isPlaying && video.currentPosition >= c.trimEndMs) video.pause() else handler.postDelayed(this, 50)
         }
     }
@@ -72,12 +72,12 @@ class ClimbPlaybackActivity : AppCompatActivity() {
         trimLabel = findViewById(R.id.trimLabel)
         outcome = findViewById(R.id.outcome)
         chips = findViewById(R.id.attempts)
-        masks = findViewById(R.id.faceMask)
-        masks.target = video
+        overlay = findViewById(R.id.clipOverlay)
+        overlay.target = video
         findViewById<MaterialButton>(R.id.btnPlay).setOnClickListener { handlePlay() }
         findViewById<MaterialButton>(R.id.btnShare).setOnClickListener { handleShare() }
         findViewById<MaterialButton>(R.id.btnDelete).setOnClickListener { handleDelete() }
-        trim.addOnChangeListener { slider, _, fromUser -> if (fromUser) { showTrim(slider.values[0].toLong(), slider.values[1].toLong()); video.seekTo(slider.values[0].toInt()); masks.timeMs = slider.values[0].toLong() } }
+        trim.addOnChangeListener { slider, _, fromUser -> if (fromUser) { showTrim(slider.values[0].toLong(), slider.values[1].toLong()); video.seekTo(slider.values[0].toInt()); overlay.timeMs = slider.values[0].toLong() } }
         trim.addOnSliderTouchListener(object : RangeSlider.OnSliderTouchListener {
             override fun onStartTrackingTouch(slider: RangeSlider) = video.pause()
             override fun onStopTrackingTouch(slider: RangeSlider) = save { it.with(trimStartMs = slider.values[0].toLong(), trimEndMs = slider.values[1].toLong()) }
@@ -91,9 +91,17 @@ class ClimbPlaybackActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        masks.climber = Settings.maskClimber(this)
-        masks.bystanders = Settings.maskBystanders(this)
-        masks.invalidate()
+        overlay.climber = Settings.maskClimber(this)
+        overlay.bystanders = Settings.maskBystanders(this)
+        overlay.caption = captionPainter()
+    }
+
+    /** The caption for this climb's route by the Settings (null when off): route name and grade over gym, wall and set. */
+    private fun captionPainter(): CaptionPainter? {
+        if (!Settings.caption(this)) return null
+        val route = RouteStore.route(captureDir, send.routeId)
+        val location = LocationStore.get(this, route?.locationId ?: CaptureStore.readLocationId(captureDir))
+        return CaptionPainter(this, Settings.captionFont(this), Settings.captionCorner(this), Labels.caption(this, route, location))
     }
 
     override fun onPause() {
@@ -134,9 +142,9 @@ class ClimbPlaybackActivity : AppCompatActivity() {
         if (first) {
             video.setVideoPath(File(captureDir, c.file).path)
             faces = FaceStore.read(File(captureDir, c.file))
-            masks.frames = faces
+            overlay.frames = faces
         }
-        masks.timeMs = c.trimStartMs
+        overlay.timeMs = c.trimStartMs
         video.setOnPreparedListener { video.seekTo(c.trimStartMs.toInt()) }
         if (!first) video.seekTo(c.trimStartMs.toInt())
         trim.valueFrom = 0f
@@ -181,8 +189,8 @@ class ClimbPlaybackActivity : AppCompatActivity() {
     }
 
     /**
-     * Shares the attempt's trimmed range as its own MP4: a straight copy when nothing is to be masked in it, else
-     * re-encoded with the masks drawn on (progress shown; the screen must stay open).
+     * Shares the attempt's trimmed range as its own MP4: a straight copy when nothing would be drawn on it, else
+     * re-encoded with the masks and caption burnt in (progress shown; the screen must stay open).
      */
     private fun handleShare() {
         val c = clip ?: return
@@ -191,7 +199,8 @@ class ClimbPlaybackActivity : AppCompatActivity() {
         val out = File(dir, "climb-${captureDir.name}-${sendId}-attempt-${c.attempt}.mp4")
         val source = File(captureDir, c.file)
         val climber = Settings.maskClimber(this); val bystanders = Settings.maskBystanders(this)
-        if (!FaceMask.any(faces, c.trimStartMs, c.trimEndMs, climber, bystanders)) {
+        val caption = captionPainter()
+        if (!OverlayExport.hasOverlay(faces, c.trimStartMs, c.trimEndMs, climber, bystanders, caption)) {
             thread(name = "clip-export") {
                 val made = runCatching { ClipExport.trimmedCopy(source, c.trimStartMs, c.trimEndMs, out) }
                     .onFailure { Log.e(TAG, "clip export failed", it) }.isSuccess
@@ -199,10 +208,10 @@ class ClimbPlaybackActivity : AppCompatActivity() {
             }
             return
         }
-        val progress = AlertDialog.Builder(this).setMessage(R.string.masking_faces_wait).setCancelable(false).show()
-        export = MaskedExport.start(
-            this, source, c.trimStartMs, c.trimEndMs, faces, climber, bystanders, out,
-            onProgress = { progress.setMessage(getString(R.string.masking_faces, it)) },
+        val progress = AlertDialog.Builder(this).setMessage(R.string.rendering_clip_wait).setCancelable(false).show()
+        export = OverlayExport.start(
+            this, source, c.trimStartMs, c.trimEndMs, faces, climber, bystanders, caption, out,
+            onProgress = { progress.setMessage(getString(R.string.rendering_clip, it)) },
         ) { made ->
             export = null
             if (isDestroyed) return@start

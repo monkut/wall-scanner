@@ -136,12 +136,12 @@ picture is never masked.
   upright recorded frame: the preview is a centred crop of the camera stream (`PreviewView` FILL_CENTER), which
   now takes the recording's 16:9 aspect, so `FaceMask.previewToFrame` undoes the crop. The video is never
   changed; the sidecar moves and goes with its file (`RouteStore.addSend` / `deleteClip`).
-- **Playback.** `climbs/FaceMaskView.kt` lies over the VideoView and draws `FaceMask.boxesAt(t)`: the sample at
+- **Playback.** `climbs/ClipOverlayView.kt` lies over the VideoView and draws `FaceMask.boxesAt(t)`: the sample at
   or before t moved towards its match in the next one, faces held 0.5 s after their last sample, boxes grown by
   25%. Solid rounded rectangles in the panel colour with a chalk hairline (`MaskPainter`); blur is not worth a
   moving 1080p frame.
 - **Share.** `ClipExport.trimmedCopy` still copies when nothing in the range would be masked. Otherwise
-  `climbs/MaskedExport.kt` re-encodes the trimmed range with media3 Transformer: a `BitmapOverlay` the size of
+  `climbs/OverlayExport.kt` re-encodes the trimmed range with media3 Transformer: a `BitmapOverlay` the size of
   the upright frame, redrawn every 40 ms of clip time (frame times are relative to the trim start; the decoder
   delivers upright frames). Audio is copied. Progress is shown; the screen must stay open.
 - **Keyframes.** With the bystander mask on, Finish turns each keyframe upright by its pose
@@ -150,6 +150,23 @@ picture is never masked.
   a hold. Only bystanders appear in keyframes (the climber holds the phone).
 - **Limits.** The short-range model misses small and turned-away faces (then only the pose covers the climber);
   recording-time masking (never storing a face) is not offered; the mask look is fixed.
+
+## Caption (issue #13)
+
+The route (name and grade) over the gym, wall and set, written in a corner of the video so a shared clip carries its
+context. Settings → **Caption**: on by default, **Corner** (upper / lower × left / right, default lower left) and
+**Font** (the app's Atkinson Hyperlegible, or a family every Android ships: sans, condensed, serif, monospace,
+casual, handwriting; the picker shows each in its own typeface).
+
+- `core/Caption.kt`: `Corner`, `CaptionFont`, the `Caption` text and `CaptionLayout` (title 3.5% and detail 2.5% of
+  the frame height, inset 3% of the shorter side, both lines shrunk together when the wider would pass 90% of the
+  width). `Labels.caption` builds the text in the app language; parts left unset are left out.
+- `climbs/CaptionPainter.kt` draws it: chalk text on a 70% panel-colour backdrop, left-aligned in a left corner and
+  right-aligned in a right one. `ClipOverlayView` (playback) and `OverlayExport` (shared copy) use the same painter
+  after the face masks, so both look the same; the export bitmap is uploaded again only when the masks move, so a
+  caption alone costs one upload. The copy-without-re-encode path is taken only when neither masks nor caption
+  would draw anything.
+- Not yet: the date and attempt number in the caption, per-clip hiding.
 
 ## Code
 
@@ -164,7 +181,8 @@ picture is never masked.
 | Share zip exclusion, FileProvider path | `io/CaptureStore.kt`, `res/xml/file_paths.xml` |
 | Docs | `android/README.md` (route record, data), `ARCHITECTURE.md` §10 |
 | Tests | `RouteStoreTest`: clip round-trip, version-1 file reads, trim clamp; `ClipExportTest` on a tiny generated MP4 if the JVM can build one, else a device test |
-| Face masks (#12): settings, detection, sidecar, playback overlay, masked export, keyframes | `Settings.kt`, `res/layout/dialog_face_masks.xml`, `core/FaceMask.kt`, `io/FaceFinder.kt`, `io/FaceStore.kt`, `io/PoseTracker.kt` (head box), `climbs/ClimbRecordActivity.kt`, `climbs/FaceMaskView.kt`, `climbs/MaskPainter.kt`, `climbs/MaskedExport.kt`, `io/KeyframeFaces.kt`, `scan/ScanActivity.kt`; tests `FaceMaskTest`, `FaceStoreTest` |
+| Face masks (#12): settings, detection, sidecar, playback overlay, masked export, keyframes | `Settings.kt`, `res/layout/dialog_face_masks.xml`, `core/FaceMask.kt`, `io/FaceFinder.kt`, `io/FaceStore.kt`, `io/PoseTracker.kt` (head box), `climbs/ClimbRecordActivity.kt`, `climbs/ClipOverlayView.kt`, `climbs/MaskPainter.kt`, `climbs/OverlayExport.kt`, `io/KeyframeFaces.kt`, `scan/ScanActivity.kt`; tests `FaceMaskTest`, `FaceStoreTest` |
+| Caption (#13): settings (on, corner, font), painter, playback and export | `Settings.kt`, `res/layout/dialog_caption.xml`, `core/Caption.kt`, `climbs/CaptionPainter.kt`, `Labels.kt` (caption text, setting labels), `climbs/ClimbPlaybackActivity.kt`; test `CaptionTest` |
 
 Estimated size: ~600 lines of Kotlin and layouts. Order: data model and tests → recording → playback with
 trim and delete → share → docs.

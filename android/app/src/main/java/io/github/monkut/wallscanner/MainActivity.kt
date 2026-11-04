@@ -16,6 +16,7 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ListView
+import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
@@ -24,6 +25,9 @@ import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
+import io.github.monkut.wallscanner.climbs.CaptionPainter
+import io.github.monkut.wallscanner.core.CaptionFont
+import io.github.monkut.wallscanner.core.Corner
 import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.Length
 import io.github.monkut.wallscanner.core.RouteDefinition
@@ -288,12 +292,14 @@ class MainActivity : AppCompatActivity() {
             if (profile.username.isEmpty() && profile.heightCm == null && profile.reachCm == null) getString(R.string.profile_add_hint)
             else Labels.profileDetail(this, profile, units).ifEmpty { getString(R.string.profile) }
         bindSetting(view.findViewById(R.id.settingsFaceMasks), R.string.face_masks, Labels.faceMasks(this, Settings.maskClimber(this), Settings.maskBystanders(this)))
+        bindSetting(view.findViewById(R.id.settingsCaption), R.string.caption, Labels.captionSetting(this, Settings.caption(this), Settings.captionCorner(this), Settings.captionFont(this)))
         bindSetting(view.findViewById(R.id.settingsUnits), R.string.units, Labels.units(this, units))
         bindSetting(view.findViewById(R.id.settingsLanguage), R.string.language, getString(Language.current().label))
         val dialog = AlertDialog.Builder(this).setTitle(R.string.settings).setView(view).show()
         fun open(id: Int, action: () -> Unit) = view.findViewById<View>(id).setOnClickListener { dialog.dismiss(); action() }
         open(R.id.settingsProfile) { handleEditProfile() }
         open(R.id.settingsFaceMasks) { handleFaceMasks() }
+        open(R.id.settingsCaption) { handleCaption() }
         open(R.id.settingsUnits) { handleUnits() }
         open(R.id.settingsLanguage) { handleLanguage() }
     }
@@ -313,6 +319,36 @@ class MainActivity : AppCompatActivity() {
             .setView(view)
             .setPositiveButton(R.string.save) { _, _ ->
                 Settings.setFaceMasks(this, climber.isChecked, bystanders.isChecked)
+                handleSettings()
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> handleSettings() }
+            .show()
+    }
+
+    /** Caption on climb videos (issue #13): on or off, which corner, and the font (each choice set in its own typeface). */
+    private fun handleCaption() {
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_caption, null)
+        val on = view.findViewById<CheckBox>(R.id.captionOn).apply { isChecked = Settings.caption(this@MainActivity) }
+        val corners = view.findViewById<RadioGroup>(R.id.captionCorner)
+        val cornerIds = mapOf(Corner.UPPER_LEFT to R.id.cornerUpperLeft, Corner.UPPER_RIGHT to R.id.cornerUpperRight, Corner.LOWER_LEFT to R.id.cornerLowerLeft, Corner.LOWER_RIGHT to R.id.cornerLowerRight)
+        corners.check(cornerIds.getValue(Settings.captionCorner(this)))
+        val fonts = view.findViewById<RadioGroup>(R.id.captionFont)
+        val current = Settings.captionFont(this)
+        for (font in CaptionFont.entries) {
+            fonts.addView(RadioButton(this).apply {
+                id = View.generateViewId(); tag = font
+                text = Labels.captionFont(this@MainActivity, font)
+                typeface = CaptionPainter.typeface(this@MainActivity, font, bold = false)
+                isChecked = font == current
+            })
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.caption)
+            .setView(view)
+            .setPositiveButton(R.string.save) { _, _ ->
+                val corner = cornerIds.entries.firstOrNull { it.value == corners.checkedRadioButtonId }?.key ?: Corner.DEFAULT
+                val font = fonts.findViewById<RadioButton>(fonts.checkedRadioButtonId)?.tag as? CaptionFont ?: CaptionFont.DEFAULT
+                Settings.setCaption(this, on.isChecked, corner, font)
                 handleSettings()
             }
             .setNegativeButton(android.R.string.cancel) { _, _ -> handleSettings() }

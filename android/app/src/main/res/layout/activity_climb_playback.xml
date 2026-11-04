@@ -43,9 +43,9 @@
             android:layout_height="match_parent"
             android:layout_gravity="center" />
 
-        <!-- Face masks drawn over the area the VideoView occupies. -->
-        <io.github.monkut.wallscanner.climbs.FaceMaskView
-            android:id="@+id/faceMask"
+        <!-- Face masks and the caption drawn over the area the VideoView occupies. -->
+        <io.github.monkut.wallscanner.climbs.ClipOverlayView
+            android:id="@+id/clipOverlay"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
     </FrameLayout>
