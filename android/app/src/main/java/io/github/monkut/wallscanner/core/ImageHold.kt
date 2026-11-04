@@ -6,7 +6,7 @@ import kotlin.math.max
 object ImageHold {
     private const val MAX_POINTS = 96
 
-    fun fromPixels(id: Int, pixels: IntArray, voxels: Int, photo: Orthophoto, frame: WallFrame): Hold {
+    fun fromPixels(id: Int, pixels: IntArray, voxels: Int, photo: Orthophoto, surface: WallSurface): Hold {
         val w = photo.image.width; val h = photo.image.height
         var su = 0.0; var sv = 0.0; var sr = 0L; var sg = 0L; var sb = 0L
         var x0 = w; var x1 = -1; var y0 = h; var y1 = -1
@@ -22,12 +22,10 @@ object ImageHold {
         val rel = FloatArray(n) { photo.relief[pixels[it]] }
         rel.sort()
         val height = max(0f, rel[(n * 9) / 10])
-        val pl = frame.plane
+        val centre = surface.world(cu, cv, height)
         return Hold(
             id = id,
-            cx = pl.ox + cu * frame.rx + cv * frame.ux + height * pl.nx,
-            cy = pl.oy + cu * frame.ry + cv * frame.uy + height * pl.ny,
-            cz = pl.oz + cu * frame.rz + cv * frame.uz + height * pl.nz,
+            cx = centre[0], cy = centre[1], cz = centre[2],
             u = cu, v = cv, width = (x1 - x0 + 1) * photo.px, tall = (y1 - y0 + 1) * photo.px, height = height,
             r = (sr / n).toInt(), g = (sg / n).toInt(), b = (sb / n).toInt(),
             voxels = voxels, outline = outlineOf(pixels, photo),

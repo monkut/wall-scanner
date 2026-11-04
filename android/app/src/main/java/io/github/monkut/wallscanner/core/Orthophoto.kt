@@ -36,20 +36,21 @@ object OrthophotoBuilder {
      * [extent] is the scanned wall area [minU, minV, maxU, maxV]; [decode] returns a keyframe's pixels (ARGB,
      * any scale: intrinsics are scaled to the decoded size) or null to skip it.
      */
-    fun build(cloud: VoxelCloud, frame: WallFrame, extent: FloatArray, keyframes: List<Keyframe>, decode: (Keyframe) -> Image?, mmPerPx: Float = MM_PER_PX): Orthophoto? {
+    fun build(cloud: VoxelCloud, surface: WallSurface, extent: FloatArray, keyframes: List<Keyframe>, decode: (Keyframe) -> Image?, mmPerPx: Float = MM_PER_PX): Orthophoto? {
         if (keyframes.isEmpty() || extent[2] <= extent[0] || extent[3] <= extent[1]) return null
         val px = mmPerPx / 1000f
         val minU = extent[0] - MARGIN; val minV = extent[1] - MARGIN; val maxU = extent[2] + MARGIN; val maxV = extent[3] + MARGIN
         val w = ((maxU - minU) / px).toInt() + 1
         val h = ((maxV - minV) / px).toInt() + 1
         if (w.toLong() * h > 4_000_000L) return null
-        val relief = reliefMap(cloud, frame, minU, minV, maxU, maxV)
+        val relief = reliefMap(cloud, surface, minU, minV, maxU, maxV)
 
-        // World position of every pixel (at its relief), row 0 = top (maxV).
+        // World position of every pixel (at its relief, on the face it lies on), row 0 = top (maxV).
         val n = w * h
         val wx = FloatArray(n); val wy = FloatArray(n); val wz = FloatArray(n)
         val reliefPx = FloatArray(n)
-        val p = frame.plane
+        val faceOf = ByteArray(n) // which face each pixel lies on, for the view-angle score
+        val faces = surface.faces
         for (y in 0 until h) {
             val v = maxV - (y + 0.5f) * px
             for (x in 0 until w) {
@@ -57,9 +58,13 @@ object OrthophotoBuilder {
                 val d = relief.at(u, v)
                 val i = y * w + x
                 reliefPx[i] = d
-                wx[i] = p.ox + u * frame.rx + v * frame.ux + d * p.nx
-                wy[i] = p.oy + u * frame.ry + v * frame.uy + d * p.ny
-                wz[i] = p.oz + u * frame.rz + v * frame.uz + d * p.nz
+                val face = surface.faceAt(u, v)
+                faceOf[i] = faces.indexOf(face).toByte()
+                val lu = face.toLocalU(u, v); val lv = face.toLocalV(u, v)
+                val p = face.plane; val f = face.frame
+                wx[i] = p.ox + lu * f.rx + lv * f.ux + d * p.nx
+                wy[i] = p.oy + lu * f.ry + lv * f.uy + d * p.ny
+                wz[i] = p.oz + lu * f.rz + lv * f.uz + d * p.nz
             }
         }
         val best = FloatArray(n)
@@ -85,6 +90,7 @@ object OrthophotoBuilder {
                 val iy = (cy - fy * yc / depth).toFloat()
                 if (ix < edgeX || iy < edgeY || ix >= img.width - 1 - edgeX || iy >= img.height - 1 - edgeY) continue
                 val dist = sqrt(dx * dx + dy * dy + dz * dz)
+                val p = faces[faceOf[i].toInt()].plane
                 val cos = abs((dx * p.nx + dy * p.ny + dz * p.nz) / dist)
                 val score = (cos * cos / max(dist, 0.5)).toFloat()
                 if (score <= best[i]) continue
@@ -125,16 +131,19 @@ object OrthophotoBuilder {
         }
     }
 
-    private fun reliefMap(cloud: VoxelCloud, frame: WallFrame, minU: Float, minV: Float, maxU: Float, maxV: Float): ReliefMap {
+    private fun reliefMap(cloud: VoxelCloud, surface: WallSurface, minU: Float, minV: Float, maxU: Float, maxV: Float): ReliefMap {
         val cw = max(2, ((maxU - minU) / RELIEF_CELL).toInt() + 1); val ch = max(2, ((maxV - minV) / RELIEF_CELL).toInt() + 1)
         val xyz = cloud.xyz
         val cellOf = IntArray(cloud.count) { -1 }
+        val dist = FloatArray(cloud.count)
         val count = IntArray(cw * ch)
+        val pr = FloatArray(3)
         for (i in 0 until cloud.count) {
-            val x = xyz[i * 3]; val y = xyz[i * 3 + 1]; val z = xyz[i * 3 + 2]
-            val d = frame.d(x, y, z)
+            surface.project(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2], pr)
+            val d = pr[2]
+            dist[i] = d
             if (d < -0.3f || d > 0.6f) continue
-            val cx = ((frame.u(x, y, z) - minU) / RELIEF_CELL).toInt(); val cy = ((frame.v(x, y, z) - minV) / RELIEF_CELL).toInt()
+            val cx = ((pr[0] - minU) / RELIEF_CELL).toInt(); val cy = ((pr[1] - minV) / RELIEF_CELL).toInt()
             if (cx < 0 || cy < 0 || cx >= cw || cy >= ch) continue
             cellOf[i] = cy * cw + cx; count[cellOf[i]]++
         }
@@ -144,7 +153,7 @@ object OrthophotoBuilder {
         val order = FloatArray(start[cw * ch])
         for (i in 0 until cloud.count) {
             val c = cellOf[i]
-            if (c >= 0) order[cursor[c]++] = frame.d(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])
+            if (c >= 0) order[cursor[c]++] = dist[i]
         }
         val median = FloatArray(cw * ch)
         for (c in 0 until cw * ch) {

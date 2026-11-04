@@ -22,6 +22,7 @@ import io.github.monkut.wallscanner.core.SceneJson
 import io.github.monkut.wallscanner.core.Thumbnail
 import io.github.monkut.wallscanner.core.VoxelCloud
 import io.github.monkut.wallscanner.core.WallFrame
+import io.github.monkut.wallscanner.core.WallSurface
 import io.github.monkut.wallscanner.core.SceneBuilder
 import org.json.JSONObject
 import kotlin.math.max
@@ -173,7 +174,7 @@ object CaptureStore {
         return runCatching {
             val plane = planeOf(JSONObject(readScene(dir)).getJSONObject("wall"))
             val cloud = File(dir, PLY_FILE).inputStream().use { PlyReader.read(it) }
-            writeThumbnail(dir, Thumbnail.render(cloud, WallFrame(plane)))
+            writeThumbnail(dir, Thumbnail.render(cloud, WallSurface.single(WallFrame(plane))))
         }.isSuccess
     }
 
@@ -212,12 +213,12 @@ object CaptureStore {
             val p = result.frame.plane
             log.log(
                 "REPROCESS: plane origin=(${p.ox}, ${p.oy}, ${p.oz}) normal=(${p.nx}, ${p.ny}, ${p.nz}) " +
-                    "inliers=${result.planeInliers}/${cloud.count} wallColor=${result.wallColor ?: "n/a"} holds=${result.holds.size} " +
+                    "inliers=${result.planeInliers}/${cloud.count} faces=${SceneJson.facesSummary(result.surface)} wallColor=${result.wallColor ?: "n/a"} holds=${result.holds.size} " +
                     "unassigned=${result.holds.count { it.routeId == -1 }} " +
                     "routes=${result.routes.joinToString { "${it.name}(${it.holdIds.size})" }} (${System.currentTimeMillis() - t0} ms)"
             )
             writeScene(dir, SceneJson.write(result, cloud.count, nowIso(), Build.MODEL))
-            writeThumbnail(dir, Thumbnail.render(cloud, result.frame))
+            writeThumbnail(dir, Thumbnail.render(cloud, result.surface))
             return summary
         } finally {
             log.close()

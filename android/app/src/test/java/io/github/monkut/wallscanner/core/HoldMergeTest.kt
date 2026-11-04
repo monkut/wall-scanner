@@ -11,7 +11,7 @@ class HoldMergeTest {
     private val tan = 0xffC9B496.toInt()
     private val red = 0xffC23B3B.toInt()
     private val grey = 0xff808080.toInt()
-    private val frame = WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f))
+    private val frame = WallSurface.single(WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f)))
     private val wall = WallColor(0xC9, 0xB4, 0x96, 36f, 0.25f, 0.1f, 0.6f, 0.95f)
 
     private fun photo(paint: (Float, Float) -> Int?): Orthophoto {

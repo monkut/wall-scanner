@@ -33,7 +33,8 @@ class RealCaptureHarness {
             var result = SceneBuilder.build(cloud, cameras, definition = Definition(RouteDefinition.fromId(type)))
             val ms = System.currentTimeMillis() - t0
             if (result == null) { println("HARNESS ${dir.name} voxels=${cloud.count} no wall plane"); continue }
-            result.thinCoverage = Coverage.thinCells(cloud, result.frame, result.extent)
+            println("HARNESS ${dir.name} faces=${SceneJson.facesSummary(result.surface)} regions=${Facets.find(cloud, result.frame).summary}")
+            result.thinCoverage = Coverage.thinCells(cloud, result.surface, result.extent)
             if (result.thinCoverage.isNotEmpty()) println("HARNESS ${dir.name} thin coverage: ${result.thinCoverage.joinToString { "(row ${it.row}, col ${it.col})" }}")
             println(
                 "HARNESS ${dir.name} voxels=${cloud.count} inliers=${result.planeInliers} wallColor=${result.wallColor} " +
@@ -43,7 +44,7 @@ class RealCaptureHarness {
             val keyframes = keyframes(framesJson)
             val ppm = File(dir, "frames-ppm")
             val t1 = System.currentTimeMillis()
-            val photo = if (ppm.isDirectory) OrthophotoBuilder.build(cloud, result.frame, result.extent, keyframes, decode = { k -> readPpm(File(ppm, File(k.file).nameWithoutExtension + ".ppm")) }) else null
+            val photo = if (ppm.isDirectory) OrthophotoBuilder.build(cloud, result.surface, result.extent, keyframes, decode = { k -> readPpm(File(ppm, File(k.file).nameWithoutExtension + ".ppm")) }) else null
             if (photo != null) {
                 println("HARNESS ${dir.name} orthophoto ${photo.image.width}x${photo.image.height} from ${keyframes.size} keyframes (${System.currentTimeMillis() - t1} ms)")
                 val t2 = System.currentTimeMillis()
@@ -51,8 +52,8 @@ class RealCaptureHarness {
                 val refined = HoldShapes.refine(result.holds, photo, patches, result.wallColor)
                 println("HARNESS ${dir.name} hold shapes: ${result.holds.size} → ${refined.size} refined (${System.currentTimeMillis() - t2} ms)")
                 val t3 = System.currentTimeMillis()
-                val extra = HoldSearch.find(refined, patches, photo, result.frame, result.extent)
-                val split = HoldSplit.byColor(refined + extra, photo, patches, result.frame, result.wallColor)
+                val extra = HoldSearch.find(refined, patches, photo, result.surface, result.extent)
+                val split = HoldSplit.byColor(refined + extra, photo, patches, result.surface, result.wallColor)
                 if (split.size != refined.size + extra.size) println("HARNESS ${dir.name} hold split: ${refined.size + extra.size} → ${split.size} by photo colour")
                 // The JVM cannot run the hold model: holds are judged by colour alone here.
                 val holds = HoldMerge.prune(split, emptyList(), emptyList(), photo, patches, result.wallColor, result.extent)

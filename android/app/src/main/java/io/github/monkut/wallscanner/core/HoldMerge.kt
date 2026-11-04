@@ -30,7 +30,7 @@ object HoldMerge {
      * hold: the model cuts a hold in two at a seam between keyframes or where a two-tone hold changes colour,
      * while separate holds have wall between them. Masks the result covers less than [MAX_COVERED] are added.
      */
-    fun withModel(holds: List<Hold>, masks: List<Hold>, photo: Orthophoto, frame: WallFrame): Merged {
+    fun withModel(holds: List<Hold>, masks: List<Hold>, photo: Orthophoto, surface: WallSurface): Merged {
         if (masks.isEmpty()) return Merged(holds, 0, 0)
         val w = photo.image.width; val h = photo.image.height
         val n = w * h
@@ -61,7 +61,7 @@ object HoldMerge {
                 val part = when {
                     gi > 0 && g.size == 1 -> first
                     g.size == 1 -> Hold(hold.id, first.cx, first.cy, first.cz, first.u, first.v, first.width, first.tall, first.height, first.r, first.g, first.b, hold.voxels, first.outline)
-                    else -> ImageHold.fromPixels(if (gi == 0) hold.id else first.id, g.flatMap { maskPx[it].asList() }.distinct().toIntArray(), if (gi == 0) hold.voxels else 0, photo, frame)
+                    else -> ImageHold.fromPixels(if (gi == 0) hold.id else first.id, g.flatMap { maskPx[it].asList() }.distinct().toIntArray(), if (gi == 0) hold.voxels else 0, photo, surface)
                 }
                 if (gi == 0) { part.role = hold.role; part.tape = hold.tape }
                 out.add(part)
@@ -129,7 +129,7 @@ object HoldMerge {
      * this joins exactly the four pairs the climber named and none of the 19 other touching pairs. The joined hold
      * keeps the id of the piece with most voxels, sums the voxels, takes the first role and tape.
      */
-    fun byDepth(holds: List<Hold>, photo: Orthophoto, frame: WallFrame): List<Hold> {
+    fun byDepth(holds: List<Hold>, photo: Orthophoto, surface: WallSurface): List<Hold> {
         val w = photo.image.width; val h = photo.image.height
         val px = holds.map { Raster.fillPolygon(ImageHold.polygon(it), photo) }
         val height = px.map { p -> if (p.isEmpty()) 0f else FloatArray(p.size) { photo.relief[p[it]] }.also { it.sort() }[p.size * 3 / 4] }
@@ -163,7 +163,7 @@ object HoldMerge {
             if (g.size == 1) continue
             val primary = g.maxBy { holds[it].voxels }
             val pixels = g.flatMap { px[it].asList() }.distinct().toIntArray()
-            joined[primary] = ImageHold.fromPixels(holds[primary].id, pixels, g.sumOf { holds[it].voxels }, photo, frame).also { hold ->
+            joined[primary] = ImageHold.fromPixels(holds[primary].id, pixels, g.sumOf { holds[it].voxels }, photo, surface).also { hold ->
                 hold.role = (listOf(primary) + g).map { holds[it].role }.firstOrNull { it != HoldRole.ANY } ?: HoldRole.ANY
                 hold.tape = (listOf(primary) + g).firstNotNullOfOrNull { holds[it].tape }
             }

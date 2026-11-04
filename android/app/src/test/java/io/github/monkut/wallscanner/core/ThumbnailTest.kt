@@ -21,7 +21,7 @@ class ThumbnailTest {
     @Test
     fun rendersWallWithHoldColorsInFront() {
         val cloud = SyntheticWall.cloud()
-        val frame = WallFrame(Plane(1.5f, 1.2f, 0f, 0f, 0f, 1f))
+        val frame = WallSurface.single(WallFrame(Plane(1.5f, 1.2f, 0f, 0f, 0f, 1f)))
         val image = Thumbnail.render(cloud, frame, 320, 240)
         assertEquals(320 * 240, image.pixels.size)
         val red = image.pixels.count { (it shr 16 and 0xff) > 200 && (it shr 8 and 0xff) < 60 }

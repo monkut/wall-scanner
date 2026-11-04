@@ -411,12 +411,12 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             val p = result.frame.plane
             log.log(
                 "RESULT: plane origin=(${p.ox}, ${p.oy}, ${p.oz}) normal=(${p.nx}, ${p.ny}, ${p.nz}) " +
-                    "inliers=${result.planeInliers}/${cloud.count} wallColor=${result.wallColor ?: "n/a"} holds=${result.holds.size} " +
+                    "inliers=${result.planeInliers}/${cloud.count} faces=${SceneJson.facesSummary(result.surface)} wallColor=${result.wallColor ?: "n/a"} holds=${result.holds.size} " +
                     "unassigned=${result.holds.count { it.routeId == -1 }} " +
                     "routes=${result.routes.joinToString { "${it.name}(${it.holdIds.size})" }} (${elapsed} ms)"
             )
             CaptureStore.writeScene(captureDir, SceneJson.write(result, cloud.count, CaptureStore.nowIso(), Build.MODEL))
-            CaptureStore.writeThumbnail(captureDir, Thumbnail.render(cloud, result.frame))
+            CaptureStore.writeThumbnail(captureDir, Thumbnail.render(cloud, result.surface))
             finished = true
             val thin = result.thinCoverage
             runOnUiThread {

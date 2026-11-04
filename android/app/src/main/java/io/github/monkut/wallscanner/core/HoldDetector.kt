@@ -52,12 +52,15 @@ object HoldDetector {
      * distance, bilinearly interpolated) instead of the plane itself; used for outdoor rock, which is not flat.
      * Voxels matching [wall] are left out of a hold's colour when enough other voxels remain.
      */
-    fun detect(cloud: VoxelCloud, frame: WallFrame, localRelief: Boolean = false, wall: WallColor? = null): List<Hold> {
+    fun detect(cloud: VoxelCloud, surface: WallSurface, localRelief: Boolean = false, wall: WallColor? = null): List<Hold> {
         val n = cloud.count
         val xyz = cloud.xyz
-        val relief = FloatArray(n) { frame.d(xyz[it * 3], xyz[it * 3 + 1], xyz[it * 3 + 2]) }
-        if (localRelief) subtractLocalSurface(relief, cloud, frame)
-        val grid = Grid.build(cloud, frame, relief)
+        // Every voxel measured against the face it lies on, in the unfolded (u, v).
+        val us = FloatArray(n); val vs = FloatArray(n); val relief = FloatArray(n)
+        val p = FloatArray(3)
+        for (i in 0 until n) { surface.project(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2], p); us[i] = p[0]; vs[i] = p[1]; relief[i] = p[2] }
+        if (localRelief) subtractLocalSurface(relief, us, vs)
+        val grid = Grid.build(cloud, us, vs, relief)
         if (grid.count == 0) return emptyList()
 
         val all = IntArray(grid.count) { it }
@@ -111,7 +114,7 @@ object HoldDetector {
                 Hold(
                     id = holds.size + 1,
                     cx = cand.cx, cy = cand.cy, cz = cand.cz,
-                    u = frame.u(cand.cx, cand.cy, cand.cz), v = frame.v(cand.cx, cand.cy, cand.cz),
+                    u = surface.u(cand.cx, cand.cy, cand.cz), v = surface.v(cand.cx, cand.cy, cand.cz),
                     width = (maxU - minU + 1) * Tuning.CLUSTER_CELL, tall = (maxV - minV + 1) * Tuning.CLUSTER_CELL, height = cand.peak,
                     r = cand.color[0], g = cand.color[1], b = cand.color[2],
                     voxels = cand.voxels,
@@ -278,9 +281,8 @@ object HoldDetector {
         }
 
         companion object {
-            fun build(cloud: VoxelCloud, frame: WallFrame, relief: FloatArray): Grid {
+            fun build(cloud: VoxelCloud, us: FloatArray, vs: FloatArray, relief: FloatArray): Grid {
                 val n = cloud.count
-                val xyz = cloud.xyz
                 val rgb = cloud.rgb
                 val inv = 1f / Tuning.CLUSTER_CELL
                 val index = HashMap<Long, Int>()
@@ -289,9 +291,8 @@ object HoldDetector {
                 val cellOf = IntArray(n)
                 for (i in 0 until n) {
                     if (relief[i] < Tuning.HOLD_RELIEF_MIN || relief[i] > Tuning.HOLD_RELIEF_MAX) { cellOf[i] = -1; continue }
-                    val x = xyz[i * 3]; val y = xyz[i * 3 + 1]; val z = xyz[i * 3 + 2]
-                    val iu = floor(frame.u(x, y, z) * inv).toInt()
-                    val iv = floor(frame.v(x, y, z) * inv).toInt()
+                    val iu = floor(us[i] * inv).toInt()
+                    val iv = floor(vs[i] * inv).toInt()
                     val key = VoxelKey.pack(iu, iv, 0)
                     var c = index[key]
                     if (c == null) {
@@ -391,15 +392,11 @@ object HoldDetector {
      * Replaces each plane distance in [relief] with its height above the local surface: the median plane
      * distance of each [Tuning.OUTDOOR_RELIEF_CELL] cell in (u, v), interpolated between cell centres.
      */
-    private fun subtractLocalSurface(relief: FloatArray, cloud: VoxelCloud, frame: WallFrame) {
-        val n = cloud.count
-        val xyz = cloud.xyz
+    private fun subtractLocalSurface(relief: FloatArray, u: FloatArray, v: FloatArray) {
+        val n = relief.size
         val cell = Tuning.OUTDOOR_RELIEF_CELL
-        val u = FloatArray(n); val v = FloatArray(n)
         val members = HashMap<Long, MutableList<Int>>()
         for (i in 0 until n) {
-            u[i] = frame.u(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])
-            v[i] = frame.v(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])
             members.getOrPut(VoxelKey.pack(floor(u[i] / cell).toInt(), floor(v[i] / cell).toInt(), 0)) { ArrayList() }.add(i)
         }
         val medians = HashMap<Long, Float>(members.size * 2)

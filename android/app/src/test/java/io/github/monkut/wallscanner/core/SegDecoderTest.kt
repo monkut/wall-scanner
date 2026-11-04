@@ -9,7 +9,7 @@ import kotlin.math.hypot
 /** YOLO-seg outputs decode into boxes after NMS, and a mask becomes a hold with the disc's size, colour and position. */
 class SegDecoderTest {
     private val px = 0.005f
-    private val frame = WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f))
+    private val frame = WallSurface.single(WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f)))
     private val size = 256   // model input
     private val proto = 64   // prototype resolution (input / 4)
     private val extent = floatArrayOf(0f, 0f, 1f, 1f)
