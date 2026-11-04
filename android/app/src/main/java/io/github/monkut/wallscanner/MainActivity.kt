@@ -507,7 +507,9 @@ class MainActivity : AppCompatActivity() {
      * capture's own set kept in the list even when retired; the last used set is preselected, else the newest
      * open one. An outdoor area has none. Cancel runs [onCancel] (New scan stops; Set location keeps the capture's set).
      */
-    private fun pickSet(location: Location, wallId: String, preselectedId: String?, onCancel: () -> Unit = {}, onPicked: (WallSet?) -> Unit) {
+    private fun pickSet(picked: Location, wallId: String, preselectedId: String?, onCancel: () -> Unit = {}, onPicked: (WallSet?) -> Unit) {
+        // Read the location again: a wall registered one step earlier is not on the object the location picker handed over.
+        val location = LocationStore.get(this, picked.id).takeIf { it.id.isNotEmpty() } ?: picked
         if (location.kind != LocationKind.GYM) { onPicked(null); return }
         val walls = listOf(wallId).filter { it.isNotEmpty() }
         val choices = WallSet.ordered(location.sets.filter { it.covers(wallId) && (it.active || it.id == preselectedId) })
