@@ -11,7 +11,7 @@ class HoldSearchTest {
     private val px = 0.005f
     private val tan = 0xffC9B496.toInt()
     private val purple = 0xff5A3C9E.toInt()
-    private val frame = WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f))
+    private val frame = WallSurface.single(WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f)))
     private val extent = floatArrayOf(0f, 0f, 2f, 2f)
 
     /** 2 × 2 m tan wall with painted features. */

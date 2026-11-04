@@ -15,17 +15,17 @@ object Coverage {
 
     class Cell(val row: Int, val col: Int)
 
-    fun thinCells(cloud: VoxelCloud, frame: WallFrame, extent: FloatArray): List<Cell> {
+    fun thinCells(cloud: VoxelCloud, surface: WallSurface, extent: FloatArray): List<Cell> {
         val width = extent[2] - extent[0]; val height = extent[3] - extent[1]
         if (width <= 0f || height <= 0f) return emptyList()
         val counts = IntArray(ROWS * COLS)
         val xyz = cloud.xyz
+        val p = FloatArray(3)
         for (i in 0 until cloud.count) {
-            val x = xyz[i * 3]; val y = xyz[i * 3 + 1]; val z = xyz[i * 3 + 2]
-            val d = frame.d(x, y, z)
-            if (d < MIN_RELIEF || d > MAX_RELIEF) continue
-            val col = ((frame.u(x, y, z) - extent[0]) / width * COLS).toInt()
-            val row = ((extent[3] - frame.v(x, y, z)) / height * ROWS).toInt()
+            surface.project(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2], p)
+            if (p[2] < MIN_RELIEF || p[2] > MAX_RELIEF) continue
+            val col = ((p[0] - extent[0]) / width * COLS).toInt()
+            val row = ((extent[3] - p[1]) / height * ROWS).toInt()
             if (col !in 0 until COLS || row !in 0 until ROWS) continue
             counts[row * COLS + col]++
         }

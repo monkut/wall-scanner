@@ -20,7 +20,7 @@ object HoldSplit {
     private const val HUE_TOL = 30f
     private const val MIN_SHARE = 0.04f // and at least MIN_SIDE² of pixels: a small hold beside a big one still counts
 
-    fun byColor(holds: List<Hold>, photo: Orthophoto, patches: ColorPatches, frame: WallFrame, wall: WallColor?): List<Hold> {
+    fun byColor(holds: List<Hold>, photo: Orthophoto, patches: ColorPatches, surface: WallSurface, wall: WallColor?): List<Hold> {
         val w = photo.image.width
         val minSidePx = max(2, (MIN_SIDE / photo.px).toInt())
         val owner = ImageHold.owners(holds, photo)
@@ -36,8 +36,8 @@ object HoldSplit {
             for (k in 1 until parts.size) others.addAll(parts[k])
             // The largest part keeps its own pixels and the grey, white and dark ones (not the wall showing through the old outline).
             val kept = inside.filter { i -> i !in others && (patches.label[i] != 0 || (wall != null && !wall.matches(patches.hue[i], patches.sat[i], patches.value[i]))) }
-            out.add(ImageHold.fromPixels(hold.id, kept.toIntArray(), hold.voxels, photo, frame).also { it.role = hold.role; it.tape = hold.tape })
-            for (k in 1 until parts.size) out.add(ImageHold.fromPixels(nextId++, parts[k].toIntArray(), 0, photo, frame))
+            out.add(ImageHold.fromPixels(hold.id, kept.toIntArray(), hold.voxels, photo, surface).also { it.role = hold.role; it.tape = hold.tape })
+            for (k in 1 until parts.size) out.add(ImageHold.fromPixels(nextId++, parts[k].toIntArray(), 0, photo, surface))
         }
         return out
     }

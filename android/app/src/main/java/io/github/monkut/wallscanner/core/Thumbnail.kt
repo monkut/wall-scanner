@@ -13,15 +13,16 @@ object Thumbnail {
     private const val MAX_RELIEF = 0.6f
     private const val SPLAT = 2 // pixels per point, fills gaps between 1 cm voxels
 
-    fun render(cloud: VoxelCloud, frame: WallFrame, width: Int = 320, height: Int = 240): Image {
+    fun render(cloud: VoxelCloud, surface: WallSurface, width: Int = 320, height: Int = 240): Image {
         val n = cloud.count
         val u = FloatArray(n); val v = FloatArray(n); val d = FloatArray(n)
         var minU = Float.MAX_VALUE; var maxU = -Float.MAX_VALUE; var minV = Float.MAX_VALUE; var maxV = -Float.MAX_VALUE
+        val p = FloatArray(3)
         for (i in 0 until n) {
-            val x = cloud.xyz[i * 3]; val y = cloud.xyz[i * 3 + 1]; val z = cloud.xyz[i * 3 + 2]
-            d[i] = frame.d(x, y, z)
+            surface.project(cloud.xyz[i * 3], cloud.xyz[i * 3 + 1], cloud.xyz[i * 3 + 2], p)
+            d[i] = p[2]
             if (d[i] < MIN_RELIEF || d[i] > MAX_RELIEF) continue
-            u[i] = frame.u(x, y, z); v[i] = frame.v(x, y, z)
+            u[i] = p[0]; v[i] = p[1]
             minU = min(minU, u[i]); maxU = max(maxU, u[i]); minV = min(minV, v[i]); maxV = max(maxV, v[i])
         }
         val pixels = IntArray(width * height) { BACKGROUND }

@@ -21,7 +21,7 @@ class CoverageTest {
             }
             x += 0.02f
         }
-        val frame = WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f))
+        val frame = WallSurface.single(WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f)))
         val thin = Coverage.thinCells(map.snapshot(), frame, floatArrayOf(0f, 0f, 3f, 3f))
         assertEquals("one thin cell, got ${thin.map { "(${it.row}, ${it.col})" }}", 1, thin.size)
         assertEquals(0, thin[0].row)
@@ -31,7 +31,7 @@ class CoverageTest {
     @Test
     fun fullCoverageReportsNothing() {
         val cloud = SyntheticWall.cloud()
-        val frame = WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f))
+        val frame = WallSurface.single(WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f)))
         assertTrue(Coverage.thinCells(cloud, frame, floatArrayOf(0f, 0f, 3f, 2.5f)).isEmpty())
     }
 }

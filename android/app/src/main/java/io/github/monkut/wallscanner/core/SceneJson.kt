@@ -4,7 +4,7 @@ import java.util.Locale
 
 /** Writes scene.json (hand-rolled so the core stays free of Android/JSON dependencies). */
 object SceneJson {
-    const val VERSION = 3 // 3: routes[].confirmed; sends moved to sends.json
+    const val VERSION = 4 // 4: wall.faces (several planar faces in one unfolded frame); 3: routes[].confirmed; sends moved to sends.json
     /** Orthophoto of the wall next to scene.json; `wall.photo.bounds` maps it into the wall frame. */
     const val PHOTO_FILE = "wall.png"
 
@@ -19,6 +19,10 @@ object SceneJson {
             val mm = (photo.relief[it] * 1000f + 0.5f).toInt().coerceIn(0, 65535)
             (0xff shl 24) or ((mm shr 8) shl 16) or ((mm and 0xff) shl 8)
         })
+
+    /** "1" for a single plane, else "2 (20.4°)": the number of faces and each secondary's angle to the primary, for logs. */
+    fun facesSummary(surface: WallSurface): String =
+        if (!surface.multi) "1" else "${surface.faces.size} (${surface.faces.drop(1).joinToString { "%.1f°".format(Locale.US, it.angleTo(surface.primary)) }})"
 
     fun write(result: SceneResult, pointCount: Int, createdAt: String, device: String): String {
         val sb = StringBuilder(64 * 1024)
@@ -45,6 +49,22 @@ object SceneJson {
         result.photo?.let { p ->
             sb.append(", \"photo\": {\"file\": ").append(str(PHOTO_FILE)).append(", \"bounds\": [").append(num(p.minU)).append(", ").append(num(p.minV))
                 .append(", ").append(num(p.maxU)).append(", ").append(num(p.maxV)).append("], \"px\": ").append(num(p.px)).append(", \"relief\": ").append(str(RELIEF_FILE)).append("}")
+        }
+        // Several faces: each with its own frame, its rigid map from local (u, v) to the unfolded (u, v) every hold and
+        // the photo use, and (secondaries) the seam line it owns one side of. The first face is the `wall` above.
+        if (result.surface.multi) {
+            sb.append(", \"faces\": [")
+            result.surface.faces.forEachIndexed { i, face ->
+                val fp = face.plane; val ff = face.frame
+                if (i > 0) sb.append(", ")
+                sb.append("{\"origin\": ").append(vec(fp.ox, fp.oy, fp.oz)).append(", \"normal\": ").append(vec(fp.nx, fp.ny, fp.nz))
+                    .append(", \"up\": ").append(vec(ff.ux, ff.uy, ff.uz)).append(", \"right\": ").append(vec(ff.rx, ff.ry, ff.rz))
+                    .append(", \"map\": [").append(num(face.cos)).append(", ").append(num(face.sin)).append(", ").append(num(face.tu)).append(", ").append(num(face.tv)).append("]")
+                val seam = face.seam
+                if (seam != null) sb.append(", \"seam\": [").append(num(seam[0])).append(", ").append(num(seam[1])).append(", ").append(num(seam[2])).append(", ").append(num(seam[3])).append("], \"side\": ").append(num(face.side))
+                sb.append("}")
+            }
+            sb.append("]")
         }
         sb.append("},\n")
         sb.append("  \"holds\": [\n")

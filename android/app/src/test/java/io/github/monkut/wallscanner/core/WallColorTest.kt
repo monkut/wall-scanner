@@ -12,7 +12,7 @@ class WallColorTest {
         val n = 1000
         val xyz = FloatArray(n * 3) { if (it % 3 == 0) (it / 3) * 0.001f else 0f }
         val rgb = ByteArray(n * 3) { colors[when ((it / 3) % 5) { 3 -> 1; 4 -> 2; else -> 0 }][it % 3].toByte() }
-        val wall = WallColor.of(VoxelCloud(n, xyz, rgb, IntArray(n) { 1 }), WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f)))!!
+        val wall = WallColor.of(VoxelCloud(n, xyz, rgb, IntArray(n) { 1 }), WallSurface.single(WallFrame(Plane(0f, 0f, 0f, 0f, 0f, 1f))))!!
         assertTrue("hue ${wall.hue}", wall.hue in 30f..40f)
         assertTrue("tan matches", wall.matches(0xC9, 0xB4, 0x96))
     }

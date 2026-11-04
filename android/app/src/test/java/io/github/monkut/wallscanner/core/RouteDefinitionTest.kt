@@ -70,7 +70,7 @@ class RouteDefinitionTest {
         val result = SceneBuilder.build(SyntheticWall.cloud(), cameras, Random(7), Definition(RouteDefinition.TAGGED, Rules(FeetRule.OPEN, false)))!!
         result.holds[0].role = HoldRole.START
         val json = SceneJson.write(result, 1, "2026-10-20T15:00:00+09:00", "test")
-        assertTrue(json.contains("\"version\": 3"))
+        assertTrue(json.contains("\"version\": 4"))
         assertTrue(json.contains("\"confirmed\": false"))
         assertTrue(!json.contains("\"sends\""))
         assertTrue(json.contains("\"definition\": {\"type\": \"tagged\", \"rules\": {\"feet\": \"open\", \"volumesOn\": false}}"))

@@ -152,7 +152,7 @@ A gym's marking system decides what "route" means for post-processing. The type 
 
 Rule modifiers (stored in `definition.rules`, orthogonal to the type): feet policy (`follow` = feet follow hands, `open`, `chips` = foot chips only), volumes on/off, start rule (matched, two-hand, hand+foot), finish rule (match top, touch tag, top-out), hold roles and eliminates.
 
-### scene.json v3 schema additions
+### scene.json v3 / v4 schema additions
 
 ```
 definition: { type: <id above>, rules: { feet: follow|open|chips, volumesOn: bool } }
@@ -167,7 +167,19 @@ wall:       { origin, normal, up, right, inliers, color: [r, g, b], extent: [min
                                                  relief = each photo pixel's height off the wall in mm (red × 256 + green), from the point cloud; the viewer shows the wall in 3D with it
 routes[]:   { id, name, color, grade, gradeSystem: yds|kyu_dan|v|font|null, holdIds: [..], confirmed: bool }   # a hold may appear in several routes
 nextRouteId: int   # kept by the viewer so a deleted route's id is never reissued (sends.json keys by route id)
+wall.faces[]: { origin, normal, up, right, map: [cos, sin, tu, tv], seam: [u, v, du, dv], side: ±1 }   # v4, only when the wall is several planar faces (#8 phase 2)
 ```
+
+v4 faces: `core/Facets.kt` bins the points near the fitted plane into 10 cm cells, gives each a local normal from
+its 3 × 3 neighbourhood, grows regions of normals within 10° and keeps regions of at least 1 m² whose plane turns
+at least 10° from the largest one (the primary face, which keeps the fitted plane and so the (u, v) every
+single-plane scene already uses). `core/WallSurface.kt` unfolds each secondary face about its seam with the
+primary (the planes' intersection line), so every hold, outline and photo pixel keeps one 2D (u, v) while being
+measured against the face it lies on: `map` turns the unfolded (u, v) back into the face's own frame, and a
+secondary face owns the `side` of its `seam` line. The orthophoto projects each pixel through its face; the viewer
+places the photo mesh and holds through the faces (`wallPoint`). On the Oct 23 2:00 PM wall (top section kicked
+back 20°) the depth stage finds 63 holds instead of 33, and reference holds matched by 3D centre within 8 cm go
+from 35 to 39 of 68.
 
 `capture.json` (written at New scan, before any data): `{ version, createdAt, location, set, definition, gps? }` where `location` is a `locations.json` id (empty for captures made before locations existed; assignable later from the capture list), `set` the id of the gym set the wall was scanned in (empty outdoors or when scanned without one) and `gps` is `{ lat, lon, accuracyM, at }`, recorded when the scan requested a position fix.
 

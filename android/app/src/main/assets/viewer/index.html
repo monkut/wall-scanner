@@ -185,7 +185,21 @@
   };
   // Wall frame: (u, v) in the wall plane (right, up) and d along the normal, as scene.json's wall fields define them.
   const wallQuaternion = () => new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(vec(scene.wall.right), vec(scene.wall.up), vec(scene.wall.normal)));
-  const wallPoint = (u, v, d = 0) => vec(scene.wall.origin).addScaledVector(vec(scene.wall.right), u).addScaledVector(vec(scene.wall.up), v).addScaledVector(vec(scene.wall.normal), d);
+  // A wall of several faces (scene.wall.faces, v4): (u, v) are unfolded coordinates; a secondary face owns one side of its
+  // seam line, the first face the rest. Each face's map turns the unfolded (u, v) back into its own frame.
+  const faceAt = (u, v) => {
+    const fs = scene.wall.faces;
+    if (!fs || fs.length < 2) return null;
+    for (let i = 1; i < fs.length; i++) { const s = fs[i].seam; if ((s[2] * (v - s[1]) - s[3] * (u - s[0])) * fs[i].side > 0) return fs[i]; }
+    return fs[0];
+  };
+  const wallPoint = (u, v, d = 0) => {
+    const f = faceAt(u, v);
+    if (!f) return vec(scene.wall.origin).addScaledVector(vec(scene.wall.right), u).addScaledVector(vec(scene.wall.up), v).addScaledVector(vec(scene.wall.normal), d);
+    const [c, s, tu, tv] = f.map;
+    const lu = c * (u - tu) + s * (v - tv), lv = -s * (u - tu) + c * (v - tv);
+    return vec(f.origin).addScaledVector(vec(f.right), lu).addScaledVector(vec(f.up), lv).addScaledVector(vec(f.normal), d);
+  };
 
   const resize = () => {
     renderer.setSize(innerWidth, innerHeight, false);
@@ -252,13 +266,19 @@
       for (let i = 0; i < relief.length; i++) relief[i] = (r[i * 4] * 256 + r[i * 4 + 1]) / 1000;
     }
     photo = { data, w: img.width, h: img.height, minU, minV, maxU, maxV, px: p.px, relief };
+    // Every vertex placed in the world through wallPoint, so a wall of several faces bends where its faces meet.
     const geometry = new THREE.PlaneGeometry(maxU - minU, maxV - minV, Math.ceil(img.width / SURFACE_STEP_PX), Math.ceil(img.height / SURFACE_STEP_PX));
     const pos = geometry.attributes.position;
-    for (let i = 0; i < pos.count; i++) pos.setZ(i, heightAt(minU + pos.getX(i) + (maxU - minU) / 2, minV + pos.getY(i) + (maxV - minV) / 2));
+    for (let i = 0; i < pos.count; i++) {
+      const u = minU + pos.getX(i) + (maxU - minU) / 2, v = minV + pos.getY(i) + (maxV - minV) / 2;
+      const p = wallPoint(u, v, heightAt(u, v));
+      pos.setXYZ(i, p.x, p.y, p.z);
+    }
+    geometry.computeVertexNormals();
     geometry.computeBoundingSphere();
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const place = (m) => { m.position.copy(wallPoint((minU + maxU) / 2, (minV + maxV) / 2)); m.quaternion.copy(wallQuaternion()); scene3.add(m); return m; };
+    const place = (m) => { scene3.add(m); return m; }; // the geometry is already in world coordinates
     photo.mesh = place(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: tex })));
     const oc = document.createElement('canvas');
     oc.width = img.width * OVERLAY_SCALE; oc.height = img.height * OVERLAY_SCALE;

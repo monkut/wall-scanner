@@ -3,7 +3,8 @@ package io.github.monkut.wallscanner.core
 import kotlin.random.Random
 
 class SceneResult(
-    val frame: WallFrame,
+    /** The wall as one or more planar faces in one unfolded frame; [frame] is its primary face. */
+    val surface: WallSurface,
     val planeInliers: Int,
     val holds: List<Hold>,
     val routes: List<Route>,
@@ -13,6 +14,8 @@ class SceneResult(
     /** Scanned wall area in the wall frame, [minU, minV, maxU, maxV] (1st..99th percentile of the points). */
     val extent: FloatArray = FloatArray(4),
 ) {
+    val frame: WallFrame get() = surface.frame
+
     /** Orthophoto of the wall (wall.png) when keyframes allowed one; set by the scene pipeline after build. */
     var photo: Orthophoto? = null
     /** Cells of the wall with little depth (Coverage); set by the scene pipeline. */
@@ -45,14 +48,16 @@ object SceneBuilder {
             else PlaneFitter.fit(cloud, random, tx, ty, tz)
             ) ?: return null
         val frame = WallFrame(fit.plane)
-        val wall = if (type.outdoor) null else WallColor.of(cloud, frame)
-        val extent = extent(cloud, frame)
+        // A gym wall may be several faces (a top that kicks back, a corner); outdoor rock keeps its one coarse plane and local relief.
+        val surface = if (type.outdoor) WallSurface.single(frame) else Facets.find(cloud, frame).surface
+        val wall = if (type.outdoor) null else WallColor.of(cloud, surface)
+        val extent = extent(cloud, surface)
         // Crash pads below the wall and beams above it reach the relief window; the wall surface itself ends at the extent.
-        val holds = HoldDetector.detect(cloud, frame, localRelief = type.outdoor, wall = wall)
+        val holds = HoldDetector.detect(cloud, surface, localRelief = type.outdoor, wall = wall)
             .filter { type.outdoor || (it.v >= extent[1] - EXTENT_HOLD_MARGIN && it.v <= extent[3] + EXTENT_HOLD_MARGIN) }
             .mapIndexed { i, h -> Hold(i + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels, h.outline) }
         val routes = if (type.colorIsRoute) RouteGrouper.group(holds, type.splitByPosition, wall) else emptyList()
-        return SceneResult(frame, fit.inliers, holds, routes, definition, wall, extent)
+        return SceneResult(surface, fit.inliers, holds, routes, definition, wall, extent)
     }
 
     /**
@@ -65,7 +70,7 @@ object SceneBuilder {
         }
         val type = result.definition.type
         val routes = if (type.colorIsRoute) RouteGrouper.group(sorted, type.splitByPosition, result.wallColor) else emptyList()
-        return SceneResult(result.frame, result.planeInliers, sorted, routes, result.definition, result.wallColor, result.extent).also {
+        return SceneResult(result.surface, result.planeInliers, sorted, routes, result.definition, result.wallColor, result.extent).also {
             it.photo = result.photo
             it.thinCoverage = result.thinCoverage
         }
@@ -85,7 +90,7 @@ object SceneBuilder {
             if (h.routeId != -1) h.routeId += offset
             h.routeIds.replaceAll { it + offset }
         }
-        return SceneResult(result.frame, result.planeInliers, result.holds, routes, result.definition, result.wallColor, result.extent).also {
+        return SceneResult(result.surface, result.planeInliers, result.holds, routes, result.definition, result.wallColor, result.extent).also {
             it.photo = result.photo
             it.thinCoverage = result.thinCoverage
         }
@@ -96,23 +101,19 @@ object SceneBuilder {
     private const val EXTENT_HOLD_MARGIN = 0.02f
 
     /** Wall-frame bounds of the points near the wall, trimmed of the stray 1% at each edge. */
-    private fun extent(cloud: VoxelCloud, frame: WallFrame): FloatArray {
+    private fun extent(cloud: VoxelCloud, surface: WallSurface): FloatArray {
         val xyz = cloud.xyz
+        val p = FloatArray(3)
+        val us = FloatArray(cloud.count); val vs = FloatArray(cloud.count)
         var n = 0
         for (i in 0 until cloud.count) {
-            val d = frame.d(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])
-            if (d >= -EXTENT_SURFACE_BAND && d <= EXTENT_SURFACE_BAND) n++
+            surface.project(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2], p)
+            if (p[2] < -EXTENT_SURFACE_BAND || p[2] > EXTENT_SURFACE_BAND) continue
+            us[n] = p[0]; vs[n] = p[1]; n++
         }
         if (n == 0) return FloatArray(4)
-        val us = FloatArray(n); val vs = FloatArray(n)
-        var k = 0
-        for (i in 0 until cloud.count) {
-            val x = xyz[i * 3]; val y = xyz[i * 3 + 1]; val z = xyz[i * 3 + 2]
-            val d = frame.d(x, y, z)
-            if (d < -EXTENT_SURFACE_BAND || d > EXTENT_SURFACE_BAND) continue
-            us[k] = frame.u(x, y, z); vs[k] = frame.v(x, y, z); k++
-        }
-        us.sort(); vs.sort()
+        us.copyOf(n).also { java.util.Arrays.sort(it); System.arraycopy(it, 0, us, 0, n) }
+        vs.copyOf(n).also { java.util.Arrays.sort(it); System.arraycopy(it, 0, vs, 0, n) }
         val lo = (n * EXTENT_CROP).toInt(); val hi = n - 1 - lo
         return floatArrayOf(us[lo], vs[lo], us[hi], vs[hi])
     }

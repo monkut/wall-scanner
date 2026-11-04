@@ -48,17 +48,18 @@ class WallColor(
         private const val PEAK_SPAN = 20f // voxels this close to the histogram peak refine the hue
 
         /** Null when fewer than 100 voxels lie on the plane. */
-        fun of(cloud: VoxelCloud, frame: WallFrame): WallColor? {
+        fun of(cloud: VoxelCloud, surface: WallSurface): WallColor? {
             val xyz = cloud.xyz; val rgb = cloud.rgb
+            val dist = FloatArray(cloud.count) { surface.d(xyz[it * 3], xyz[it * 3 + 1], xyz[it * 3 + 2]) }
             var n = 0
-            for (i in 0 until cloud.count) if (abs(frame.d(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])) <= Tuning.WALL_COLOR_BAND) n++
+            for (i in 0 until cloud.count) if (abs(dist[i]) <= Tuning.WALL_COLOR_BAND) n++
             if (n < 100) return null
             val sats = FloatArray(n); val vals = FloatArray(n); val hues = FloatArray(n)
             val hist = FloatArray(HUE_BINS)
             var sr = 0L; var sg = 0L; var sb = 0L
             var k = 0
             for (i in 0 until cloud.count) {
-                if (abs(frame.d(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])) > Tuning.WALL_COLOR_BAND) continue
+                if (abs(dist[i]) > Tuning.WALL_COLOR_BAND) continue
                 val r = rgb[i * 3].toInt() and 0xff; val g = rgb[i * 3 + 1].toInt() and 0xff; val b = rgb[i * 3 + 2].toInt() and 0xff
                 sr += r; sg += g; sb += b
                 val c = ColorUtil.rgbToHsv(r, g, b)

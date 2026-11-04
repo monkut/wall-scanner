@@ -30,13 +30,13 @@ object ScenePipeline {
 
     fun build(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit): SceneResult? {
         var result = SceneBuilder.build(cloud, cameras, Random(42), definition) ?: return null
-        result.thinCoverage = Coverage.thinCells(cloud, result.frame, result.extent)
+        result.thinCoverage = Coverage.thinCells(cloud, result.surface, result.extent)
         if (result.thinCoverage.isNotEmpty()) {
             log("COVERAGE thin depth in ${result.thinCoverage.joinToString { "(row ${it.row}, col ${it.col})" }} of a ${Coverage.ROWS}x${Coverage.COLS} grid (row 0 = top, col 0 = left)")
         }
         val keyframes = CaptureStore.readKeyframes(dir)
         val t0 = System.currentTimeMillis()
-        val photo = runCatching { OrthophotoBuilder.build(cloud, result.frame, result.extent, keyframes, decode = { decode(dir, it) }) }
+        val photo = runCatching { OrthophotoBuilder.build(cloud, result.surface, result.extent, keyframes, decode = { decode(dir, it) }) }
             .onFailure { log("orthophoto failed: $it") }
             .getOrNull()
         if (photo == null) {
@@ -51,22 +51,22 @@ object ScenePipeline {
             .getOrDefault(result.holds)
         log("hold shapes: ${result.holds.size} holds → ${refined.size} refined on the orthophoto (${System.currentTimeMillis() - t1} ms)")
         val t2 = System.currentTimeMillis()
-        val extra = runCatching { HoldSearch.find(refined, patches, photo, result.frame, result.extent) }
+        val extra = runCatching { HoldSearch.find(refined, patches, photo, result.surface, result.extent) }
             .onFailure { log("hold search failed: $it") }
             .getOrDefault(emptyList())
         log("hold search: ${extra.size} image-only holds added from the orthophoto (${System.currentTimeMillis() - t2} ms)")
         val t3 = System.currentTimeMillis()
         val model = assets?.let { HoldModel.get(it) }
         val found = refined + extra
-        val seen = if (model == null) HoldModel.Found(emptyList(), emptyList()) else runCatching { model.find(photo, result.frame, result.extent, (found.maxOfOrNull { it.id } ?: 0) + 1) }
+        val seen = if (model == null) HoldModel.Found(emptyList(), emptyList()) else runCatching { model.find(photo, result.surface, result.extent, (found.maxOfOrNull { it.id } ?: 0) + 1) }
             .onFailure { log("hold model failed: $it") }
             .getOrDefault(HoldModel.Found(emptyList(), emptyList()))
         val masks = seen.holds
-        val merged = runCatching { HoldMerge.withModel(found, masks, photo, result.frame) }
+        val merged = runCatching { HoldMerge.withModel(found, masks, photo, result.surface) }
             .onFailure { log("hold merge failed: $it") }
             .getOrDefault(HoldMerge.Merged(found, 0, 0))
         log(if (model != null) "hold model: ${masks.size} holds, ${seen.tape.size} tape strips; ${merged.split} merged holds split by them, ${merged.added} added where no other hold was (${System.currentTimeMillis() - t3} ms)" else "hold model: ${if (assets == null) "no assets" else HoldModel.loadError}")
-        val split = runCatching { HoldSplit.byColor(merged.holds, photo, patches, result.frame, result.wallColor) }
+        val split = runCatching { HoldSplit.byColor(merged.holds, photo, patches, result.surface, result.wallColor) }
             .onFailure { log("hold split failed: $it") }
             .getOrDefault(merged.holds)
         if (split.size != merged.holds.size) log("hold split: ${merged.holds.size} holds → ${split.size} by photo colour")
@@ -76,12 +76,12 @@ object ScenePipeline {
         log("hold prune: ${split.size - pruned.size} dropped: tape, or at the edge or made of bare wall (neither coloured nor seen by the model)")
         val t4 = System.currentTimeMillis()
         val sam = assets?.let { HoldSam.get(it) }
-        val refinedBySam = if (sam == null) null else runCatching { sam.refine(pruned, photo, result.frame, masks) }
+        val refinedBySam = if (sam == null) null else runCatching { sam.refine(pruned, photo, result.surface, masks) }
             .onFailure { log("hold outlines failed: $it") }
             .getOrNull()
         log(if (refinedBySam != null) "hold outlines: ${refinedBySam.redrawn} of ${pruned.size} redrawn by SAM, ${refinedBySam.merged} pieces merged into the hold around them, ${refinedBySam.added} model holds added where the outlines no longer cover them, ${refinedBySam.dropped} without contrast to the wall dropped (${System.currentTimeMillis() - t4} ms, encoder ${refinedBySam.encodeMs} ms)" else "hold outlines: SAM ${if (assets == null) "no assets" else HoldSam.loadError ?: "failed"}")
         val outlined = refinedBySam?.holds ?: pruned
-        val joined = runCatching { HoldMerge.byDepth(outlined, photo, result.frame) }
+        val joined = runCatching { HoldMerge.byDepth(outlined, photo, result.surface) }
             .onFailure { log("hold depth merge failed: $it") }
             .getOrDefault(outlined)
         log("hold depth merge: ${outlined.size - joined.size} pieces joined to a touching hold with no depth valley between them")

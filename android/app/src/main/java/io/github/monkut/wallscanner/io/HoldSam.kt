@@ -7,7 +7,7 @@ import io.github.monkut.wallscanner.core.ImageHold
 import io.github.monkut.wallscanner.core.Orthophoto
 import io.github.monkut.wallscanner.core.Raster
 import io.github.monkut.wallscanner.core.SamRefine
-import io.github.monkut.wallscanner.core.WallFrame
+import io.github.monkut.wallscanner.core.WallSurface
 import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
 import java.io.FileNotFoundException
@@ -40,7 +40,7 @@ class HoldSam private constructor(private val encoder: Interpreter, private val 
      * One run at a time: the interpreters are not thread-safe.
      */
     @Synchronized
-    fun refine(holds: List<Hold>, photo: Orthophoto, frame: WallFrame, candidates: List<Hold> = emptyList()): Refined {
+    fun refine(holds: List<Hold>, photo: Orthophoto, surface: WallSurface, candidates: List<Hold> = emptyList()): Refined {
         val image = photo.image
         val scale = SamRefine.scale(image)
         val input = floats(SamRefine.input(image))
@@ -74,7 +74,7 @@ class HoldSam private constructor(private val encoder: Interpreter, private val 
             val pixels = members.flatMap { masks[it]!!.asList() }.distinct().toIntArray()
             val role = members.map { holds[it].role }.firstOrNull { it != HoldRole.ANY } ?: hold.role
             val tape = members.firstNotNullOfOrNull { holds[it].tape }
-            out.add(ImageHold.fromPixels(hold.id, pixels, members.sumOf { holds[it].voxels }, photo, frame).also { it.role = role; it.tape = tape } to pixels)
+            out.add(ImageHold.fromPixels(hold.id, pixels, members.sumOf { holds[it].voxels }, photo, surface).also { it.role = role; it.tape = tape } to pixels)
         }
         val covered = BooleanArray(image.width * image.height)
         for ((_, px) in out) for (i in px) covered[i] = true
@@ -86,7 +86,7 @@ class HoldSam private constructor(private val encoder: Interpreter, private val 
             val (hold, px) = pair
             val m = lateMasks[k]?.takeIf { mask -> mask.count { covered[it] } < SamRefine.MAX_COVERED * mask.size }
             val pixels = m ?: px
-            out.add((if (m != null) ImageHold.fromPixels(hold.id, m, 0, photo, frame) else hold) to pixels)
+            out.add((if (m != null) ImageHold.fromPixels(hold.id, m, 0, photo, surface) else hold) to pixels)
             for (i in pixels) covered[i] = true
         }
         // Image-only holds that do not stand out from the wall around them are bolt holes, grain or an exposure seam.

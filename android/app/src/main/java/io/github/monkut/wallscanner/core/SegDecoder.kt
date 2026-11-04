@@ -114,7 +114,7 @@ object SegDecoder {
      */
     fun holds(
         detections: List<Detection>, protos: FloatArray, protoSize: Int, protosChannelsFirst: Boolean, box: Letterbox,
-        photo: Orthophoto, frame: WallFrame, extent: FloatArray, firstId: Int, plausibleOnly: Boolean = true,
+        photo: Orthophoto, surface: WallSurface, extent: FloatArray, firstId: Int, plausibleOnly: Boolean = true,
     ): List<Hold> {
         val w = photo.image.width; val h = photo.image.height
         val minSidePx = max(2, (MIN_SIDE / photo.px).toInt())
@@ -140,7 +140,7 @@ object SegDecoder {
             if (max(px1 - px0, py1 - py0) + 1 < minSidePx) continue
             val members = pixels.toIntArray()
             if (plausibleOnly && !HoldSearch.plausible(members, members.size, photo, extent)) continue
-            out.add(ImageHold.fromPixels(nextId++, members, 0, photo, frame))
+            out.add(ImageHold.fromPixels(nextId++, members, 0, photo, surface))
         }
         return out
     }

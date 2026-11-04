@@ -18,7 +18,7 @@ object HoldSearch {
     private const val PAD_RELIEF = 0.12f // crash pads stand this far off the wall …
     private const val PAD_ZONE = 0.35f // … within this height of the wall's bottom edge
 
-    fun find(holds: List<Hold>, patches: ColorPatches, photo: Orthophoto, frame: WallFrame, extent: FloatArray): List<Hold> {
+    fun find(holds: List<Hold>, patches: ColorPatches, photo: Orthophoto, surface: WallSurface, extent: FloatArray): List<Hold> {
         val w = photo.image.width; val h = photo.image.height
         val covered = BooleanArray(w * h)
         for (hold in holds) for (i in Raster.fillPolygon(ImageHold.polygon(hold), photo)) covered[i] = true
@@ -33,7 +33,7 @@ object HoldSearch {
             val members = patches.members(p)
             if (members.count { covered[it] } >= MAX_COVERED * count) continue
             if (!plausible(members, count, photo, extent)) continue
-            found.add(ImageHold.fromPixels(nextId++, members, 0, photo, frame))
+            found.add(ImageHold.fromPixels(nextId++, members, 0, photo, surface))
         }
         return found
     }

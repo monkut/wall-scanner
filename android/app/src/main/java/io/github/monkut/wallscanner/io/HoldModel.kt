@@ -5,7 +5,7 @@ import io.github.monkut.wallscanner.core.Clahe
 import io.github.monkut.wallscanner.core.Hold
 import io.github.monkut.wallscanner.core.Orthophoto
 import io.github.monkut.wallscanner.core.SegDecoder
-import io.github.monkut.wallscanner.core.WallFrame
+import io.github.monkut.wallscanner.core.WallSurface
 import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
 import java.io.FileNotFoundException
@@ -30,7 +30,7 @@ class HoldModel private constructor(private val interpreter: Interpreter) {
      * as the training images did. One run at a time: the interpreter is not thread-safe.
      */
     @Synchronized
-    fun find(photo: Orthophoto, frame: WallFrame, extent: FloatArray, firstId: Int): Found {
+    fun find(photo: Orthophoto, surface: WallSurface, extent: FloatArray, firstId: Int): Found {
         val inShape = interpreter.getInputTensor(0).shape()
         val channelsFirst = inShape[1] == 3
         val size = if (channelsFirst) inShape[2] else inShape[1]
@@ -57,8 +57,8 @@ class HoldModel private constructor(private val interpreter: Interpreter) {
         val protoArr = FloatArray(protoShape[1] * protoShape[2] * protoShape[3]).also { protos.rewind(); protos.asFloatBuffer().get(it) }
         val detections = SegDecoder.detections(boxArr, boxShape[1], boxShape[2], size)
         val (holdDets, tapeDets) = detections.partition { it.cls != SegDecoder.TAPE }
-        val holds = SegDecoder.holds(holdDets, protoArr, protoSize, protosChannelsFirst, box, photo, frame, extent, firstId)
-        val tape = SegDecoder.holds(tapeDets, protoArr, protoSize, protosChannelsFirst, box, photo, frame, extent, firstId + holds.size, plausibleOnly = false)
+        val holds = SegDecoder.holds(holdDets, protoArr, protoSize, protosChannelsFirst, box, photo, surface, extent, firstId)
+        val tape = SegDecoder.holds(tapeDets, protoArr, protoSize, protosChannelsFirst, box, photo, surface, extent, firstId + holds.size, plausibleOnly = false)
         return Found(holds, tape)
     }
 
