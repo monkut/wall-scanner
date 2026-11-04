@@ -26,8 +26,8 @@ the climber: their photo, else the first letter of their username, else a gear b
 **Settings** (see below).
 
 - **Capture** mode is for scanning and identifying routes: the **New scan** button and the list of captures
-  (thumbnail, timestamp, location, set, wall type, hold / route / confirmed counts). Tap a capture to open it in the
-  viewer. Long-press for **Set location** (location and, at a gym, set), **Reprocess** (runs hold and route detection again on the saved
+  (thumbnail, timestamp, location, wall, set, wall type, hold / route / confirmed counts). Tap a capture to open it in the
+  viewer. Long-press for **Set location** (location and, at a gym, wall and set), **Reprocess** (runs hold and route detection again on the saved
   point cloud, replacing route edits and confirmations; use after a detector change), **Share** (zip of the
   capture) and **Delete**. Captures without a 3D scene are listed as "incomplete · diagnostics only" and can
   still be shared.
@@ -43,7 +43,12 @@ the climber: their photo, else the first letter of their username, else a gear b
   from New scan's "New location…" and from Add location. At a gym the routes are grouped by **set** (the
   routes on the wall between two resets): open sets first, newest first, then retired ones, then "No set" for
   routes scanned without one; a set header shows its dates and route count, and its **Edit** renames the set
-  or marks it retired once the wall has been reset (its routes and sends stay). Tap a route to open its record.
+  or marks it retired once the wall has been reset (its routes and sends stay). Once the gym has registered
+  **walls** ("Main wall", "Cave": the fixed structures that outlive resets), the routes are grouped by wall first
+  and by set inside each wall; a wall header shows the open sets covering it and its route count, and its
+  **Edit** renames or deletes the wall (its captures and routes then show under "No wall", which also collects
+  routes scanned without a wall). A set covers the walls ticked in its form, or the whole gym when none is.
+  Tap a route to open its record.
 
 ### Settings and profile
 
@@ -72,9 +77,13 @@ locale support (`Language.kt`) and applied to the viewer page through its `lang`
 
 1. **Where are you scanning?** Pick a registered location or **New location…** (name, Gym / Outdoor area,
    grade scale Q/D, V, Font or YDS). The last used location is preselected.
-2. **Which set is this wall?** (gyms only) Pick one of the gym's open sets or **New set…**, named after the
-   month ("October Set") unless renamed; **Without a set** goes on with none. The last used set is preselected.
-3. **How are routes marked on this wall or rock?** Hold colour, hold colour with taped start and finish, tape, circuit, tagged, competition,
+2. **Which wall are you scanning?** (gyms only) Pick one of the gym's registered walls or **New wall…** (a name:
+   "Main wall", "Cave"); a gym without walls goes straight to the New wall form, whose **Without a wall** goes on
+   with none. The last used wall is preselected.
+3. **Which set is this wall?** (gyms only) Pick one of the gym's open sets covering that wall or **New set…**,
+   named after the month ("October Set") unless renamed and covering the chosen wall (untick every wall for the
+   whole gym); **Without a set** goes on with none. The last used set is preselected.
+4. **How are routes marked on this wall or rock?** Hold colour, hold colour with taped start and finish, tape, circuit, tagged, competition,
    free / spray wall, system board, or outdoor rock (preselected for outdoor areas). See `ARCHITECTURE.md` §9
    for what each type means and how it is processed.
 
@@ -183,7 +192,7 @@ Each capture has a `scan.log`. Key lines, all with JST timestamps:
 | Line | Meaning |
 |---|---|
 | `capture …`, `device …`, `camera config chosen …` | Environment and ARCore configuration |
-| `location: <id>`, `route definition: <type> …` | Choices made at New scan |
+| `location: <id> · wall: <id> · set: <id>`, `route definition: <type> …` | Choices made at New scan |
 | `USER tapped Start/Pause/Resume/Finish button …` | Button presses with segment, voxel and pose state |
 | `LIFECYCLE onPause … / onResume (pausedFor …)` | Android pauses (screen off, app switch) that interrupt ARCore |
 | `TRACKING lost (…) / regained after …` | ARCore tracking changes with camera poses |
@@ -207,7 +216,7 @@ adb exec-out run-as io.github.monkut.wallscanner tar -C files/captures -cf - <id
 ```
 files/locations.json                      { version, nextId, locations: [{ id, name, kind: gym|outdoor, gradeSystem, coords?: { lat, lon, accuracyM, at }, sets: [{ id, name, createdAt, retiredAt? }] }] }
 files/captures/<JST timestamp>/
-  capture.json                            { version, createdAt, location, set, definition: { type, rules }, gps?: { lat, lon, accuracyM, at } }
+  capture.json                            { version, createdAt, location, wall, set, definition: { type, rules }, gps?: { lat, lon, accuracyM, at } }
   scan.log                                diagnostics (always written)
   segments/segment-NN.ply                 per-segment points, world coordinates before snapping
   frames/frame-NNNN.jpg, frames.jsonl     keyframes and segment-local poses

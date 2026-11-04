@@ -45,6 +45,7 @@ import io.github.monkut.wallscanner.io.RouteRecord
 import io.github.monkut.wallscanner.io.RouteStore
 import io.github.monkut.wallscanner.io.SendLog
 import io.github.monkut.wallscanner.io.SendResult
+import io.github.monkut.wallscanner.io.Wall
 import io.github.monkut.wallscanner.io.WallSet
 import io.github.monkut.wallscanner.routes.RouteActivity
 import io.github.monkut.wallscanner.scan.GpsFix
@@ -59,10 +60,11 @@ import kotlin.math.roundToInt
  * Home screen with a mode switch. **Capture** mode: New scan plus the capture list (scan sessions opened in
  * the viewer to identify and confirm routes). **Logbook** mode: the registered locations with their progress;
  * tap one to list its confirmed routes (opened in [RouteActivity] to log sends) under a header with **Edit**
- * (name, kind, grade scale, coordinates, delete); at a gym the routes are grouped by set (the routes on the
- * wall between two resets), each under a header with **Edit** (rename, retire). New scan asks for the location
- * (a registered gym or outdoor area, or a new one), at a gym the set (an open one or a new one), and then the
- * wall type. The climber's picture in the header opens Settings: the profile (picture, username, height, reach),
+ * (name, kind, grade scale, coordinates, delete); at a gym the routes are grouped by wall (once the gym has
+ * registered walls, each under a header with **Edit**: rename, delete) and inside by set (the routes on the wall
+ * between two resets), each under a header with **Edit** (rename, retire, walls covered). New scan asks for the
+ * location (a registered gym or outdoor area, or a new one), at a gym the wall and the set (an open one covering
+ * that wall, or a new one), and then the wall type. The climber's picture in the header opens Settings: the profile (picture, username, height, reach),
  * the units its lengths are shown in, and the app language.
  */
 class MainActivity : AppCompatActivity() {
@@ -91,15 +93,20 @@ class MainActivity : AppCompatActivity() {
         override fun handleOnBackPressed() { selectedLocationId = null; refresh() }
     }
 
-    /** One row of the logbook: a location header, a set header ([NO_SET] for routes outside every set), or a confirmed route. */
-    private class RouteRow(val header: Location? = null, val set: WallSet? = null, val route: RouteRecord? = null)
+    /**
+     * One row of the logbook: a location header, a wall header ([NO_WALL] for routes scanned without one), a set
+     * header ([NO_SET] for routes outside every set), or a confirmed route.
+     */
+    private class RouteRow(val header: Location? = null, val wall: Wall? = null, val set: WallSet? = null, val route: RouteRecord? = null)
 
     private companion object {
         const val PREF_DEFINITION = "definition"
         const val PREF_LOCATION = "location"
+        const val PREF_WALL = "wall"
         const val PREF_SET = "set"
         const val PREF_MODE = "mode"
         val NO_SET = WallSet("", "", "")
+        val NO_WALL = Wall("", "")
     }
 
     private val logbook get() = mode.checkedButtonId == R.id.modeLogbook
@@ -169,14 +176,13 @@ class MainActivity : AppCompatActivity() {
         locationRows = locations.values.toList() + if (confirmed.any { it.locationId !in locations }) listOf(LocationStore.UNKNOWN) else emptyList()
         val shown = if (selected == null) confirmed else confirmed.filter { keyOf(it) == selected }
         routeRows = if (selected == null) emptyList() else {
-            // A gym's routes sit under their set, open sets first; routes outside every set come last under "No set".
             val location = locationOf(selected)
-            val groups = WallSet.ordered(location.sets).map { set -> set to shown.filter { it.setId == set.id } }
-            val outside = shown.filter { r -> location.set(r.setId) == null }
-            listOf(RouteRow(header = location)) +
-                groups.flatMap { (set, routes) -> listOf(RouteRow(set = set)) + routes.map { RouteRow(route = it) } } +
-                (if (groups.isNotEmpty() && outside.isNotEmpty()) listOf(RouteRow(set = NO_SET)) else emptyList()) +
-                outside.map { RouteRow(route = it) }
+            listOf(RouteRow(header = location)) + if (location.walls.isEmpty()) setRows(location, shown, wallId = "") else {
+                // A gym split into walls: each wall's routes under its header; routes with no (or a deleted) wall last under "No wall".
+                val orphans = shown.filter { location.wall(it.wallId) == null }
+                val byWall = location.walls.map { wall -> wall to shown.filter { it.wallId == wall.id } } + (if (orphans.isEmpty()) emptyList() else listOf(NO_WALL to orphans))
+                byWall.flatMap { (wall, routes) -> listOf(RouteRow(wall = wall)) + setRows(location, routes, wall.id) }
+            }
         }
         // One primary action per screen: label and handler decided together.
         btnPrimary.visibility = if (!logbook || selected == null) View.VISIBLE else View.GONE
@@ -210,6 +216,20 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Set headers with their routes: the sets covering [wallId] (open first, newest first, then retired) plus any
+     * set that still has routes here; routes outside every set come last under "No set". A gym without walls
+     * passes "" and so lists every set.
+     */
+    private fun setRows(location: Location, routes: List<RouteRecord>, wallId: String): List<RouteRow> {
+        val sets = WallSet.ordered(location.sets.filter { set -> location.walls.isEmpty() || set.covers(wallId) || routes.any { it.setId == set.id } })
+        val groups = sets.map { set -> set to routes.filter { it.setId == set.id } }
+        val outside = routes.filter { r -> sets.none { it.id == r.setId } }
+        return groups.flatMap { (set, inSet) -> listOf(RouteRow(set = set)) + inSet.map { RouteRow(route = it) } } +
+            (if (groups.isNotEmpty() && outside.isNotEmpty()) listOf(RouteRow(set = NO_SET)) else emptyList()) +
+            outside.map { RouteRow(route = it) }
     }
 
     private fun locationOf(id: String): Location = locations[id] ?: LocationStore.UNKNOWN
@@ -355,51 +375,142 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /** New scan: pick the location (remembered), at a gym its set (remembered), then how routes are marked there (remembered), then scan. */
+    /** New scan: pick the location (remembered), at a gym its wall and set (remembered), then how routes are marked there (remembered), then scan. */
     private fun handleNewScan() {
         val prefs = getPreferences(MODE_PRIVATE)
         pickLocation(prefs.getString(PREF_LOCATION, null)) { location ->
             prefs.edit().putString(PREF_LOCATION, location.id).apply()
-            pickSet(location, prefs.getString(PREF_SET, null)) { set ->
-                prefs.edit().putString(PREF_SET, set?.id ?: "").apply()
-                val preferred = if (location.kind == LocationKind.OUTDOOR) RouteDefinition.OUTDOOR
-                else RouteDefinition.fromId(prefs.getString(PREF_DEFINITION, null)).takeIf { !it.outdoor } ?: RouteDefinition.DEFAULT
-                pickDefinition(preferred) { chosen ->
-                    prefs.edit().putString(PREF_DEFINITION, chosen.id).apply()
-                    startActivity(
-                        Intent(this, ScanActivity::class.java)
-                            .putExtra(ScanActivity.EXTRA_DEFINITION, chosen.id)
-                            .putExtra(ScanActivity.EXTRA_LOCATION, location.id)
-                            .putExtra(ScanActivity.EXTRA_SET, set?.id ?: "")
-                    )
+            pickWall(location, prefs.getString(PREF_WALL, null)) { wall ->
+                prefs.edit().putString(PREF_WALL, wall?.id ?: "").apply()
+                pickSet(location, wall?.id ?: "", prefs.getString(PREF_SET, null)) { set ->
+                    prefs.edit().putString(PREF_SET, set?.id ?: "").apply()
+                    val preferred = if (location.kind == LocationKind.OUTDOOR) RouteDefinition.OUTDOOR
+                    else RouteDefinition.fromId(prefs.getString(PREF_DEFINITION, null)).takeIf { !it.outdoor } ?: RouteDefinition.DEFAULT
+                    pickDefinition(preferred) { chosen ->
+                        prefs.edit().putString(PREF_DEFINITION, chosen.id).apply()
+                        startActivity(
+                            Intent(this, ScanActivity::class.java)
+                                .putExtra(ScanActivity.EXTRA_DEFINITION, chosen.id)
+                                .putExtra(ScanActivity.EXTRA_LOCATION, location.id)
+                                .putExtra(ScanActivity.EXTRA_WALL, wall?.id ?: "")
+                                .putExtra(ScanActivity.EXTRA_SET, set?.id ?: "")
+                        )
+                    }
                 }
             }
         }
     }
 
     /**
-     * Gym sets: single choice of the open sets (newest first) plus "New set…", with the capture's own set kept
-     * in the list even when retired; the last used set is preselected, else the newest open one. An outdoor
-     * area has none. Cancel runs [onCancel] (New scan stops; Set location keeps the capture's set).
+     * Gym walls: single choice of the registered walls plus "New wall…"; the last used wall is preselected. A gym
+     * without walls goes straight to the New wall form, whose "Without a wall" carries on with none. An outdoor
+     * area has no walls. Cancel runs [onCancel] (New scan stops; Set location keeps the capture's wall and set).
      */
-    private fun pickSet(location: Location, preselectedId: String?, onCancel: () -> Unit = {}, onPicked: (WallSet?) -> Unit) {
+    private fun pickWall(location: Location, preselectedId: String?, onCancel: () -> Unit = {}, onPicked: (Wall?) -> Unit) {
         if (location.kind != LocationKind.GYM) { onPicked(null); return }
-        val choices = WallSet.ordered(location.sets.filter { it.active || it.id == preselectedId })
-        if (choices.isEmpty()) { handleNewSet(location, onPicked); return }
+        val walls = location.walls
+        if (walls.isEmpty()) { handleNewWall(location, onPicked); return }
+        val labels = (walls.map { it.name } + getString(R.string.new_wall)).toTypedArray()
+        var index = walls.indexOfFirst { it.id == preselectedId }.takeIf { it >= 0 } ?: 0
+        AlertDialog.Builder(this)
+            .setTitle(R.string.choose_wall)
+            .setSingleChoiceItems(labels, index) { _, which -> index = which }
+            .setPositiveButton(R.string.next) { _, _ -> if (index < walls.size) onPicked(walls[index]) else handleNewWall(location, onPicked) }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> onCancel() }
+            .show()
+    }
+
+    /** Registers a wall at the gym ("Main wall"); "Without a wall" goes on with none. */
+    private fun handleNewWall(location: Location, onPicked: (Wall?) -> Unit) =
+        wallDialog(R.string.new_wall, R.string.next, location, existing = null, onSave = { onPicked(LocationStore.addWall(this, location.id, it)) }) {
+            it.setNegativeButton(R.string.without_wall) { _, _ -> onPicked(null) }
+        }
+
+    /** Edit from a wall header: rename, or delete (asks first). */
+    private fun handleEditWall(location: Location, wall: Wall) =
+        wallDialog(R.string.edit_wall, R.string.save, location, wall, onSave = { LocationStore.updateWall(this, location.id, Wall(wall.id, it)); refresh() }) {
+            it.setNegativeButton(android.R.string.cancel, null)
+            it.setNeutralButton(R.string.delete) { _, _ -> handleDeleteWall(location, wall) }
+        }
+
+    /**
+     * Wall name form shared by New wall and Edit wall; [buttons] adds the dialog's other buttons. An empty name or
+     * one already used at the gym (trimmed, case-insensitive) re-opens the form with the draft kept.
+     */
+    private fun wallDialog(
+        @StringRes title: Int, @StringRes positive: Int, location: Location, existing: Wall?, draft: String? = null,
+        onSave: (String) -> Unit, buttons: (AlertDialog.Builder) -> Unit,
+    ) {
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_wall, null)
+        val name = view.findViewById<EditText>(R.id.wallName).apply { setText(draft ?: existing?.name ?: "") }
+        val builder = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(view)
+            .setPositiveButton(positive) { _, _ ->
+                val text = name.text.toString().trim()
+                if (text.isEmpty() || wallNameTaken(location, text, exceptId = existing?.id ?: "")) {
+                    if (text.isNotEmpty()) Toast.makeText(this, getString(R.string.wall_name_taken, text), Toast.LENGTH_LONG).show()
+                    wallDialog(title, positive, location, existing, text, onSave, buttons)
+                    return@setPositiveButton
+                }
+                onSave(text)
+            }
+        buttons(builder)
+        // Destructive, so it must not read as a second primary action.
+        builder.show().getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(ContextCompat.getColor(this, R.color.danger))
+    }
+
+    private fun wallNameTaken(location: Location, name: String, exceptId: String): Boolean =
+        location.walls.any { it.id != exceptId && it.name.equals(name.trim(), ignoreCase = true) }
+
+    private fun handleDeleteWall(location: Location, wall: Wall) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.delete_wall)
+            .setMessage(getString(R.string.delete_wall_confirm, wall.name))
+            .setPositiveButton(R.string.delete) { _, _ -> LocationStore.removeWall(this, location.id, wall.id); refresh() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Fills the set form's wall list with one checkbox per registered wall ([checked] ticked); hidden when the gym
+     * has no walls. Returns a reader of the ticked ids (none = the whole gym).
+     */
+    private fun bindSetWalls(view: View, location: Location, checked: Collection<String>): () -> List<String> {
+        if (location.walls.isEmpty()) return { emptyList() }
+        val container = view.findViewById<ViewGroup>(R.id.setWalls).apply { visibility = View.VISIBLE }
+        val boxes = location.walls.map { wall -> CheckBox(this).apply { text = wall.name; tag = wall.id; isChecked = wall.id in checked; container.addView(this) } }
+        return { boxes.filter { it.isChecked }.map { it.tag as String } }
+    }
+
+    /**
+     * Gym sets: single choice of the open sets covering [wallId] (newest first) plus "New set…", with the
+     * capture's own set kept in the list even when retired; the last used set is preselected, else the newest
+     * open one. An outdoor area has none. Cancel runs [onCancel] (New scan stops; Set location keeps the capture's set).
+     */
+    private fun pickSet(location: Location, wallId: String, preselectedId: String?, onCancel: () -> Unit = {}, onPicked: (WallSet?) -> Unit) {
+        if (location.kind != LocationKind.GYM) { onPicked(null); return }
+        val walls = listOf(wallId).filter { it.isNotEmpty() }
+        val choices = WallSet.ordered(location.sets.filter { it.covers(wallId) && (it.active || it.id == preselectedId) })
+        if (choices.isEmpty()) { handleNewSet(location, walls, onPicked); return }
         val labels = (choices.map { "${Labels.set(this, it)}\n${getString(R.string.set_since, Labels.isoDate(this, it.createdAt))}" } + getString(R.string.new_set)).toTypedArray()
         var index = choices.indexOfFirst { it.id == preselectedId }.takeIf { it >= 0 } ?: choices.indexOf(WallSet.current(choices))
         AlertDialog.Builder(this)
             .setTitle(R.string.choose_set)
             .setSingleChoiceItems(labels, index) { _, which -> index = which }
-            .setPositiveButton(R.string.next) { _, _ -> if (index < choices.size) onPicked(choices[index]) else handleNewSet(location, onPicked) }
+            .setPositiveButton(R.string.next) { _, _ -> if (index < choices.size) onPicked(choices[index]) else handleNewSet(location, walls, onPicked) }
             .setNegativeButton(android.R.string.cancel) { _, _ -> onCancel() }
             .show()
     }
 
-    /** Opens a set at the gym, named after the month ("October Set") unless renamed; "Without a set" goes on with none. */
-    private fun handleNewSet(location: Location, onPicked: (WallSet?) -> Unit, draft: String? = null) {
+    /**
+     * Opens a set at the gym, named after the month ("October Set") unless renamed and covering [walls] (the wall
+     * being scanned; untick all for the whole gym); "Without a set" goes on with none.
+     */
+    private fun handleNewSet(location: Location, walls: Collection<String>, onPicked: (WallSet?) -> Unit, draft: String? = null) {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_set, null)
         val name = view.findViewById<EditText>(R.id.setName)
+        val chosenWalls = bindSetWalls(view, location, walls)
         view.findViewById<View>(R.id.setRetired).visibility = View.GONE
         name.setText(draft ?: Labels.defaultSetName(this))
         AlertDialog.Builder(this)
@@ -409,10 +520,10 @@ class MainActivity : AppCompatActivity() {
                 val text = name.text.toString().trim()
                 if (text.isEmpty() || setNameTaken(location, text, exceptId = "")) {
                     if (text.isNotEmpty()) Toast.makeText(this, getString(R.string.set_name_taken, text), Toast.LENGTH_LONG).show()
-                    handleNewSet(location, onPicked, text)
+                    handleNewSet(location, chosenWalls(), onPicked, text)
                     return@setPositiveButton
                 }
-                onPicked(LocationStore.addSet(this, location.id, text))
+                onPicked(LocationStore.addSet(this, location.id, text, chosenWalls()))
             }
             .setNegativeButton(R.string.without_set) { _, _ -> onPicked(null) }
             .show()
@@ -422,11 +533,12 @@ class MainActivity : AppCompatActivity() {
     private fun setNameTaken(location: Location, name: String, exceptId: String): Boolean =
         location.sets.any { it.active && it.id != exceptId && it.name.equals(name.trim(), ignoreCase = true) }
 
-    /** Edit from a set header: rename, or retire it once the wall has been reset (reopen by unticking). */
-    private fun handleEditSet(location: Location, set: WallSet, draft: String? = null) {
+    /** Edit from a set header: rename, change the walls it covers, or retire it once the wall has been reset (reopen by unticking). */
+    private fun handleEditSet(location: Location, set: WallSet, draft: String? = null, walls: Collection<String> = set.wallIds) {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_set, null)
         val name = view.findViewById<EditText>(R.id.setName)
         val retired = view.findViewById<CheckBox>(R.id.setRetired)
+        val chosenWalls = bindSetWalls(view, location, walls)
         name.setText(draft ?: set.name)
         retired.isChecked = !set.active
         AlertDialog.Builder(this)
@@ -436,11 +548,11 @@ class MainActivity : AppCompatActivity() {
                 val text = name.text.toString().trim()
                 if (text.isEmpty() || setNameTaken(location, text, exceptId = set.id)) {
                     if (text.isNotEmpty()) Toast.makeText(this, getString(R.string.set_name_taken, text), Toast.LENGTH_LONG).show()
-                    handleEditSet(location, set, text)
+                    handleEditSet(location, set, text, chosenWalls())
                     return@setPositiveButton
                 }
                 val retiredAt = if (retired.isChecked) set.retiredAt ?: CaptureStore.nowIso() else null
-                LocationStore.updateSet(this, location.id, WallSet(set.id, text, set.createdAt, retiredAt))
+                LocationStore.updateSet(this, location.id, WallSet(set.id, text, set.createdAt, retiredAt, chosenWalls()))
                 refresh()
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -612,10 +724,13 @@ class MainActivity : AppCompatActivity() {
             .setItems(items) { _, which ->
                 when (which) {
                     0 -> pickLocation(CaptureStore.readLocationId(dir)) { location ->
-                        val current = CaptureStore.readPlace(dir).setId
-                        pickSet(location, current, onCancel = { CaptureStore.setLocation(dir, location.id, current); refresh() }) { set ->
-                            CaptureStore.setLocation(dir, location.id, set?.id ?: "")
-                            refresh()
+                        val current = CaptureStore.readPlace(dir)
+                        pickWall(location, current.wallId, onCancel = { CaptureStore.setLocation(dir, location.id, current.setId, current.wallId); refresh() }) { wall ->
+                            val wallId = wall?.id ?: ""
+                            pickSet(location, wallId, current.setId, onCancel = { CaptureStore.setLocation(dir, location.id, current.setId, wallId); refresh() }) { set ->
+                                CaptureStore.setLocation(dir, location.id, set?.id ?: "", wallId)
+                                refresh()
+                            }
                         }
                     }
                     1 -> handleReprocess(dir)
@@ -674,7 +789,10 @@ class MainActivity : AppCompatActivity() {
             val where = CaptureStore.readPlace(dir)
             val location = locationOf(where.locationId)
             val set = location.set(where.setId)
-            val place = Labels.join(c, Labels.location(c, location), set?.let { Labels.set(c, it) } ?: "", Labels.definition(c, CaptureStore.readDefinition(dir).type))
+            val place = Labels.join(
+                c, Labels.location(c, location), location.wall(where.wallId)?.name ?: "", set?.let { Labels.set(c, it) } ?: "",
+                Labels.definition(c, CaptureStore.readDefinition(dir).type),
+            )
             val meta = if (!CaptureStore.hasScene(dir)) getString(R.string.incomplete_capture) else runCatching {
                 val holds = JSONObject(CaptureStore.readScene(dir)).getJSONArray("holds").length()
                 val routes = RouteStore.routes(dir)
@@ -709,14 +827,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Set header in the logbook: name (marked when retired), dates, route count, Edit for a real set. */
+    /** Wall header in the logbook: name ("No wall" for routes scanned without one), its open sets, route count, Edit for a real wall. */
+    private fun bindWallHeader(view: View, location: Location, wall: Wall, routes: Int) {
+        val c = this@MainActivity
+        val real = wall.id.isNotEmpty()
+        view.setPaddingRelative(0, view.paddingTop, view.paddingEnd, view.paddingBottom)
+        view.findViewById<TextView>(R.id.header).text = if (real) wall.name else getString(R.string.no_wall)
+        view.findViewById<TextView>(R.id.headerDetail).text = Labels.join(c, *location.sets.filter { it.active && it.covers(wall.id) }.map { it.name }.toTypedArray())
+        view.findViewById<TextView>(R.id.headerCounts).apply { text = Labels.plural(c, R.plurals.routes_count, routes); visibility = View.VISIBLE }
+        view.findViewById<View>(R.id.chevron).visibility = View.GONE
+        view.findViewById<View>(R.id.btnEditLocation).apply {
+            visibility = if (real) View.VISIBLE else View.GONE
+            setOnClickListener { handleEditWall(location, wall) }
+        }
+    }
+
+    /** "Main wall, Cave" or "whole gym" for a set at a gym with walls; "" at a gym without. */
+    private fun setWallsLabel(location: Location, set: WallSet): String = when {
+        location.walls.isEmpty() -> ""
+        set.wallIds.isEmpty() -> getString(R.string.set_whole_gym)
+        else -> Labels.join(this, *set.wallIds.mapNotNull { location.wall(it)?.name }.toTypedArray())
+    }
+
+    /** Set header in the logbook: name (marked when retired), dates and walls, route count, Edit for a real set; indented under a wall header. */
     private fun bindSetHeader(view: View, location: Location, set: WallSet, routes: Int) {
         val c = this@MainActivity
         val real = set.id.isNotEmpty()
+        val indent = if (location.walls.isEmpty()) 0 else (16 * resources.displayMetrics.density).toInt()
+        view.setPaddingRelative(indent, view.paddingTop, view.paddingEnd, view.paddingBottom)
         view.findViewById<TextView>(R.id.header).text = if (real) Labels.set(c, set) else getString(R.string.no_set)
         view.findViewById<TextView>(R.id.headerDetail).text = if (!real) "" else Labels.join(
             c, getString(R.string.set_since, Labels.isoDate(c, set.createdAt)),
             set.retiredAt?.let { getString(R.string.set_retired_on, Labels.isoDate(c, it)) } ?: "",
+            setWallsLabel(location, set),
         )
         view.findViewById<TextView>(R.id.headerCounts).apply { text = Labels.plural(c, R.plurals.routes_count, routes); visibility = View.VISIBLE }
         view.findViewById<View>(R.id.chevron).visibility = View.GONE
@@ -728,12 +871,18 @@ class MainActivity : AppCompatActivity() {
 
     private inner class RouteAdapter(items: List<RouteRow>) : ArrayAdapter<RouteRow>(this, R.layout.item_capture, items) {
         override fun getViewTypeCount() = 3
-        override fun getItemViewType(position: Int) = getItem(position)!!.let { if (it.header != null) 0 else if (it.set != null) 2 else 1 }
+        /** Wall and set headers share the header layout (and view type); every field is rebound. */
+        override fun getItemViewType(position: Int) = getItem(position)!!.let { if (it.header != null) 0 else if (it.set != null || it.wall != null) 2 else 1 }
         override fun isEnabled(position: Int) = getItem(position)!!.route != null
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val row = getItem(position)!!
             val c = this@MainActivity
+            if (row.wall != null) {
+                val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_header, parent, false)
+                bindWallHeader(view, routeRows[0].header!!, row.wall, routeRows.drop(position + 1).takeWhile { it.wall == null }.count { it.route != null })
+                return view
+            }
             if (row.set != null) {
                 val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_header, parent, false)
                 bindSetHeader(view, routeRows[0].header!!, row.set, routeRows.drop(position + 1).takeWhile { it.route != null }.size)
