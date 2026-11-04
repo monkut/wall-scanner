@@ -108,6 +108,9 @@ class MainActivity : AppCompatActivity() {
         const val PREF_MODE = "mode"
         val NO_SET = WallSet("", "", "")
         val NO_WALL = Wall("", "")
+        /** Logbook header sizes: location and wall headers, and set headers nested under a wall (item_header.xml sets 18sp). */
+        const val HEADER_SP = 18f
+        const val SUBHEADER_SP = 16f
     }
 
     private val logbook get() = mode.checkedButtonId == R.id.modeLogbook
@@ -182,7 +185,9 @@ class MainActivity : AppCompatActivity() {
                 // A gym split into walls: each wall's routes under its header; routes with no (or a deleted) wall last under "No wall".
                 val orphans = shown.filter { location.wall(it.wallId) == null }
                 val byWall = location.walls.map { wall -> wall to shown.filter { it.wallId == wall.id } } + (if (orphans.isEmpty()) emptyList() else listOf(NO_WALL to orphans))
-                byWall.flatMap { (wall, routes) -> listOf(RouteRow(wall = wall)) + setRows(location, routes, wall.id) }
+                // A set gets an empty header only where it has no routes at all in the gym, once, under the first wall it covers.
+                val emptyShown = HashSet(shown.map { it.setId })
+                byWall.flatMap { (wall, routes) -> listOf(RouteRow(wall = wall)) + setRows(location, routes, wall.id, emptyShown) }
             }
         }
         // One primary action per screen: label and handler decided together.
@@ -220,12 +225,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Set headers with their routes: the sets covering [wallId] (open first, newest first, then retired) plus any
-     * set that still has routes here; routes outside every set come last under "No set". A gym without walls
-     * passes "" and so lists every set.
+     * Set headers with their routes: the sets with routes here, plus (so it can be edited or retired) a set
+     * covering [wallId] that has routes nowhere in the gym, once ([emptyShown] holds the sets already placed);
+     * open sets first, newest first, then retired. Routes outside every set come last under "No set". A gym without
+     * walls lists every set.
      */
-    private fun setRows(location: Location, routes: List<RouteRecord>, wallId: String): List<RouteRow> {
-        val sets = WallSet.ordered(location.sets.filter { set -> location.walls.isEmpty() || set.covers(wallId) || routes.any { it.setId == set.id } })
+    private fun setRows(location: Location, routes: List<RouteRecord>, wallId: String, emptyShown: MutableSet<String>? = null): List<RouteRow> {
+        val sets = WallSet.ordered(location.sets.filter { set ->
+            location.walls.isEmpty() || routes.any { it.setId == set.id } || (set.covers(wallId) && (emptyShown == null || emptyShown.add(set.id)))
+        })
         val groups = sets.map { set -> set to routes.filter { it.setId == set.id } }
         val outside = routes.filter { r -> sets.none { it.id == r.setId } }
         return groups.flatMap { (set, inSet) -> listOf(RouteRow(set = set)) + inSet.map { RouteRow(route = it) } } +
@@ -507,7 +515,9 @@ class MainActivity : AppCompatActivity() {
      * capture's own set kept in the list even when retired; the last used set is preselected, else the newest
      * open one. An outdoor area has none. Cancel runs [onCancel] (New scan stops; Set location keeps the capture's set).
      */
-    private fun pickSet(location: Location, wallId: String, preselectedId: String?, onCancel: () -> Unit = {}, onPicked: (WallSet?) -> Unit) {
+    private fun pickSet(picked: Location, wallId: String, preselectedId: String?, onCancel: () -> Unit = {}, onPicked: (WallSet?) -> Unit) {
+        // Read the location again: a wall registered one step earlier is not on the object the location picker handed over.
+        val location = LocationStore.get(this, picked.id).takeIf { it.id.isNotEmpty() } ?: picked
         if (location.kind != LocationKind.GYM) { onPicked(null); return }
         val walls = listOf(wallId).filter { it.isNotEmpty() }
         val choices = WallSet.ordered(location.sets.filter { it.covers(wallId) && (it.active || it.id == preselectedId) })
@@ -851,12 +861,13 @@ class MainActivity : AppCompatActivity() {
         val c = this@MainActivity
         val real = wall.id.isNotEmpty()
         view.setPaddingRelative(0, view.paddingTop, view.paddingEnd, view.paddingBottom)
-        view.findViewById<TextView>(R.id.header).text = if (real) wall.name else getString(R.string.no_wall)
-        view.findViewById<TextView>(R.id.headerDetail).text = Labels.join(c, *location.sets.filter { it.active && it.covers(wall.id) }.map { it.name }.toTypedArray())
+        view.findViewById<TextView>(R.id.header).apply { text = if (real) wall.name else getString(R.string.no_wall); textSize = HEADER_SP }
+        // The open sets on this wall, newest first; nothing for No wall, whose routes are under their own set headers.
+        view.findViewById<TextView>(R.id.headerDetail).text = if (!real) "" else Labels.join(c, *WallSet.ordered(location.sets.filter { it.active && it.covers(wall.id) }).map { it.name }.toTypedArray())
         view.findViewById<TextView>(R.id.headerCounts).apply { text = Labels.plural(c, R.plurals.routes_count, routes); visibility = View.VISIBLE }
         view.findViewById<View>(R.id.chevron).visibility = View.GONE
         view.findViewById<View>(R.id.btnEditLocation).apply {
-            visibility = if (real) View.VISIBLE else View.GONE
+            visibility = if (real) View.VISIBLE else View.INVISIBLE // keeps the count aligned with the other headers
             setOnClickListener { handleEditWall(location, wall) }
         }
     }
@@ -874,7 +885,8 @@ class MainActivity : AppCompatActivity() {
         val real = set.id.isNotEmpty()
         val indent = if (location.walls.isEmpty()) 0 else (16 * resources.displayMetrics.density).toInt()
         view.setPaddingRelative(indent, view.paddingTop, view.paddingEnd, view.paddingBottom)
-        view.findViewById<TextView>(R.id.header).text = if (real) Labels.set(c, set) else getString(R.string.no_set)
+        // Under a wall header the set is one level down: indented and a step smaller.
+        view.findViewById<TextView>(R.id.header).apply { text = if (real) Labels.set(c, set) else getString(R.string.no_set); textSize = if (indent > 0) SUBHEADER_SP else HEADER_SP }
         view.findViewById<TextView>(R.id.headerDetail).text = if (!real) "" else Labels.join(
             c, getString(R.string.set_since, Labels.isoDate(c, set.createdAt)),
             set.retiredAt?.let { getString(R.string.set_retired_on, Labels.isoDate(c, it)) } ?: "",
@@ -883,7 +895,7 @@ class MainActivity : AppCompatActivity() {
         view.findViewById<TextView>(R.id.headerCounts).apply { text = Labels.plural(c, R.plurals.routes_count, routes); visibility = View.VISIBLE }
         view.findViewById<View>(R.id.chevron).visibility = View.GONE
         view.findViewById<View>(R.id.btnEditLocation).apply {
-            visibility = if (real) View.VISIBLE else View.GONE
+            visibility = if (real) View.VISIBLE else View.INVISIBLE // keeps the count aligned with the other headers
             setOnClickListener { handleEditSet(location, set) }
         }
     }
