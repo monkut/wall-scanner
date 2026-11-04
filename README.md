@@ -23,6 +23,7 @@ Releases are built by `.github/workflows/release.yml` (pull requests run the tes
 | Gym sets | A gym's routes grouped by set (the routes between two wall resets); retire a set when the wall is reset, its routes and sends stay. |
 | Logbook | Confirmed routes grouped by location with a progress line (routes, sends, flashes, locations); per route a send log (flash / send / attempt, tries, note). |
 | Climb video | Film attempts per route (hands-free start/end by pose, or one at a time); playback with trim, top / fall, share, delete (`CLIMB-VIDEO.md`). |
+| Face masks | Faces found while filming are hidden in playback and shared clips, the climber's and bystanders' separately (both on by default, in Settings); scans pixelate bystanders' faces in their keyframes. |
 | Profile | Username, height and reach; Settings chooses metric (cm) or imperial (ft, in). |
 | Language | English (US) by default, English (UK) and Japanese selectable in the app; dates follow the language and are JST. |
 | Diagnostics | Per-capture `scan.log` with button taps, lifecycle pauses, tracking changes, segment snaps and processing results; crash traces; **Share** zips the whole capture. |

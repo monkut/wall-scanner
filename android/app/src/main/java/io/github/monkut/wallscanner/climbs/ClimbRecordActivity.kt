@@ -17,6 +17,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
@@ -33,8 +35,14 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import io.github.monkut.wallscanner.Labels
 import io.github.monkut.wallscanner.R
+import io.github.monkut.wallscanner.Settings
 import io.github.monkut.wallscanner.core.AttemptDetector
+import io.github.monkut.wallscanner.core.FaceBox
+import io.github.monkut.wallscanner.core.FaceFrame
+import io.github.monkut.wallscanner.core.FaceMask
 import io.github.monkut.wallscanner.core.PoseSample
+import io.github.monkut.wallscanner.io.FaceFinder
+import io.github.monkut.wallscanner.io.FaceStore
 import io.github.monkut.wallscanner.io.CaptureStore
 import io.github.monkut.wallscanner.io.Clip
 import io.github.monkut.wallscanner.io.ClipExport
@@ -51,7 +59,9 @@ import java.util.concurrent.Executors
  * Films a climb on one route (CLIMB-VIDEO.md). Hands-free (default): one recording for the whole session while
  * the pose model watches ~10 preview frames a second; on STOP the attempts are cut out of it by [AttemptDetector] (each a
  * clip of the same file). One attempt: REC/STOP per attempt, one file each. Clips wait in `climbs/pending/` until
- * Finish climb logs the climb (the send dialog, tries prefilled); leaving asks whether to keep them.
+ * Finish climb logs the climb (the send dialog, tries prefilled); leaving asks whether to keep them. With face
+ * masks on (Settings) the same sampled frames go to the face model too, and the faces seen (the climber's from
+ * the pose's head, the rest bystanders') are saved beside each file ([FaceStore]) for playback and sharing.
  */
 class ClimbRecordActivity : AppCompatActivity() {
     private lateinit var captureDir: File
@@ -63,6 +73,7 @@ class ClimbRecordActivity : AppCompatActivity() {
     private lateinit var btnFinish: MaterialButton
     private lateinit var mode: MaterialButtonToggleGroup
     private var videoCapture: VideoCapture<Recorder>? = null
+    private var previewUseCase: Preview? = null
     @Volatile private var recording: Recording? = null
     private var recordingFile: File? = null
     @Volatile private var recordStart = 0L // SystemClock.elapsedRealtime() when the recording started
@@ -72,6 +83,11 @@ class ClimbRecordActivity : AppCompatActivity() {
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     @Volatile private var busy = false
     private var tracker: PoseTracker? = null
+    private var faceFinder: FaceFinder? = null
+    private val faceFrames = ArrayList<FaceFrame>()
+    private var maskClimber = false
+    private var maskBystanders = false
+    private val masks get() = maskClimber || maskBystanders
     private val analysis = Executors.newSingleThreadExecutor()
     private val pending get() = File(captureDir, RouteStore.PENDING_DIR)
     private val hasAudio get() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -96,6 +112,8 @@ class ClimbRecordActivity : AppCompatActivity() {
             override fun handleOnBackPressed() = handleLeave()
         })
         pending.mkdirs()
+        maskClimber = Settings.maskClimber(this)
+        maskBystanders = Settings.maskBystanders(this)
         showStatus()
         val missing = listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
             .filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
@@ -117,7 +135,7 @@ class ClimbRecordActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        analysis.execute { tracker?.close(); tracker = null }
+        analysis.execute { tracker?.close(); tracker = null; faceFinder?.close(); faceFinder = null }
         analysis.shutdown()
     }
 
@@ -132,19 +150,23 @@ class ClimbRecordActivity : AppCompatActivity() {
                 .setTargetVideoEncodingBitRate(BITRATE)
                 .build()
             val video = VideoCapture.withOutput(recorder)
-            val shown = Preview.Builder().build().also { it.surfaceProvider = preview.surfaceProvider }
+            // The preview stream takes the recording's aspect ratio (16:9), so what the screen shows (and the models see) is what is recorded.
+            val shown = Preview.Builder()
+                .setResolutionSelector(ResolutionSelector.Builder().setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY).build())
+                .build().also { it.surfaceProvider = preview.surfaceProvider }
             provider.unbindAll()
             // Two streams only: a third (image analysis) caps the recording at 720p on a Pixel 9a. The pose model
             // reads the preview instead (sampleFrame).
             provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, shown, video)
             videoCapture = video
+            previewUseCase = shown
         }, ContextCompat.getMainExecutor(this))
     }
 
-    /** While a hands-free recording runs: the preview's current frame (upright, as shown), scaled down, to the pose model ~[ANALYSE_MS] apart. */
+    /** While a hands-free recording runs (or any recording with face masks on): the preview's current frame (upright, as shown), scaled down, to the models ~[ANALYSE_MS] apart. */
     private val sampleFrame = object : Runnable {
         override fun run() {
-            if (recording == null || !sessionMode) return
+            if (recording == null || !(sessionMode || masks)) return
             handler.postDelayed(this, ANALYSE_MS)
             if (busy) return // the previous frame is still in the pose model
             val frame = preview.bitmap ?: return
@@ -157,18 +179,45 @@ class ClimbRecordActivity : AppCompatActivity() {
 
     private fun analyse(frame: Bitmap, now: Long) {
         try {
-            val t = tracker ?: runCatching { PoseTracker(this) }.onFailure { e -> Log.e(TAG, "pose model failed to load", e) }.getOrNull()?.also { p -> tracker = p } ?: return
-            val sample = t.sample(frame, now - recordStart, now)
-            synchronized(samples) {
-                samples.add(sample)
-                if (samples.size % RECOUNT_EVERY == 0) found = AttemptDetector.detect(samples, now - recordStart).size
+            val tMs = now - recordStart
+            val session = sessionMode
+            // The pose finds attempts (hands-free) and the climber's head (climber mask); the face model finds everyone else.
+            val sample = if (session || maskClimber) {
+                val t = tracker ?: runCatching { PoseTracker(this) }.onFailure { e -> Log.e(TAG, "pose model failed to load", e) }.getOrNull()?.also { p -> tracker = p }
+                t?.sample(frame, tMs, now)
+            } else null
+            if (session && sample != null) {
+                synchronized(samples) {
+                    samples.add(sample)
+                    if (samples.size % RECOUNT_EVERY == 0) found = AttemptDetector.detect(samples, tMs).size
+                }
+                val count = found
+                runOnUiThread { showStatus(seen = sample.foot != null, found = count) }
             }
-            val count = found
-            runOnUiThread { showStatus(seen = sample.foot != null, found = count) }
+            if (masks) {
+                val faces = if (maskBystanders) {
+                    val finder = faceFinder ?: runCatching { FaceFinder(this) }.onFailure { e -> Log.e(TAG, "face model failed to load", e) }.getOrNull()?.also { f -> faceFinder = f }
+                    finder?.detect(frame) ?: emptyList()
+                } else emptyList()
+                val previewAspect = frame.width.toFloat() / frame.height
+                val seen = FaceMask.assign(faces, sample?.head).map { FaceBox(FaceMask.previewToFrame(it.box, previewAspect, frameAspect ?: previewAspect), it.role) }
+                synchronized(faceFrames) { faceFrames.add(FaceFrame(tMs, seen)) }
+            }
         } finally {
             busy = false
         }
     }
+
+    /**
+     * Width / height of the camera frame as displayed upright, from the preview stream's resolution (the same
+     * aspect ratio as the recording); null before it is known. The screen shows a centred crop of it.
+     */
+    private val frameAspect: Float?
+        get() {
+            val info = previewUseCase?.resolutionInfo ?: return null
+            val r = info.resolution
+            return if (info.rotationDegrees % 180 == 0) r.width.toFloat() / r.height else r.height.toFloat() / r.width
+        }
 
     private fun handleRecord() {
         val active = recording
@@ -177,6 +226,7 @@ class ClimbRecordActivity : AppCompatActivity() {
         val n = clips.size + 1
         val file = File(pending, if (sessionMode) "session-${System.currentTimeMillis()}.mp4" else "attempt-%02d.mp4".format(n))
         synchronized(samples) { samples.clear(); found = 0 }
+        synchronized(faceFrames) { faceFrames.clear() }
         val prepared = capture.output.prepareRecording(this, FileOutputOptions.Builder(file).build())
         recordingFile = file
         recording = (if (hasAudio) prepared.withAudioEnabled() else prepared).start(ContextCompat.getMainExecutor(this)) { event ->
@@ -198,6 +248,7 @@ class ClimbRecordActivity : AppCompatActivity() {
         btnRecord.setText(R.string.rec)
         if (event.hasError() && !file.exists()) { Log.e(TAG, "recording failed: ${event.error}", event.cause); showStatus(); return }
         val duration = ClipExport.durationMs(file).takeIf { it > 0 } ?: (event.recordingStats.recordedDurationNanos / 1_000_000)
+        if (masks) FaceStore.write(file, synchronized(faceFrames) { faceFrames.toList() })
         val rel = file.relativeTo(captureDir).path
         val now = CaptureStore.nowIso()
         val found = if (file.name.startsWith("session-")) synchronized(samples) { AttemptDetector.detect(samples, duration) } else emptyList()

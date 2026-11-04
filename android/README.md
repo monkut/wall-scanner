@@ -56,6 +56,16 @@ value:
   `files/profile.jpg` on Save, and Cancel keeps the previous one. Reach is standing reach (floor to fingertips, arm
   raised). Lengths are entered in the chosen units (cm, or feet and inches) and stored in centimetres in
   `files/profile.json` (`io/ProfileStore.kt`); a length outside 50–300 cm keeps the form open with an error.
+- **Face masks** (issue #12): **My face** and **Bystanders' faces**, both on by default. While a climb is filmed the
+  frames the pose model sees also go to a face model (MediaPipe BlazeFace short-range, `io/FaceFinder.kt`, the
+  frame whole and in 2 × 2 tiles); the face on the pose's head is the climber's, every other face a bystander's,
+  and a head the face model missed (back turned, too far) is masked from the pose alone. The boxes are saved
+  beside each video as `<name>.faces.json` (`io/FaceStore.kt`); the recording itself is never changed and never
+  leaves the phone unmasked. Playback draws the masks (solid panel-colour pills, `climbs/FaceMaskView.kt`) and
+  Share re-encodes the trimmed range with them burnt in (`climbs/MaskedExport.kt`, media3 Transformer, progress
+  shown; a clip with nothing to mask is still copied without re-encoding). A scan with the bystander mask on
+  pixelates faces in its keyframes at Finish (`io/KeyframeFaces.kt`), before the orthophoto is built. Switching a
+  mask on later masks clips filmed with it on; clips filmed with both off have no face data.
 - **Units**: Metric (cm) or Imperial (ft, in), the units the profile's lengths are shown and entered in
   (`Settings.kt`, "settings" shared preferences; default metric). Switching units does not change stored values.
 - **Language**: see below.
@@ -155,7 +165,9 @@ dialog (tries prefilled); Back with filmed attempts offers to keep them as an at
 with clips shows "n filmed attempts"; tap it for playback (`climbs/ClimbPlaybackActivity.kt`): a tab per attempt,
 the trim range (stored, the file is never changed), outcome Top / Fall, Delete, and Share (a trimmed copy without
 re-encoding, from the keyframe at or before the in-point; `io/ClipExport.kt`). Detector thresholds are a first
-guess until tuned on filmed sessions (CLIMB-VIDEO.md).
+guess until tuned on filmed sessions (CLIMB-VIDEO.md). With face masks on (Settings) the same sampled frames go
+to the face model too, in both modes; playback masks the faces and Share burns the masks into the copy (see
+Settings above and CLIMB-VIDEO.md § Face masks).
 
 ### Segments and snapping
 
@@ -174,7 +186,9 @@ log says why.
 During the scan sparse 1080p JPEG keyframes are saved to `frames/` with `frames.jsonl` (segment id,
 segment-local pose, intrinsics): one every ≥ 0.7 s when the camera moved ≥ 0.25 m or turned ≥ 15°, or a new
 segment started. At Finish they are resolved to world poses in `frames.json` for image-based tape and placard
-detection (`tools/tape.py`).
+detection (`tools/tape.py`). With the bystander face mask on (Settings) each keyframe is then turned upright by
+its pose, searched for faces and the faces pixelated in the stored JPEG before the orthophoto is built
+(`io/KeyframeFaces.kt`; `keyframe faces: …` in `scan.log`).
 
 ### Diagnostics and sharing
 
@@ -216,6 +230,7 @@ files/captures/<JST timestamp>/
   scene.json                              wall frame, holds, routes (schema: ARCHITECTURE.md §9)
   sends.json                              { version: 2, sends: [{ id, routeId, at, result, attempts, note, clips?: [...] }], ratings: { "<routeId>": 0..5 }, comments: { "<routeId>": text } }
   climbs/<sendId>/*.mp4                   filmed attempts (left out of the capture's share zip)
+  climbs/<sendId>/<name>.faces.json       faces seen while filming <name>.mp4: { version: 1, frames: [{ t, faces: [{ box: [x, y, w, h], role: climber|bystander }] }] }
   thumbnail.png                           front view used in the lists
   wall.png                                orthophoto of the wall from the keyframes (5 mm/px; bounds in scene.json wall.photo)
 ```
@@ -271,6 +286,7 @@ counts are written out with locale plurals ("1 try", "2 tries", "記録 2 件").
 - Raw depth noise smears the wall about 3 voxels thick and fills 60–70% of a scan with off-wall points. The voxel map evicts least-hit voxels past `MAX_VOXELS` (1.4M per segment, logged as `SEGMENT n full`) and Finish drops voxels under `MIN_VOXEL_HITS` (about 40% of a real wall scan). A 90 s gym scan reaches 1.1M voxels without hitting the cap. Gym scans reject depth beyond `MAX_DEPTH_RANGE` (3.5 m), so the top of a tall wall needs the phone raised or a step back.
 - `RealCaptureHarness` (unit test) rebuilds every capture pulled into `captures/` with the current pipeline and writes `scene-new.json` (and `wall-new.ppm`) beside each: `./gradlew :app:testDebugUnitTest --tests '*RealCaptureHarness*' -i | grep HARNESS`. Use it to compare hold and route counts before and after a detector change. The orthophoto stage needs the keyframes decoded first with `uv run tools/frames_to_ppm.py captures/<id>` (unit tests compile against android.jar, which has no JPEG decoder).
 - The live overlay draws at most 300k points per segment (`ArRenderer.PREVIEW_MAX_POINTS`, every k-th voxel); the full cloud is only in the viewer. Depth integration runs at about half the raw depth rate (`skipped(busy=…)` in the log); `integrate(avg/max)` and `upload(avg/max)` in the `STATUS` line show where the time goes.
+- Face masks follow the models: the short-range face model misses faces smaller than about a twentieth of a tile (a bystander far behind the climber) and faces turned away; the climber's mask then comes from the pose's head landmarks alone, a bystander's not at all. Faces are sampled about ten times a second from the preview and held half a second, so a fast head can show an edge. Masks are drawn where the preview showed the frame (a centred crop of the recording's 16:9 stream); keyframe faces are found on the frame turned upright by its pose, which assumes the climber held the phone roughly level with gravity.
 - Locations can be registered and assigned but not renamed or deleted; grades must come from one of the four scales (no free text).
 - Routes and sends live with the capture they were identified in; there is no merging of the same route across captures yet.
 - The viewer exposes `window.viewerDebug` (`scene`, `project(u, v)` → CSS px, `hitAt(u, v)`, `probe(id)`) for driving it from WebView DevTools (`adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>`).

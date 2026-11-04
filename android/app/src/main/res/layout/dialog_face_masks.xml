@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings → Face masks: what is said about them, then one switch per role. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="24dp"
+    android:paddingTop="8dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAppearance="?attr/textAppearanceBody2"
+        android:text="@string/face_masks_hint" />
+
+    <CheckBox
+        android:id="@+id/maskClimber"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/face_mask_climber" />
+
+    <CheckBox
+        android:id="@+id/maskBystanders"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/face_mask_bystanders" />
+</LinearLayout>

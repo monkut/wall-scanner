@@ -237,6 +237,14 @@
     <string name="play">Play</string>
     <string name="share_clip">Share</string>
     <string name="share_failed">Could not make the clip to share.</string>
+    <!-- Face masks (Settings): faces found while filming are hidden on playback and in shared clips -->
+    <string name="face_masks">Face masks</string>
+    <string name="face_mask_climber">My face</string>
+    <string name="face_mask_bystanders">Bystanders\' faces</string>
+    <string name="face_masks_off">Off</string>
+    <string name="face_masks_hint">Faces are found while a climb is filmed and hidden when it is played or shared. The recording itself stays as filmed, on this phone only. Scans hide bystanders\' faces in their photos.</string>
+    <string name="masking_faces">Hiding faces… %1$d%%</string>
+    <string name="masking_faces_wait">Hiding faces…</string>
     <string name="trim">Trim</string>
     <string name="trim_range">%1$s – %2$s (%3$s)</string>
     <string name="delete_attempt_confirm">Delete attempt %1$d?</string>

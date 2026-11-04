@@ -27,6 +27,9 @@ import com.google.ar.core.exceptions.UnavailableException
 import com.google.ar.core.exceptions.UnsupportedConfigurationException
 import io.github.monkut.wallscanner.Labels
 import io.github.monkut.wallscanner.R
+import io.github.monkut.wallscanner.Settings
+import io.github.monkut.wallscanner.io.FaceFinder
+import io.github.monkut.wallscanner.io.KeyframeFaces
 import io.github.monkut.wallscanner.core.Definition
 import io.github.monkut.wallscanner.core.Rigid
 import io.github.monkut.wallscanner.core.RouteDefinition
@@ -386,6 +389,9 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             processor.awaitKeyframes()
             val keyframes = processor.keyframes?.resolve(segmentTransforms) ?: 0
             log.log("keyframes: $keyframes resolved to world poses (${CaptureStore.FRAMES_RESOLVED})")
+            if (Settings.maskBystanders(this)) runCatching { FaceFinder(this).use { KeyframeFaces.mask(captureDir, it) } }
+                .onSuccess { log.log("keyframe faces: ${it.faces} hidden in ${it.withFaces} of ${it.frames} keyframes (${it.ms} ms)") }
+                .onFailure { log.log("keyframe faces failed: $it") }
             val cloud = reference
             log.log("merged: voxels=${cloud.count} cameraPositions=${cameras.size} (${System.currentTimeMillis() - t0} ms)")
             CaptureStore.writePly(captureDir, cloud)

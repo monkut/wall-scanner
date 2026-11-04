@@ -100,6 +100,11 @@ object Labels {
         }
     )
 
+    /** "My face, bystanders' faces" for the face masks that are on; "Off" when neither is. */
+    fun faceMasks(c: Context, climber: Boolean, bystanders: Boolean): String =
+        join(c, if (climber) c.getString(R.string.face_mask_climber) else "", if (bystanders) c.getString(R.string.face_mask_bystanders) else "")
+            .ifEmpty { c.getString(R.string.face_masks_off) }
+
     /** "Height 178 cm, reach 225 cm" with the lengths in [units]; "" when neither is set. */
     fun profileDetail(c: Context, profile: Profile, units: UnitSystem): String =
         join(
