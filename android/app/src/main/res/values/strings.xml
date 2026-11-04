@@ -129,6 +129,14 @@
     <string name="delete">Delete</string>
     <string name="share">Share</string>
     <string name="reprocess">Reprocess</string>
+    <!-- Join captures (#7): a second scan of the same wall registered onto this one -->
+    <string name="join_with">Join with…</string>
+    <string name="join_choose">Join with which capture?</string>
+    <string name="join_none">No other capture of this wall to join with.</string>
+    <string name="joining">Joining the captures…</string>
+    <string name="join_done">Joined: %1$s</string>
+    <string name="join_failed">Could not join: the scans do not overlap enough (%1$s).</string>
+    <string name="joined_from">joined from %1$s</string>
     <string name="reprocess_message">Runs hold and route detection again on this capture\'s saved point cloud. Route edits and confirmations in it are replaced; sends stay in the logbook, but routes must be confirmed again.</string>
     <string name="reprocess_done">Reprocessed: %1$s</string>
     <string name="reprocess_failed">Reprocessing failed: no point cloud or no wall plane.</string>

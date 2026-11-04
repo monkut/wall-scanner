@@ -127,6 +127,13 @@
     <string name="delete">削除</string>
     <string name="share">共有</string>
     <string name="reprocess">再処理</string>
+    <string name="join_with">結合…</string>
+    <string name="join_choose">どのキャプチャと結合しますか？</string>
+    <string name="join_none">結合できる同じ壁のキャプチャがありません。</string>
+    <string name="joining">キャプチャを結合しています…</string>
+    <string name="join_done">結合しました: %1$s</string>
+    <string name="join_failed">結合できませんでした: スキャンの重なりが足りません（%1$s）。</string>
+    <string name="joined_from">%1$s を結合</string>
     <string name="reprocess_message">このキャプチャの保存済み点群に対して、ホールドとルートの検出をやり直します。ルートの編集と確定は置き換えられます。センドの記録はログブックに残りますが、ルートの再確定が必要です。</string>
     <string name="reprocess_done">再処理しました: %1$s</string>
     <string name="reprocess_failed">再処理に失敗しました: 点群または壁面が見つかりません。</string>

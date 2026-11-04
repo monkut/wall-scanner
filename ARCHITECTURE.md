@@ -181,7 +181,7 @@ places the photo mesh and holds through the faces (`wallPoint`). On the Oct 23 2
 back 20°) the depth stage finds 63 holds instead of 33, and reference holds matched by 3D centre within 8 cm go
 from 35 to 39 of 68.
 
-`capture.json` (written at New scan, before any data): `{ version, createdAt, location, set, definition, gps? }` where `location` is a `locations.json` id (empty for captures made before locations existed; assignable later from the capture list), `set` the id of the gym set the wall was scanned in (empty outdoors or when scanned without one) and `gps` is `{ lat, lon, accuracyM, at }`, recorded when the scan requested a position fix.
+`capture.json` (written at New scan, before any data): `{ version, createdAt, location, wall, set, definition, gps?, joined?: [captureId, captureId], registration?: { yawDeg, rmse, holdMatches, icpPairs, transform: { r, t } } }` (`joined` and `registration` on a capture made by **Join with…**: the second capture registered onto the first, `core/CaptureRegistration.kt`) where `location` is a `locations.json` id (empty for captures made before locations existed; assignable later from the capture list), `set` the id of the gym set the wall was scanned in (empty outdoors or when scanned without one) and `gps` is `{ lat, lon, accuracyM, at }`, recorded when the scan requested a position fix.
 
 ### Keyframes for image-based detection
 
