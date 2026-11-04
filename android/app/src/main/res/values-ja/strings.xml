@@ -26,9 +26,12 @@
     <!-- Settings and profile -->
     <string name="settings">設定</string>
     <string name="profile">プロフィール</string>
-    <string name="profile_not_set">未設定</string>
+    <string name="profile_add">プロフィールを追加</string>
+    <string name="profile_add_hint">名前、身長、リーチ、写真</string>
+    <string name="profile_choose_photo">写真を選ぶ</string>
+    <string name="profile_remove_photo">写真を削除</string>
+    <string name="profile_photo_unreadable">この写真は開けません。別の写真を選んでください。</string>
     <string name="profile_username">ユーザー名</string>
-    <string name="profile_username_hint">記録に表示される名前</string>
     <string name="profile_height">身長</string>
     <string name="profile_reach">リーチ</string>
     <string name="profile_reach_hint">立って腕を上に伸ばしたときの床から指先まで</string>

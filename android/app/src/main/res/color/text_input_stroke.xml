@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text field outline: tape while focused, dust otherwise (hairline is too faint for an input's edge on the panel). -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true" android:color="@color/tape" />
+    <item android:color="@color/dust" />
+</selector>
