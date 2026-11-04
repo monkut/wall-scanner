@@ -67,7 +67,7 @@
     <string name="set_retired_checkbox">Retired: the wall has been reset</string>
     <string name="edit_set">Edit set</string>
     <string name="set_name_taken">A set named %1$s already exists here</string>
-    <string name="set_walls_label">Walls this set covers (none ticked = the whole gym)</string>
+    <string name="set_walls_label">Walls covered (none = whole gym)</string>
     <string name="set_whole_gym">whole gym</string>
     <!-- Gym walls: the fixed structures ("Main wall", "Cave") that outlive resets -->
     <string name="choose_wall">Which wall are you scanning?</string>
