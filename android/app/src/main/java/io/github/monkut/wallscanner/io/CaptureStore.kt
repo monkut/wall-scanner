@@ -84,34 +84,35 @@ object CaptureStore {
 
     fun writeScene(dir: File, json: String) = File(dir, SCENE_FILE).writeText(json)
 
-    /** capture.json: location, set and route definition chosen at New scan, written before scanning so post-processing can use them. */
-    fun writeMeta(dir: File, definition: Definition, locationId: String, setId: String = "") {
+    /** capture.json: location, wall, set and route definition chosen at New scan, written before scanning so post-processing can use them. */
+    fun writeMeta(dir: File, definition: Definition, locationId: String, setId: String = "", wallId: String = "") {
         val json = JSONObject()
             .put("version", 2)
             .put("createdAt", nowIso())
             .put("location", locationId)
             .put("set", setId)
+            .put("wall", wallId)
             .put("definition", JSONObject()
                 .put("type", definition.type.id)
                 .put("rules", JSONObject().put("feet", definition.rules.feet.id).put("volumesOn", definition.rules.volumesOn)))
         File(dir, META_FILE).writeText(json.toString(2))
     }
 
-    /** Where a capture was made: a `locations.json` location id and, at a gym, set id; "" when unset (older or outdoor captures). */
-    class Place(val locationId: String, val setId: String)
+    /** Where a capture was made: a `locations.json` location id and, at a gym, set and wall ids; "" when unset (older or outdoor captures). */
+    class Place(val locationId: String, val setId: String, val wallId: String = "")
 
     fun readPlace(dir: File): Place = runCatching {
         val json = JSONObject(File(dir, META_FILE).readText())
-        Place(json.optString("location"), json.optString("set"))
+        Place(json.optString("location"), json.optString("set"), json.optString("wall"))
     }.getOrDefault(Place("", ""))
 
     fun readLocationId(dir: File): String = readPlace(dir).locationId
 
     /** Re-assigns an existing capture (older ones have no location) without touching the rest of capture.json. */
-    fun setLocation(dir: File, locationId: String, setId: String) {
+    fun setLocation(dir: File, locationId: String, setId: String, wallId: String = "") {
         val file = File(dir, META_FILE)
         val json = runCatching { JSONObject(file.readText()) }.getOrDefault(JSONObject().put("version", 2))
-        file.writeText(json.put("location", locationId).put("set", setId).toString(2))
+        file.writeText(json.put("location", locationId).put("set", setId).put("wall", wallId).toString(2))
     }
 
     /** Records the scan's position fix in capture.json (`gps`); later, more accurate fixes overwrite it. */

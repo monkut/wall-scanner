@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- New wall / Edit wall: the wall's name. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="24dp"
+    android:paddingTop="8dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAppearance="?attr/textAppearanceBody2"
+        android:text="@string/wall_name_label" />
+
+    <EditText
+        android:id="@+id/wallName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/wall_name_hint"
+        android:inputType="textCapWords"
+        android:importantForAutofill="no" />
+</LinearLayout>

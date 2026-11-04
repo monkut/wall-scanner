@@ -22,6 +22,8 @@ class RouteRecord(
     val locationId: String,
     /** The gym set the capture belongs to; "" when none. */
     val setId: String = "",
+    /** The gym wall the capture scanned; "" when none. */
+    val wallId: String = "",
 )
 
 enum class SendResult(val id: String) {
@@ -96,7 +98,7 @@ object RouteStore {
                     dir.name, r.getInt("id"), r.optString("name"), r.optString("grade"),
                     GradeSystem.fromId(r.optString("gradeSystem")),
                     intArrayOf(c.getInt(0), c.getInt(1), c.getInt(2)),
-                    r.getJSONArray("holdIds").length(), r.optBoolean("confirmed", false), type, place.locationId, place.setId,
+                    r.getJSONArray("holdIds").length(), r.optBoolean("confirmed", false), type, place.locationId, place.setId, place.wallId,
                 )
             }
         }.getOrDefault(emptyList())

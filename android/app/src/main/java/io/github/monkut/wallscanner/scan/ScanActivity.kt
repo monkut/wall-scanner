@@ -88,9 +88,9 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         processor.log = log
         processor.keyframes = KeyframeWriter(captureDir)
         definition = Definition(RouteDefinition.fromId(intent.getStringExtra(EXTRA_DEFINITION)))
-        CaptureStore.writeMeta(captureDir, definition, intent.getStringExtra(EXTRA_LOCATION) ?: "", intent.getStringExtra(EXTRA_SET) ?: "")
+        CaptureStore.writeMeta(captureDir, definition, intent.getStringExtra(EXTRA_LOCATION) ?: "", intent.getStringExtra(EXTRA_SET) ?: "", intent.getStringExtra(EXTRA_WALL) ?: "")
         logEnvironment()
-        log.log("location: ${intent.getStringExtra(EXTRA_LOCATION) ?: "none"}")
+        log.log("location: ${intent.getStringExtra(EXTRA_LOCATION) ?: "none"} · wall: ${intent.getStringExtra(EXTRA_WALL)?.ifEmpty { null } ?: "none"} · set: ${intent.getStringExtra(EXTRA_SET)?.ifEmpty { null } ?: "none"}")
         val location = LocationStore.get(this, intent.getStringExtra(EXTRA_LOCATION))
         if (location.id.isNotEmpty() && location.coords == null) {
             gps = GpsFix(this, log::log) { point ->
@@ -452,6 +452,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         const val EXTRA_DEFINITION = "definition"
         const val EXTRA_LOCATION = "location"
         const val EXTRA_SET = "set"
+        const val EXTRA_WALL = "wall"
         private const val CAMERA_PERMISSION_CODE = 1
         private const val MAX_CPU_IMAGE_WIDTH = 1920
         private const val MIN_VOXELS_TO_FINISH = 2000

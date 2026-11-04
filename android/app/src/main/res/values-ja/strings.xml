@@ -66,6 +66,18 @@
     <string name="set_retired_checkbox">終了: 壁がリセットされた</string>
     <string name="edit_set">セットを編集</string>
     <string name="set_name_taken">「%1$s」というセットはすでにあります</string>
+    <string name="set_walls_label">このセットの対象の壁（未選択 = ジム全体）</string>
+    <string name="set_whole_gym">ジム全体</string>
+    <string name="choose_wall">どの壁をスキャンしますか？</string>
+    <string name="new_wall">新しい壁…</string>
+    <string name="wall_name_label">壁の名前</string>
+    <string name="wall_name_hint">例: メインウォール、ケイブ、スラブ</string>
+    <string name="without_wall">壁を指定しない</string>
+    <string name="no_wall">壁なし</string>
+    <string name="edit_wall">壁を編集</string>
+    <string name="wall_name_taken">「%1$s」という壁はすでにあります</string>
+    <string name="delete_wall">壁を削除</string>
+    <string name="delete_wall_confirm">「%1$s」を削除しますか？この壁のキャプチャとルートは「壁なし」と表示されます。この壁だけを対象にしていたセットはジム全体が対象になります。</string>
     <string name="grade_system">グレード表記</string>
     <string name="grades_kyu">級/段</string>
     <string name="grades_v">V</string>

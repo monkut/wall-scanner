@@ -67,6 +67,19 @@
     <string name="set_retired_checkbox">Retired: the wall has been reset</string>
     <string name="edit_set">Edit set</string>
     <string name="set_name_taken">A set named %1$s already exists here</string>
+    <string name="set_walls_label">Walls this set covers (none ticked = the whole gym)</string>
+    <string name="set_whole_gym">whole gym</string>
+    <!-- Gym walls: the fixed structures ("Main wall", "Cave") that outlive resets -->
+    <string name="choose_wall">Which wall are you scanning?</string>
+    <string name="new_wall">New wall…</string>
+    <string name="wall_name_label">Wall name</string>
+    <string name="wall_name_hint">e.g. Main wall, Cave, Slab</string>
+    <string name="without_wall">Without a wall</string>
+    <string name="no_wall">No wall</string>
+    <string name="edit_wall">Edit wall</string>
+    <string name="wall_name_taken">A wall named %1$s already exists here</string>
+    <string name="delete_wall">Delete wall</string>
+    <string name="delete_wall_confirm">Delete %1$s? Its captures and routes will show as No wall. A set that covered only this wall will cover the whole gym.</string>
     <string name="grade_system">Grade scale</string>
     <string name="grades_kyu">Q/D</string>
     <string name="grades_v">V</string>

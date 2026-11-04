@@ -16,11 +16,12 @@ Releases are built by `.github/workflows/release.yml` (pull requests run the tes
 | Area | Feature |
 |---|---|
 | Locations | Register gyms and outdoor areas (name, kind, default grade scale); every capture belongs to one. |
-| New scan | Pick the location, then how routes are marked on that wall: hold colour, tape, circuit, tagged, competition, free / spray wall, system board, or outdoor rock. |
+| New scan | Pick the location, at a gym its wall and set, then how routes are marked on that wall: hold colour, tape, circuit, tagged, competition, free / spray wall, system board, or outdoor rock. |
 | Scan | Live point overlay; Start / Pause / Resume / Finish; the screen stays on; every tracking interval is an anchored segment that is snapped onto the rest at Finish. |
 | Processing (on device) | Wall plane fit → holds as bumps in a median relief map of the wall (above the plane, or above the local rock surface for outdoor) → routes by the chosen marking type (colour groups minus the wall's own colour, colour + position for circuits, none for tape / free / board / outdoor). |
 | Capture viewer | 3D point cloud with hold boxes; rename, grade (YDS, Japanese Q/D, V-scale, Font), create or delete routes; tap holds to edit membership; mark roles (start, hand, foot, zone, finish); **Confirm** a route once identified. |
-| Gym sets | A gym's routes grouped by set (the routes between two wall resets); retire a set when the wall is reset, its routes and sends stay. |
+| Gym walls | Register a gym's walls ("Main wall", "Cave"); a capture names the wall it scanned and the logbook groups the gym's routes by wall. No geometry yet: stitching captures onto a wall is the next phase (#7, #8). |
+| Gym sets | A gym's routes grouped by set (the routes between two wall resets); a set covers one or more walls, or the whole gym; retire a set when the wall is reset, its routes and sends stay. |
 | Logbook | Confirmed routes grouped by location with a progress line (routes, sends, flashes, locations); per route a send log (flash / send / attempt, tries, note). |
 | Climb video | Film attempts per route (hands-free start/end by pose, or one at a time); playback with trim, top / fall, share, delete (`CLIMB-VIDEO.md`). |
 | Face masks | Faces found while filming are hidden in playback and shared clips, the climber's and bystanders' separately (both on by default, in Settings); scans pixelate bystanders' faces in their keyframes. |
@@ -57,7 +58,7 @@ cd android
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Then on the phone: **Capture** mode → **New scan** → pick or register the location → pick the wall type →
+Then on the phone: **Capture** mode → **New scan** → pick or register the location (at a gym: wall and set) → pick the wall type →
 **Start scan**, sweep the wall in slow overlapping rows from 1–3 m → **Finish & process** → identify and
 **Confirm** routes in the viewer → **Save**. Switch to **Logbook** to log sends against confirmed routes.
 

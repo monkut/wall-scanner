@@ -58,7 +58,7 @@ class RouteActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.routeGrade).text = route.grade.ifBlank { getString(R.string.no_grade) }
         val location = LocationStore.get(this, route.locationId)
         findViewById<TextView>(R.id.routeMeta).text = getString(
-            R.string.route_meta, Labels.location(this, location), Labels.definition(this, route.type),
+            R.string.route_meta, Labels.join(this, Labels.location(this, location), location.wall(route.wallId)?.name ?: ""), Labels.definition(this, route.type),
             Labels.plural(this, R.plurals.holds, route.holdCount),
         )
         routeImage = findViewById(R.id.routeImage)
