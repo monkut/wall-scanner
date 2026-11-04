@@ -32,6 +32,7 @@ import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.Length
 import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.core.UnitSystem
+import io.github.monkut.wallscanner.io.CaptureJoin
 import io.github.monkut.wallscanner.io.CaptureStore
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.PickVisualMediaRequest
@@ -783,7 +784,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleCaptureMenu(dir: File) {
-        val items = arrayOf(getString(R.string.set_location), getString(R.string.reprocess), getString(R.string.share), getString(R.string.delete))
+        val items = arrayOf(getString(R.string.set_location), getString(R.string.reprocess), getString(R.string.join_with), getString(R.string.share), getString(R.string.delete))
         AlertDialog.Builder(this)
             .setTitle(Labels.captureDate(this, dir.name))
             .setItems(items) { _, which ->
@@ -799,10 +800,47 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                     1 -> handleReprocess(dir)
-                    2 -> CaptureStore.share(this, dir)
-                    3 -> { CaptureStore.delete(dir); thumbnails.remove(dir.name); refresh() }
+                    2 -> handleJoin(dir)
+                    3 -> CaptureStore.share(this, dir)
+                    4 -> { CaptureStore.delete(dir); thumbnails.remove(dir.name); refresh() }
                 }
             }
+            .show()
+    }
+
+    /**
+     * Join (#7): picks another capture of the same wall (same location, and wall when set), registers it onto this
+     * one and builds a joined capture ([CaptureJoin]) that opens in the viewer; the originals stay.
+     */
+    private fun handleJoin(dir: File) {
+        val place = CaptureStore.readPlace(dir)
+        val others = captures.filter { other ->
+            other != dir && CaptureStore.hasScene(other) && CaptureStore.readPlace(other).let { it.locationId == place.locationId && (place.wallId.isEmpty() || it.wallId.isEmpty() || it.wallId == place.wallId) }
+        }
+        if (others.isEmpty()) { Toast.makeText(this, R.string.join_none, Toast.LENGTH_LONG).show(); return }
+        val labels = others.map { Labels.captureDate(this, it.name) }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.join_choose)
+            .setItems(labels) { _, which ->
+                val other = others[which]
+                val progress = AlertDialog.Builder(this).setMessage(R.string.joining).setCancelable(false).show()
+                thread(name = "join") {
+                    val outcome = runCatching { CaptureJoin.join(this, dir, other) }.getOrElse { CaptureJoin.Outcome(null, null, null) }
+                    runOnUiThread {
+                        if (isDestroyed) return@runOnUiThread
+                        progress.dismiss()
+                        refresh()
+                        val joined = outcome.dir
+                        if (joined == null) {
+                            Toast.makeText(this, getString(R.string.join_failed, outcome.registration?.toString() ?: "no matching holds"), Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(this, getString(R.string.join_done, outcome.summary ?: ""), Toast.LENGTH_LONG).show()
+                            handleOpenCapture(joined)
+                        }
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
@@ -854,9 +892,11 @@ class MainActivity : AppCompatActivity() {
             val where = CaptureStore.readPlace(dir)
             val location = locationOf(where.locationId)
             val set = location.set(where.setId)
+            val joined = CaptureJoin.joinedFrom(dir)
             val place = Labels.join(
                 c, Labels.location(c, location), location.wall(where.wallId)?.name ?: "", set?.let { Labels.set(c, it) } ?: "",
                 Labels.definition(c, CaptureStore.readDefinition(dir).type),
+                if (joined.isEmpty()) "" else getString(R.string.joined_from, joined.joinToString(" + ") { Labels.captureDate(c, it) }),
             )
             val meta = if (!CaptureStore.hasScene(dir)) getString(R.string.incomplete_capture) else runCatching {
                 val holds = JSONObject(CaptureStore.readScene(dir)).getJSONArray("holds").length()
