@@ -182,7 +182,8 @@ class MainActivity : AppCompatActivity() {
                 // A gym split into walls: each wall's routes under its header; routes with no (or a deleted) wall last under "No wall".
                 val orphans = shown.filter { location.wall(it.wallId) == null }
                 val byWall = location.walls.map { wall -> wall to shown.filter { it.wallId == wall.id } } + (if (orphans.isEmpty()) emptyList() else listOf(NO_WALL to orphans))
-                byWall.flatMap { (wall, routes) -> listOf(RouteRow(wall = wall)) + setRows(location, routes, wall.id) }
+                val emptyShown = HashSet<String>() // a set with no routes on a wall gets one header, under the first wall it covers, not one per wall
+                byWall.flatMap { (wall, routes) -> listOf(RouteRow(wall = wall)) + setRows(location, routes, wall.id, emptyShown) }
             }
         }
         // One primary action per screen: label and handler decided together.
@@ -220,12 +221,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Set headers with their routes: the sets covering [wallId] (open first, newest first, then retired) plus any
-     * set that still has routes here; routes outside every set come last under "No set". A gym without walls
-     * passes "" and so lists every set.
+     * Set headers with their routes: the sets with routes here, plus (so it can be edited or retired) a set
+     * covering [wallId] that has none, once per gym ([emptyShown] remembers which have had their header); open
+     * sets first, newest first, then retired. Routes outside every set come last under "No set". A gym without
+     * walls lists every set.
      */
-    private fun setRows(location: Location, routes: List<RouteRecord>, wallId: String): List<RouteRow> {
-        val sets = WallSet.ordered(location.sets.filter { set -> location.walls.isEmpty() || set.covers(wallId) || routes.any { it.setId == set.id } })
+    private fun setRows(location: Location, routes: List<RouteRecord>, wallId: String, emptyShown: MutableSet<String>? = null): List<RouteRow> {
+        val sets = WallSet.ordered(location.sets.filter { set ->
+            location.walls.isEmpty() || routes.any { it.setId == set.id } || (set.covers(wallId) && (emptyShown == null || emptyShown.add(set.id)))
+        })
         val groups = sets.map { set -> set to routes.filter { it.setId == set.id } }
         val outside = routes.filter { r -> sets.none { it.id == r.setId } }
         return groups.flatMap { (set, inSet) -> listOf(RouteRow(set = set)) + inSet.map { RouteRow(route = it) } } +
