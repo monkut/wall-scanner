@@ -208,6 +208,7 @@ object LocationStore {
      * the whole gym); captures that point at it show as "No wall" afterwards. The id is not reused.
      */
     fun removeWall(context: Context, locationId: String, wallId: String) {
+        WallStore.remove(context, wallId)
         val stored = read(context)
         write(context, stored.locations.map { l ->
             if (l.id != locationId) l

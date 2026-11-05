@@ -2,12 +2,12 @@ package io.github.monkut.wallscanner
 
 import android.content.Intent
 import android.net.Uri
-import android.text.Editable
-import android.text.TextWatcher
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -31,7 +31,9 @@ import io.github.monkut.wallscanner.core.Corner
 import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.Length
 import io.github.monkut.wallscanner.core.RouteDefinition
+import io.github.monkut.wallscanner.core.TNutPattern
 import io.github.monkut.wallscanner.core.UnitSystem
+import io.github.monkut.wallscanner.core.WallMap
 import io.github.monkut.wallscanner.io.CaptureJoin
 import io.github.monkut.wallscanner.io.CaptureStore
 import androidx.activity.OnBackPressedCallback
@@ -52,6 +54,7 @@ import io.github.monkut.wallscanner.io.SendLog
 import io.github.monkut.wallscanner.io.SendResult
 import io.github.monkut.wallscanner.io.Wall
 import io.github.monkut.wallscanner.io.WallSet
+import io.github.monkut.wallscanner.io.WallStore
 import io.github.monkut.wallscanner.routes.RouteActivity
 import io.github.monkut.wallscanner.scan.GpsFix
 import io.github.monkut.wallscanner.scan.ScanActivity
@@ -507,6 +510,7 @@ class MainActivity : AppCompatActivity() {
     ) {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_wall, null)
         val name = view.findViewById<EditText>(R.id.wallName).apply { setText(draft ?: existing?.name ?: "") }
+        if (existing != null) bindWallMap(view, existing)
         val builder = AlertDialog.Builder(this)
             .setTitle(title)
             .setView(view)
@@ -535,6 +539,89 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
+
+    /** The Edit wall form's map section: what the wall map holds, and the button to its form (#8 phase 4). */
+    private fun bindWallMap(view: View, wall: Wall) {
+        view.findViewById<View>(R.id.wallMapSection).visibility = View.VISIBLE
+        val summary = view.findViewById<TextView>(R.id.wallMapSummary)
+        val button = view.findViewById<TextView>(R.id.btnWallMap)
+        fun show() {
+            val map = WallStore.readMap(this, wall.id)
+            summary.text = map?.let { Labels.wallMap(this, it) } ?: getString(R.string.wall_map_not_set)
+            button.setText(if (map == null) R.string.wall_map_set_up else R.string.wall_map_edit)
+        }
+        show()
+        button.setOnClickListener { handleWallMap(wall) { show() } }
+    }
+
+    /**
+     * Wall map form (#8 phase 4): the wall's size, sheet size and orientation, T-nut pitch, pattern and first-hole
+     * offset, drawn to scale as the climber types. Save keeps the form open with a toast while the map is invalid.
+     */
+    private fun handleWallMap(wall: Wall, onSaved: () -> Unit) {
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_wall_map, null)
+        val existing = WallStore.readMap(this, wall.id)
+        val width = view.findViewById<EditText>(R.id.wallWidth)
+        val height = view.findViewById<EditText>(R.id.wallHeight)
+        val sheet = view.findViewById<RadioGroup>(R.id.sheetSize)
+        val orientation = view.findViewById<RadioGroup>(R.id.sheetOrientation)
+        val pitch = view.findViewById<EditText>(R.id.tnutPitch)
+        val pattern = view.findViewById<RadioGroup>(R.id.tnutPattern)
+        val offsetU = view.findViewById<EditText>(R.id.offsetU)
+        val offsetV = view.findViewById<EditText>(R.id.offsetV)
+        val preview = view.findViewById<WallMapView>(R.id.wallMapPreview)
+        val start = existing ?: WallMap.DEFAULT
+        if (existing != null) {
+            width.setText(Labels.metres(start.width))
+            height.setText(Labels.metres(start.height))
+        }
+        sheet.check(if (maxOf(start.sheetWidth, start.sheetHeight) > WallMap.SHEET_JIS.second + 0.01f) R.id.sheet1220 else R.id.sheet910)
+        orientation.check(if (start.sheetHeight >= start.sheetWidth) R.id.sheetStanding else R.id.sheetLying)
+        pitch.setText(Labels.centimetres(start.pitch))
+        pattern.check(if (start.pattern == TNutPattern.STAGGERED) R.id.patternStaggered else R.id.patternSquare)
+        offsetU.setText(Labels.centimetres(start.offsetU))
+        offsetV.setText(Labels.centimetres(start.offsetV))
+        fun read(): WallMap? {
+            val (short, long) = if (sheet.checkedRadioButtonId == R.id.sheet1220) WallMap.SHEET_4X8 else WallMap.SHEET_JIS
+            val standing = orientation.checkedRadioButtonId == R.id.sheetStanding
+            val map = WallMap(
+                numberOf(width) ?: return null, numberOf(height) ?: return null,
+                if (standing) short else long, if (standing) long else short,
+                (numberOf(pitch) ?: return null) / 100, if (pattern.checkedRadioButtonId == R.id.patternStaggered) TNutPattern.STAGGERED else TNutPattern.SQUARE,
+                (numberOf(offsetU) ?: return null) / 100, (numberOf(offsetV) ?: return null) / 100,
+            )
+            return map.takeIf { it.valid }
+        }
+        fun redraw() { preview.map = read() }
+        listOf(width, height, pitch, offsetU, offsetV).forEach { it.onChange { redraw() } }
+        listOf(sheet, orientation, pattern).forEach { it.setOnCheckedChangeListener { _, _ -> redraw() } }
+        redraw()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.wall_map)
+            .setView(view)
+            .setPositiveButton(R.string.save, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val map = read()
+            if (map == null) {
+                Toast.makeText(this, R.string.wall_map_invalid, Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            WallStore.writeMap(this, wall.id, map)
+            onSaved()
+            dialog.dismiss()
+        }
+    }
+
+    /** The field's number ("4.2", "4,2"), null when blank or not one. */
+    private fun numberOf(field: EditText): Float? = field.text.toString().trim().replace(',', '.').toFloatOrNull()
+
+    private fun EditText.onChange(handle: () -> Unit) = addTextChangedListener(object : TextWatcher {
+        override fun afterTextChanged(s: Editable?) = handle()
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+    })
 
     /**
      * Fills the set form's wall list with one checkbox per registered wall ([checked] ticked); hidden when the gym
