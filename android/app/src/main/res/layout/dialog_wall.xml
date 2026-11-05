@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- New wall / Edit wall: the wall's name. -->
+<!-- New wall / Edit wall: the wall's name, and (Edit only) its hand-entered wall map (#8 phase 4). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -20,4 +20,35 @@
         android:hint="@string/wall_name_hint"
         android:inputType="textCapWords"
         android:importantForAutofill="no" />
+
+    <!-- Shown when editing: what the wall map holds, and the way to the map form. -->
+    <LinearLayout
+        android:id="@+id/wallMapSection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceBody2"
+            android:text="@string/wall_map" />
+
+        <TextView
+            android:id="@+id/wallMapSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceBody1" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnWallMap"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginTop="4dp"
+            android:text="@string/wall_map_set_up" />
+    </LinearLayout>
 </LinearLayout>

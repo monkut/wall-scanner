@@ -49,6 +49,9 @@ the climber: their photo, else the first letter of their username, else a gear b
   and by set inside each wall; a wall header shows the open sets covering it and its route count, and its
   **Edit** renames or deletes the wall (its captures and routes then show under "No wall", which also collects
   routes scanned without a wall). A set covers the walls ticked in its form, or the whole gym when none is.
+  A wall's Edit form also holds its **Wall map** (#8 phase 4): the wall's size, the plywood sheets it is built
+  from and the T-nut grid, typed in and drawn to scale as you type. Nothing is measured from scans; later scans
+  will be placed on this map.
   Tap a route to open its record.
 
 ### Settings and profile

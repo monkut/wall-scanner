@@ -10,6 +10,7 @@ import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.Length
 import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.core.UnitSystem
+import io.github.monkut.wallscanner.core.WallMap
 import io.github.monkut.wallscanner.io.Location
 import io.github.monkut.wallscanner.io.LocationKind
 import io.github.monkut.wallscanner.io.Profile
@@ -27,6 +28,26 @@ import java.util.Locale
 object Labels {
     private val JST: ZoneId = ZoneId.of("Asia/Tokyo")
     private val CAPTURE_NAME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+
+    /** "4.2 × 3.65 m · 910 × 1820 mm sheets · 20 cm grid" (sheet sides as mounted). */
+    fun wallMap(c: Context, map: WallMap): String = c.getString(
+        R.string.wall_map_summary, metres(map.width), metres(map.height),
+        "${millimetres(map.sheetWidth)} × ${millimetres(map.sheetHeight)}", centimetres(map.pitch),
+    )
+
+    /** Metres as a plain number for a form field or a summary: "4.2", "3.65". */
+    fun metres(m: Float): String = plain(m, 2)
+
+    /** Centimetres from metres: "20", "12.5". */
+    fun centimetres(m: Float): String = plain(m * 100, 1)
+
+    private fun millimetres(m: Float): String = plain(m * 1000, 0)
+
+    /** A number without trailing decimal zeros: 4.20 → "4.2", 20.0 → "20", 910 → "910". */
+    private fun plain(v: Float, decimals: Int): String {
+        val text = String.format(Locale.US, "%.${decimals}f", v)
+        return if ('.' in text) text.trimEnd('0').trimEnd('.') else text
+    }
 
     fun definition(c: Context, type: RouteDefinition): String = c.getString(
         when (type) {
