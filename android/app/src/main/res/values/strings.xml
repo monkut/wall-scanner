@@ -188,6 +188,11 @@
     <string name="guide_too_far">Too far: %1$.1f m. Move in to about 2 m.</string>
     <string name="guide_face_wall">Face the wall squarely.</string>
     <string name="guide_too_fast">Slow down: sweep at a walking pace.</string>
+    <string name="track_hint_features">Nothing to track here: point at holds, an edge or the floor and hold still a moment.</string>
+    <string name="track_hint_light">Too dark to track: more light, or turn towards a lit part of the wall.</string>
+    <string name="track_hint_motion">Moved too fast: hold still until tracking returns, then sweep slowly.</string>
+    <string name="track_hint_camera">The camera is not available: close other camera apps.</string>
+    <string name="track_hint_bad_state">Tracking cannot recover: finish or cancel and start the scan again.</string>
     <string name="scan_more">Scan more of the wall before finishing</string>
     <string name="no_wall_found">No wall plane found. Scan the wall from 1–3 m with slow, overlapping passes.</string>
     <string name="camera_permission_needed">Camera permission is needed to scan</string>

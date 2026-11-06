@@ -56,6 +56,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
     private lateinit var statusText: TextView
     private lateinit var guideText: TextView
     private var lastCueAtMs = 0L
+    /** Why tracking is lost right now; null while tracking. The guide line shows what to do about it until it returns. */
+    @Volatile private var lostReason: TrackingFailureReason? = null
     private lateinit var btnRecord: Button
     private lateinit var btnFinish: Button
     private lateinit var processingOverlay: View
@@ -203,6 +205,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         } else {
             getString(R.string.tracking_lost, reason.toString())
         }
+        // The reason can change while tracking stays lost (NONE at first, then why); the hint follows it.
+        if (!tracking && reason != lostReason) { lostReason = reason; showGuide(trackingHint(reason)) }
         runOnUiThread { statusText.text = text }
 
         for (seg in segments.all()) {
@@ -233,6 +237,24 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         } else {
             log.log("TRACKING lost ($reason) after $sinceLast tracked · $state lastPose=${fmt(pose)}")
         }
+        // The guide line says what to do about a loss from the frame it happens; the guide's own cues resume with tracking (onGuide).
+        lostReason = if (tracking) null else reason
+        showGuide(if (tracking) "" else trackingHint(reason))
+    }
+
+    /** What to do about a tracking loss, from ARCore's reason (#36); nothing for NONE, the session's normal start. */
+    private fun trackingHint(reason: TrackingFailureReason): String = when (reason) {
+        TrackingFailureReason.NONE -> ""
+        TrackingFailureReason.INSUFFICIENT_FEATURES -> getString(R.string.track_hint_features)
+        TrackingFailureReason.INSUFFICIENT_LIGHT -> getString(R.string.track_hint_light)
+        TrackingFailureReason.EXCESSIVE_MOTION -> getString(R.string.track_hint_motion)
+        TrackingFailureReason.CAMERA_UNAVAILABLE -> getString(R.string.track_hint_camera)
+        TrackingFailureReason.BAD_STATE -> getString(R.string.track_hint_bad_state)
+    }
+
+    private fun showGuide(text: String) = runOnUiThread {
+        guideText.text = text
+        guideText.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
     }
 
     override fun onGuide(cue: ScanGuide.Cue?, measure: ScanGuide.Measure?) {
@@ -247,10 +269,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         val held = if (lastCueAtMs == 0L) "" else " after ${(now - lastCueAtMs) / 1000.0}s"
         log.log("GUIDE ${cue ?: "ok"}$held · ${measure ?: "no surface"} · recording=${renderer.recording}")
         lastCueAtMs = now
-        runOnUiThread {
-            guideText.text = text
-            guideText.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
-        }
+        if (cue == null && lostReason != null) return // the renderer clears its cue on a loss; the loss hint stays
+        showGuide(text)
     }
 
     override fun onSegmentStarted(segment: Segment, cameraPose: Pose) {
