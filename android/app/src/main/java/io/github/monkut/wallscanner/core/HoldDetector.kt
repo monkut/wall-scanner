@@ -50,9 +50,10 @@ object HoldDetector {
     /**
      * [localRelief] measures hold height against the local rock surface (per-cell median of the plane
      * distance, bilinearly interpolated) instead of the plane itself; used for outdoor rock, which is not flat.
-     * Voxels matching [wall] are left out of a hold's colour when enough other voxels remain.
+     * Voxels matching [wall] are left out of a hold's colour when enough other voxels remain. [wallExtent] is the
+     * wall's area in (u, v) as [minU, minV, maxU, maxV]; outside it the mat and the beams stand off the plane.
      */
-    fun detect(cloud: VoxelCloud, surface: WallSurface, localRelief: Boolean = false, wall: WallColor? = null): List<Hold> {
+    fun detect(cloud: VoxelCloud, surface: WallSurface, localRelief: Boolean = false, wall: WallColor? = null, wallExtent: FloatArray? = null): List<Hold> {
         val n = cloud.count
         val xyz = cloud.xyz
         // Every voxel measured against the face it lies on, in the unfolded (u, v).
@@ -79,6 +80,14 @@ object HoldDetector {
             if (extent < Tuning.MIN_HOLD_EXTENT || extent > Tuning.MAX_HOLD_EXTENT) continue
             var peak = -Float.MAX_VALUE
             for (c in comp) if (grid.median[c] > peak) peak = grid.median[c]
+            // A wide component that rises past any hold's height inside the wall's area is the rim of a step of
+            // the wall (a boxed-out section, a hangboard panel), not a hold on it (#28). A bottom hold's component
+            // may take in the mat, which is as high, but the mat lies outside the extent. The step's cells are
+            // claimed so that no hold of its colour grows into it.
+            if (extent >= Tuning.STEP_MIN_EXTENT && grid.peakInside(comp, wallExtent) >= Tuning.MAX_HOLD_HEIGHT) {
+                for (c in comp) grid.claimed[c] = true
+                continue
+            }
             // Cells above MAX_HOLD_HEIGHT are already outside the component; a deep jug's own cells may still
             // carry a median above it from flying pixels, so the raw peak is reported but never rejected.
             if (peak < Tuning.HOLD_MIN_PEAK) continue
@@ -245,6 +254,25 @@ object HoldDetector {
                 }
             }
             return queue.copyOf(tail)
+        }
+
+        /**
+         * Highest cell median among [cells] and the cells next to them, inside [extent] (anywhere without one);
+         * -∞ when none is. The neighbours count because a step's top, past any hold's height, lies just outside
+         * the rim component that the relief window admits.
+         */
+        fun peakInside(cells: IntArray, extent: FloatArray?): Float {
+            var best = -Float.MAX_VALUE
+            for (c in cells) for (dx in -1..1) for (dy in -1..1) {
+                val k = if (dx == 0 && dy == 0) c else neighbour(c, dx, dy)
+                if (k < 0) continue
+                if (extent != null) {
+                    val u = (cu[k] + 0.5f) * Tuning.CLUSTER_CELL; val v = (cv[k] + 0.5f) * Tuning.CLUSTER_CELL
+                    if (u < extent[0] || u > extent[2] || v < extent[1] || v > extent[3]) continue
+                }
+                if (median[k] > best) best = median[k]
+            }
+            return best
         }
 
         private fun peak(cells: IntArray): Float {
