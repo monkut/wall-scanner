@@ -17,6 +17,8 @@ import io.github.monkut.wallscanner.core.Rigid
 import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.core.Rules
 import io.github.monkut.wallscanner.core.PlyReader
+import io.github.monkut.wallscanner.core.ProcessingStage
+import io.github.monkut.wallscanner.core.ProgressListener
 import io.github.monkut.wallscanner.core.PlyWriter
 import io.github.monkut.wallscanner.core.SceneJson
 import io.github.monkut.wallscanner.core.Thumbnail
@@ -196,14 +198,14 @@ object CaptureStore {
      * scene.json are replaced; sends.json is left alone. Returns a summary for the user, or null when the
      * capture has no point cloud or no wall plane. Call off the main thread. Logged as `REPROCESS` in scan.log.
      */
-    fun reprocess(context: Context, dir: File): String? {
+    fun reprocess(context: Context, dir: File, progress: ProgressListener = { _, _ -> }): String? {
         val ply = File(dir, PLY_FILE)
         if (!ply.exists()) return null
         val log = ScanLog(File(dir, ScanLog.FILE))
         try {
             val t0 = System.currentTimeMillis()
             val cloud = ply.inputStream().use { PlyReader.read(it) }
-            val result = ScenePipeline.build(dir, cloud, readCameraPositions(dir), readDefinition(dir), context.assets) { log.log("REPROCESS $it") }
+            val result = ScenePipeline.build(dir, cloud, readCameraPositions(dir), readDefinition(dir), context.assets, { log.log("REPROCESS $it") }, progress)
                 ?.let { SceneBuilder.withFirstRouteId(it, nextRouteId(dir)) }
             if (result == null) {
                 log.log("REPROCESS: no wall plane (voxels=${cloud.count})")
@@ -217,8 +219,10 @@ object CaptureStore {
                     "unassigned=${result.holds.count { it.routeId == -1 }} " +
                     "routes=${result.routes.joinToString { "${it.name}(${it.holdIds.size})" }} (${System.currentTimeMillis() - t0} ms)"
             )
+            progress(ProcessingStage.WRITE, 0.5f)
             writeScene(dir, SceneJson.write(result, cloud.count, nowIso(), Build.MODEL))
             writeThumbnail(dir, Thumbnail.render(cloud, result.surface))
+            progress(ProcessingStage.WRITE, 1f)
             return summary
         } finally {
             log.close()

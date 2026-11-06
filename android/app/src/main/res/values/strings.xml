@@ -170,6 +170,15 @@
     <string name="resume_scan">Resume</string>
     <string name="finish_scan">Finish and process</string>
     <string name="processing">Processing scan…</string>
+    <string name="processing_stage">%1$s · %2$d%%</string>
+    <string name="stage_merge">Merging segments</string>
+    <string name="stage_faces">Hiding faces in keyframes</string>
+    <string name="stage_cloud">Finding the wall and holds</string>
+    <string name="stage_orthophoto">Building the wall photo</string>
+    <string name="stage_shapes">Refining hold shapes</string>
+    <string name="stage_model">Running the hold model</string>
+    <string name="stage_outlines">Drawing hold outlines</string>
+    <string name="stage_write">Saving</string>
     <string name="status_initializing">Initializing camera…</string>
     <string name="status_ready">Ready</string>
     <string name="status_scanning">Scanning</string>

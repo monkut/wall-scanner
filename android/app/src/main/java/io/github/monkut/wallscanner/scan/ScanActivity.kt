@@ -26,11 +26,14 @@ import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.UnavailableException
 import com.google.ar.core.exceptions.UnsupportedConfigurationException
 import io.github.monkut.wallscanner.Labels
+import io.github.monkut.wallscanner.ProcessingPanel
 import io.github.monkut.wallscanner.R
 import io.github.monkut.wallscanner.Settings
 import io.github.monkut.wallscanner.io.FaceFinder
 import io.github.monkut.wallscanner.io.KeyframeFaces
 import io.github.monkut.wallscanner.core.Definition
+import io.github.monkut.wallscanner.core.Processing
+import io.github.monkut.wallscanner.core.ProcessingStage
 import io.github.monkut.wallscanner.core.Rigid
 import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.core.SceneJson
@@ -350,6 +353,9 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         processing = true
         renderer.recording = false
         processingOverlay.visibility = View.VISIBLE
+        val maskFaces = Settings.maskBystanders(this)
+        val panel = ProcessingPanel(processingOverlay, Processing.atFinish(maskFaces))
+        panel.update(ProcessingStage.MERGE, 0f)
         thread(name = "scene-builder") {
             val t0 = System.currentTimeMillis()
             val all = segments.all()
@@ -389,7 +395,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             processor.awaitKeyframes()
             val keyframes = processor.keyframes?.resolve(segmentTransforms) ?: 0
             log.log("keyframes: $keyframes resolved to world poses (${CaptureStore.FRAMES_RESOLVED})")
-            if (Settings.maskBystanders(this)) runCatching { FaceFinder(this).use { KeyframeFaces.mask(captureDir, it) } }
+            if (maskFaces) runCatching { FaceFinder(this).use { KeyframeFaces.mask(captureDir, it) { done -> panel.update(ProcessingStage.FACES, done) } } }
                 .onSuccess { log.log("keyframe faces: ${it.faces} hidden in ${it.withFaces} of ${it.frames} keyframes (${it.ms} ms)") }
                 .onFailure { log.log("keyframe faces failed: $it") }
             val cloud = reference
@@ -397,7 +403,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             CaptureStore.writePly(captureDir, cloud)
             log.log("points.ply written (${File(captureDir, CaptureStore.PLY_FILE).length()} bytes)")
 
-            val result = ScenePipeline.build(captureDir, cloud, cameras, definition, assets) { log.log(it) }
+            val result = ScenePipeline.build(captureDir, cloud, cameras, definition, assets, { log.log(it) }, panel::update)
             val elapsed = System.currentTimeMillis() - t0
             if (result == null) {
                 log.log("RESULT: no wall plane (${elapsed} ms)")
@@ -415,8 +421,10 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
                     "unassigned=${result.holds.count { it.routeId == -1 }} " +
                     "routes=${result.routes.joinToString { "${it.name}(${it.holdIds.size})" }} (${elapsed} ms)"
             )
+            panel.update(ProcessingStage.WRITE, 0.5f)
             CaptureStore.writeScene(captureDir, SceneJson.write(result, cloud.count, CaptureStore.nowIso(), Build.MODEL))
             CaptureStore.writeThumbnail(captureDir, Thumbnail.render(cloud, result.surface))
+            panel.update(ProcessingStage.WRITE, 1f)
             finished = true
             val thin = result.thinCoverage
             runOnUiThread {

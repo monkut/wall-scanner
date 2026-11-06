@@ -22,11 +22,12 @@ object KeyframeFaces {
     private const val JPEG_QUALITY = 85
     private const val BLOCKS = 6 // mosaic cells across the longer side of a face
 
-    fun mask(dir: File, finder: FaceFinder): Result {
+    fun mask(dir: File, finder: FaceFinder, progress: (Float) -> Unit = {}): Result {
         val t0 = System.currentTimeMillis()
         val keyframes = CaptureStore.readKeyframes(dir)
         var withFaces = 0; var faces = 0
-        for (k in keyframes) {
+        for ((i, k) in keyframes.withIndex()) {
+            progress(i.toFloat() / keyframes.size)
             val file = File(dir, k.file)
             val bitmap = BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inMutable = true }) ?: continue
             val rotation = FaceMask.uprightRotation(k.worldFromCamera.r)

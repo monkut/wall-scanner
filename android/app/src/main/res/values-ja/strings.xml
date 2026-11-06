@@ -167,6 +167,15 @@
     <string name="resume_scan">再開</string>
     <string name="finish_scan">終了して処理</string>
     <string name="processing">スキャンを処理中…</string>
+    <string name="processing_stage">%1$s · %2$d%%</string>
+    <string name="stage_merge">セグメントを結合中</string>
+    <string name="stage_faces">キーフレームの顔を隠しています</string>
+    <string name="stage_cloud">壁面とホールドを検出中</string>
+    <string name="stage_orthophoto">壁の写真を作成中</string>
+    <string name="stage_shapes">ホールドの形を整えています</string>
+    <string name="stage_model">ホールドモデルを実行中</string>
+    <string name="stage_outlines">ホールドの輪郭を描いています</string>
+    <string name="stage_write">保存中</string>
     <string name="status_initializing">カメラを初期化中…</string>
     <string name="status_ready">準備完了</string>
     <string name="status_scanning">スキャン中</string>
