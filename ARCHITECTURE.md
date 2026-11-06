@@ -165,6 +165,7 @@ wall:       { origin, normal, up, right, inliers, color: [r, g, b], extent: [min
                                                  color = mean surface colour; extent = scanned area (1st..99th percentile);
                                                  photo = orthophoto from the keyframes (px metres per pixel, top row = maxV), absent when none
                                                  relief = each photo pixel's height off the wall in mm (red × 256 + green), from the point cloud; the viewer shows the wall in 3D with it
+steps:      [[[u, v], ...], ...]                   # outlines of the wall's steps the hold detector set aside (#28): a boxed-out section, a hangboard panel
 quality:    { planeShare, holdDensity, drifted: bool }   # share of the cloud within 2 cm of the wall surface (all faces), holds per m² of extent; drifted = both past
                                                  their thresholds (core/ScanQuality.kt, #35): tracking drifted mid-scan, the wall is laid down twice
 routes[]:   { id, name, color, grade, gradeSystem: yds|kyu_dan|v|font|null, holdIds: [..], confirmed: bool,

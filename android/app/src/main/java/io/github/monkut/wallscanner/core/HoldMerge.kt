@@ -17,6 +17,10 @@ object HoldMerge {
     private const val MIN_SUPPORT = 0.5f  // … or the model's masks cover this share of it
     private const val MAX_WALL = 0.5f     // a hold this much the wall's colour is bare wall unless vouched for
     private const val MAX_TAPE = 0.5f     // a hold this much covered by the model's tape strips is tape
+    private const val NESTED_INSIDE = 0.9f // a hold with this much of its outline inside another's is a piece of it (#29 B) …
+    private const val NESTED_MIN_SHARE = 0.2f // … when it is this much of the host's area (a volume's face, not a hold mounted on a volume:
+    private const val NESTED_MAX_DE = 25f     // 3% and 1% of their hosts in the Oct 21 and Oct 23 references) and about its colour
+    private const val ON_STEP_SHARE = 0.5f // an image-only hold with this much of itself on a step of the wall is the step's paint or wood (#29 A)
     private const val STRIP_MAX_WIDTH = 0.03f // an outline narrower than this …
     private const val STRIP_MIN_ASPECT = 6f   // … and this many times as long is a strip, not a hold
 
@@ -102,6 +106,56 @@ object HoldMerge {
                 minOf(u - extent[0], extent[2] - u, v - extent[1], extent[3] - v) < EDGE_M
             }
             edge < EDGE_SHARE * px.size && px.count { wall.matches(patches.hue[it], patches.sat[it], patches.value[it]) } < MAX_WALL * px.size
+        }
+    }
+
+    /**
+     * [holds] with nested outlines merged (#29 B): a hold whose pixels lie at least [NESTED_INSIDE] inside a
+     * larger hold's outline, of about its colour and at least [NESTED_MIN_SHARE] of its area, is a piece of it
+     * (the depth found a volume's upper face, the photo search the whole volume). A small hold mounted on a
+     * volume stays its own. The larger keeps its record and outline, takes the voxels, and the role and tape
+     * of either. Runs on the final outlines, after SAM: SamRefine merges only pieces it redrew itself.
+     */
+    fun nested(holds: List<Hold>, photo: Orthophoto): List<Hold> {
+        val pixels = holds.map { Raster.fillPolygon(ImageHold.polygon(it), photo) }
+        val sets = HashMap<Int, HashSet<Int>>() // a host's pixels, built when a hold of its colour and size asks
+        val lab = holds.map { ColorUtil.rgbToLab(it.r, it.g, it.b) }
+        val into = IntArray(holds.size) { -1 }
+        for (i in holds.indices.sortedBy { pixels[it].size }) {
+            val px = pixels[i]
+            if (px.isEmpty()) continue
+            val host = holds.indices.filter { it != i && into[it] < 0 && pixels[it].size > px.size && px.size >= NESTED_MIN_SHARE * pixels[it].size && deltaE(lab[i], lab[it]) <= NESTED_MAX_DE }
+                .firstOrNull { j -> val set = sets.getOrPut(j) { pixels[j].toHashSet() }; px.count { it in set } >= NESTED_INSIDE * px.size }
+            if (host != null) into[i] = host
+        }
+        // A piece of a piece goes to the outermost host.
+        for (i in holds.indices) while (into[i] >= 0 && into[into[i]] >= 0) into[i] = into[into[i]]
+        return holds.indices.filter { into[it] < 0 }.map { i ->
+            val members = listOf(i) + holds.indices.filter { into[it] == i }
+            val h = holds[i]
+            if (members.size == 1) return@map h
+            // The host as it was (depth colour, height, centre and outline), with the pieces' voxels and marks.
+            Hold(h.id, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, members.sumOf { holds[it].voxels }, h.outline).also {
+                it.role = members.map { m -> holds[m].role }.firstOrNull { r -> r != HoldRole.ANY } ?: HoldRole.ANY
+                it.tape = members.firstNotNullOfOrNull { m -> holds[m].tape }
+            }
+        }
+    }
+
+    /**
+     * [holds] without the image-only ones that lie on a step of the wall (#28, #29 A): at least [ON_STEP_SHARE]
+     * of the hold's pixels inside a step outline (the step's rim and riser as the depth saw them). The photo
+     * search takes the step's painted edge and bare wood for holds; a hold with voxels was seen by depth as a
+     * bump of its own and stays. A hold mounted on the step's rim goes with it: the step is not a face yet (#8).
+     */
+    fun dropOnSteps(holds: List<Hold>, steps: List<FloatArray>, photo: Orthophoto): List<Hold> {
+        if (steps.isEmpty()) return holds
+        val onStep = BooleanArray(photo.image.width * photo.image.height)
+        for (s in steps) for (i in Raster.fillPolygon(s, photo)) onStep[i] = true
+        return holds.filter { hold ->
+            if (hold.voxels > 0) return@filter true
+            val px = Raster.fillPolygon(ImageHold.polygon(hold), photo)
+            px.isEmpty() || px.count { onStep[it] } < ON_STEP_SHARE * px.size
         }
     }
 

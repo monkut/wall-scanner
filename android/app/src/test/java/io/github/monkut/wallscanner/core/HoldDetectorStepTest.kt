@@ -8,8 +8,8 @@ import kotlin.random.Random
 /**
  * A step of the wall (a boxed-out section standing 0.5–1 m off the plane, #28) is not a hold; a wide, low
  * volume still is. Three hemispherical holds elsewhere on the wall are found either way. Scraps of the step's
- * riser under [Tuning.STEP_MIN_EXTENT] may come through (they do on the real walls too) and are left to the
- * later stages.
+ * riser under [Tuning.STEP_MIN_EXTENT] may come through (they do on the real walls too): a narrow box standing
+ * 1 m proud is also the shape of the Oct 21 reference's corner volume, so height alone cannot drop them.
  */
 class HoldDetectorStepTest {
     private val holds = listOf(Triple(0.5f, 0.5f, SyntheticWall.red), Triple(1.5f, 0.9f, SyntheticWall.red), Triple(0.8f, 1.8f, SyntheticWall.red))
@@ -49,7 +49,9 @@ class HoldDetectorStepTest {
         assertEquals("holds: ${result.holds.map { "%.2f×%.2f".format(it.width, it.tall) }}", 3, found)
         val onStep = result.holds.filter { it.cx > boxX - 0.1f && it.cy > boxY - 0.1f }
         assertTrue("step pieces: ${onStep.map { "%.2f×%.2f".format(it.width, it.tall) }}", onStep.all { maxOf(it.width, it.tall) < Tuning.STEP_MIN_EXTENT })
+        assertTrue("step outlines: ${result.steps.size}", result.steps.isNotEmpty())
     }
+
 
     @Test
     fun aWideLowVolumeIsAHold() {

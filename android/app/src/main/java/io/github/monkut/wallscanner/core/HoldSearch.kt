@@ -14,7 +14,9 @@ import kotlin.math.min
 object HoldSearch {
     private const val MIN_SIDE = 0.04f
     private const val MAX_SIDE = 1.0f
-    private const val MAX_COVERED = 0.3f // patches already this covered by a hold are that hold
+    private const val MAX_COVERED = 0.3f // patches already this covered by a hold are that hold …
+    private const val MIN_REMNANT = 0.4f // … unless the uncovered remainder is this much of the patch, compact, and hold-sized: a
+    private const val REMNANT_FILL = 0.5f // second hold of the same colour that the gap bridging joined to the first (#29 C)
     private const val PAD_RELIEF = 0.12f // crash pads stand this far off the wall …
     private const val PAD_ZONE = 0.35f // … within this height of the wall's bottom edge
 
@@ -31,11 +33,48 @@ object HoldSearch {
             val longM = max(patches.maxX[p] - patches.minX[p], patches.maxY[p] - patches.minY[p]).plus(1) * photo.px
             if (longM < MIN_SIDE || longM > MAX_SIDE) continue
             val members = patches.members(p)
-            if (members.count { covered[it] } >= MAX_COVERED * count) continue
+            if (members.count { covered[it] } >= MAX_COVERED * count) {
+                // The patch is a found hold and whatever its colour bridged to within HOLD_GAP_M: on 1F two red
+                // volumes 2 cm apart, the lower one unseen by depth (#29 C). A hold's own halo outside its outline
+                // is a thin ring; a second hold is a compact remainder of the patch's own size.
+                for (rem in remnants(members, covered, w)) {
+                    if (rem.size < MIN_REMNANT * count || rem.size < minSidePx * minSidePx) continue
+                    var x0 = w; var x1 = -1; var y0 = h; var y1 = -1
+                    for (i in rem) { val x = i % w; val y = i / w; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
+                    val long = max(x1 - x0, y1 - y0).plus(1) * photo.px
+                    if (long < MIN_SIDE || long > MAX_SIDE || rem.size < REMNANT_FILL * (x1 - x0 + 1) * (y1 - y0 + 1)) continue
+                    if (!plausible(rem, rem.size, photo, extent)) continue
+                    found.add(ImageHold.fromPixels(nextId++, rem, 0, photo, surface))
+                }
+                continue
+            }
             if (!plausible(members, count, photo, extent)) continue
             found.add(ImageHold.fromPixels(nextId++, members, 0, photo, surface))
         }
         return found
+    }
+
+    /** 4-connected groups of the [members] pixels that no hold covers, in a [w] pixel wide image. */
+    private fun remnants(members: IntArray, covered: BooleanArray, w: Int): List<IntArray> {
+        val free = HashSet<Int>()
+        for (i in members) if (!covered[i]) free.add(i)
+        val out = ArrayList<IntArray>()
+        val queue = ArrayList<Int>()
+        while (free.isNotEmpty()) {
+            queue.clear()
+            val seed = free.first(); free.remove(seed); queue.add(seed)
+            var head = 0
+            while (head < queue.size) {
+                val i = queue[head++]
+                val x = i % w
+                if (x > 0 && free.remove(i - 1)) queue.add(i - 1)
+                if (x < w - 1 && free.remove(i + 1)) queue.add(i + 1)
+                if (free.remove(i - w)) queue.add(i - w)
+                if (free.remove(i + w)) queue.add(i + w)
+            }
+            out.add(queue.toIntArray())
+        }
+        return out
     }
 
     /**

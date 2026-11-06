@@ -56,8 +56,12 @@ class RealCaptureHarness {
                 val split = HoldSplit.byColor(refined + extra, photo, patches, result.surface, result.wallColor)
                 if (split.size != refined.size + extra.size) println("HARNESS ${dir.name} hold split: ${refined.size + extra.size} → ${split.size} by photo colour")
                 // The JVM cannot run the hold model: holds are judged by colour alone here.
-                val holds = HoldMerge.prune(split, emptyList(), emptyList(), photo, patches, result.wallColor, result.extent)
-                println("HARNESS ${dir.name} hold prune: ${split.size - holds.size} dropped")
+                val pruned = HoldMerge.prune(split, emptyList(), emptyList(), photo, patches, result.wallColor, result.extent)
+                println("HARNESS ${dir.name} hold prune: ${split.size - pruned.size} dropped: ${(split - pruned.toSet()).joinToString { "#${it.id} (%.2f, %.2f) %.2f×%.2f vox=${it.voxels} rgb=(${it.r},${it.g},${it.b})".format(it.u, it.v, it.width, it.tall) }}")
+                val unnested = HoldMerge.nested(pruned, photo)
+                if (unnested.size != pruned.size) println("HARNESS ${dir.name} hold nested: ${pruned.size - unnested.size} merged: ${(pruned.map { it.id } - unnested.map { it.id }.toSet()).joinToString { "#$it" }}")
+                val holds = HoldMerge.dropOnSteps(unnested, result.steps, photo)
+                if (holds.size != unnested.size) println("HARNESS ${dir.name} hold steps: ${unnested.size - holds.size} image-only holds on a step dropped: ${(unnested - holds.toSet()).joinToString { "#${it.id} (%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
                 val starts = TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent)
                 result.photo = photo
                 result = SceneBuilder.withHolds(result, holds)

@@ -113,8 +113,14 @@ object ScenePipeline {
             .onFailure { log("hold depth merge failed: $it") }
             .getOrDefault(outlined)
         log("hold depth merge: ${outlined.size - joined.size} pieces joined to a touching hold with no depth valley between them")
-        val holds = HoldMerge.dropStrips(joined)
-        if (holds.size != joined.size) log("hold strips: ${joined.size - holds.size} dropped (under 3 cm across, 6× as long: a column or panel edge)")
+        val unnested = runCatching { HoldMerge.nested(joined, photo) }
+            .onFailure { log("hold nested failed: $it") }
+            .getOrDefault(joined)
+        if (unnested.size != joined.size) log("hold nested: ${joined.size - unnested.size} holds inside another merged into it: ${(joined.map { it.id } - unnested.map { it.id }.toSet()).joinToString { "#$it" }}")
+        val unstripped = HoldMerge.dropStrips(unnested)
+        if (unstripped.size != unnested.size) log("hold strips: ${unnested.size - unstripped.size} dropped (under 3 cm across, 6× as long: a column or panel edge)")
+        val holds = HoldMerge.dropOnSteps(unstripped, result.steps, photo)
+        if (holds.size != unstripped.size) log("hold steps: ${unstripped.size - holds.size} image-only holds on a step of the wall dropped (its paint or wood): ${(unstripped - holds.toSet()).joinToString { "(%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
         val starts = runCatching { TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent) }
             .onFailure { log("tape marks failed: $it") }
             .getOrDefault(0)
