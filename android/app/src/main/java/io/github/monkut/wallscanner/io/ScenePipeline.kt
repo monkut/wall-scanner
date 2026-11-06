@@ -15,6 +15,7 @@ import io.github.monkut.wallscanner.core.Keyframe
 import io.github.monkut.wallscanner.core.OrthophotoBuilder
 import io.github.monkut.wallscanner.core.ProcessingStage
 import io.github.monkut.wallscanner.core.ProgressListener
+import io.github.monkut.wallscanner.core.ScanQuality
 import io.github.monkut.wallscanner.core.SceneBuilder
 import io.github.monkut.wallscanner.core.SceneJson
 import io.github.monkut.wallscanner.core.SceneResult
@@ -31,7 +32,26 @@ import kotlin.random.Random
 object ScenePipeline {
     private const val KEYFRAME_SUBSAMPLE = 2 // 960 × 540 is ~1.8 image px per 5 mm wall px at 2 m: enough, half the decode cost
 
-    fun build(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit, progress: ProgressListener = { _, _ -> }): SceneResult? {
+    fun build(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit, progress: ProgressListener = { _, _ -> }): SceneResult? =
+        stages(dir, cloud, cameras, definition, assets, log, progress)?.also { judge(it, cloud, log) }
+
+    /**
+     * The scan's quality verdict from the final holds (#35), logged and set on [result]. Only for a gym scan that
+     * went through the photo pipeline: the thresholds were calibrated on its hold counts, and outdoor rock has no
+     * single wall plane to share.
+     */
+    private fun judge(result: SceneResult, cloud: VoxelCloud, log: (String) -> Unit) {
+        val why = when {
+            result.definition.type.outdoor -> "outdoor rock"
+            result.photo == null -> "no orthophoto, hold counts are not comparable"
+            else -> null
+        }
+        if (why != null) { log("QUALITY not judged: $why"); return }
+        result.quality = ScanQuality.of(cloud, result.surface, result.holds.size, result.extent)
+        log("QUALITY ${result.quality}")
+    }
+
+    private fun stages(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit, progress: ProgressListener): SceneResult? {
         var result = SceneBuilder.build(cloud, cameras, Random(42), definition) { progress(ProcessingStage.CLOUD, it) } ?: return null
         result.thinCoverage = Coverage.thinCells(cloud, result.surface, result.extent)
         if (result.thinCoverage.isNotEmpty()) {

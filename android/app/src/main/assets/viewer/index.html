@@ -85,7 +85,7 @@
   const STRINGS = {
     'en-US': {
       routes: 'Routes', loading: 'Loading…', save: 'Save', share: 'Share', confirm: 'Confirm', confirmed: 'Confirmed', points: 'Points',
-      newRoute: 'New route', route: 'Route', grade: 'grade', pts: 'points', holds: 'holds', routesN: 'routes', confirmedN: 'confirmed',
+      newRoute: 'New route', route: 'Route', grade: 'grade', pts: 'points', holds: 'holds', routesN: 'routes', confirmedN: 'confirmed', lowConfidence: 'low confidence: the scan drifted, rescan this part',
       downClimb: 'Down climb', markDownClimb: 'Marked as the down-climb holds: not a route, never in the logbook. Tap again to make it a route.', markRoute: 'A route again.',
       roles: { start: 'start', hand: 'hand', foot: 'foot', zone: 'zone', finish: 'finish' },
       hintRole: (r) => `Marking "${r}": tap holds to mark them, tap again to clear.`,
@@ -104,7 +104,7 @@
     },
     ja: {
       routes: 'ルート', loading: '読み込み中…', save: '保存', share: '共有', confirm: '確定', confirmed: '確定済み', points: '点群',
-      newRoute: '新しいルート', route: 'ルート', grade: 'グレード', pts: '点', holds: 'ホールド', routesN: 'ルート', confirmedN: '確定',
+      newRoute: '新しいルート', route: 'ルート', grade: 'グレード', pts: '点', holds: 'ホールド', routesN: 'ルート', confirmedN: '確定', lowConfidence: '信頼度低: スキャンがぶれています。この部分を再スキャンしてください',
       downClimb: 'ダウンクライム', markDownClimb: 'ダウンクライム用ホールドに設定: ルートではなく、ログブックには出ません。もう一度タップでルートに戻ります。', markRoute: 'ルートに戻しました。',
       roles: { start: 'スタート', hand: '手', foot: '足', zone: 'ゾーン', finish: 'トップ' },
       hintRole: (r) => `「${r}」をマーク中: ホールドをタップして設定、もう一度タップで解除。`,
@@ -179,7 +179,7 @@
   const setStatus = (text) => { statusEl.textContent = text; };
   let pointCount = 0;
   const isRoute = (r) => r.kind !== 'downclimb';
-  const showCounts = () => setStatus(`${T.definitions[scene.definition.type] || ''}, ${pointCount.toLocaleString()} ${T.pts}, ${scene.holds.length} ${T.holds}, ${scene.routes.filter(isRoute).length} ${T.routesN}, ${scene.routes.filter((r) => isRoute(r) && r.confirmed).length} ${T.confirmedN}`);
+  const showCounts = () => setStatus(`${T.definitions[scene.definition.type] || ''}, ${pointCount.toLocaleString()} ${T.pts}, ${scene.holds.length} ${T.holds}, ${scene.routes.filter(isRoute).length} ${T.routesN}, ${scene.routes.filter((r) => isRoute(r) && r.confirmed).length} ${T.confirmedN}${scene.quality && scene.quality.drifted ? `, ${T.lowConfidence}` : ''}`);
   const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
   const rgbCss = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
   const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));

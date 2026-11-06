@@ -8,6 +8,8 @@ import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.core.content.FileProvider
 import io.github.monkut.wallscanner.CrashLog
+import io.github.monkut.wallscanner.Labels
+import io.github.monkut.wallscanner.R
 import io.github.monkut.wallscanner.core.Definition
 import io.github.monkut.wallscanner.core.FeetRule
 import io.github.monkut.wallscanner.core.Image
@@ -212,7 +214,10 @@ object CaptureStore {
                 log.log("REPROCESS: no wall plane (voxels=${cloud.count})")
                 return null
             }
-            val summary = "${result.holds.size} holds, ${result.routes.count { it.kind == RouteKind.ROUTE }} routes"
+            val summary = Labels.join(
+                context, "${result.holds.size} holds, ${result.routes.count { it.kind == RouteKind.ROUTE }} routes",
+                if (result.quality?.drifted == true) context.getString(R.string.low_confidence) else "",
+            )
             val p = result.frame.plane
             log.log(
                 "REPROCESS: plane origin=(${p.ox}, ${p.oy}, ${p.oz}) normal=(${p.nx}, ${p.ny}, ${p.nz}) " +
