@@ -12,6 +12,15 @@ object Tuning {
     const val OUTDOOR_MAX_DEPTH_RANGE = 5f
     const val MIN_DEPTH_CONFIDENCE = 128 // raw depth confidence, 0..255
     const val MAX_SAMPLES_PER_DEPTH_FRAME = 30_000
+    // Scan guide (#36): cues while scanning, from the depth frame's central window and the camera's motion. Between
+    // keyframes of the good noborock Main wall scans (Nov 5–6): 1.2–2.3 m from the wall (closest decile 0.64–2.2 m),
+    // turned 13–24° from facing it about the vertical (median; 12:13, scanned from a corner, 58°; 90th percentiles
+    // 33–64°), sweeping 0.6–1 m/s across the wall (median; 90th percentiles 1.0–1.6 m/s). The drifted scan of
+    // 2026-11-06 12:25 spent its middle 0.4 m from the wall and behind it; its speed was no different.
+    const val GUIDE_MIN_DISTANCE = 0.8f
+    const val GUIDE_FAR_FRACTION = 0.85f // of the depth range in use: 3 m of a gym's 3.5 m, 4.3 m of the outdoor 5 m
+    const val GUIDE_MAX_FACING_DEG = 50f // turned along the wall or at a side wall; the look up at the top row is not counted
+    const val GUIDE_MAX_SPEED = 2f // across the wall, smoothed over about a second: swinging the phone, not the sweep
 
     // Wall plane
     const val RANSAC_ITERATIONS = 600

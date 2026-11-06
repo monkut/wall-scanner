@@ -181,6 +181,10 @@
     <string name="status_scanning">スキャン中</string>
     <string name="status_line">%1$s: %2$dk 点、深度フレーム %3$d、セグメント %4$d</string>
     <string name="tracking_lost">トラッキングを喪失: %1$s</string>
+    <string name="guide_too_close">壁に近すぎます（%1$.1f m）。2 m ほど離れてください。</string>
+    <string name="guide_too_far">壁から遠すぎます（%1$.1f m）。2 m ほどまで近づいてください。</string>
+    <string name="guide_face_wall">壁に正対してください。</string>
+    <string name="guide_too_fast">ゆっくり動かしてください。</string>
     <string name="scan_more">終了する前に、壁をもっとスキャンしてください</string>
     <string name="no_wall_found">壁の面が見つかりません。1〜3 m の距離から、ゆっくり重ねながらスキャンしてください。</string>
     <string name="camera_permission_needed">スキャンにはカメラの権限が必要です</string>

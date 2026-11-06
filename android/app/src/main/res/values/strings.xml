@@ -184,6 +184,10 @@
     <string name="status_scanning">Scanning</string>
     <string name="status_line">%1$s: %2$dk points, %3$d depth frames, segment %4$d</string>
     <string name="tracking_lost">Tracking lost: %1$s</string>
+    <string name="guide_too_close">Step back: %1$.1f m from the wall. Scan from about 2 m.</string>
+    <string name="guide_too_far">Too far: %1$.1f m. Move in to about 2 m.</string>
+    <string name="guide_face_wall">Face the wall squarely.</string>
+    <string name="guide_too_fast">Slow down: sweep at a walking pace.</string>
     <string name="scan_more">Scan more of the wall before finishing</string>
     <string name="no_wall_found">No wall plane found. Scan the wall from 1–3 m with slow, overlapping passes.</string>
     <string name="camera_permission_needed">Camera permission is needed to scan</string>

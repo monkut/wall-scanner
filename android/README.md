@@ -110,8 +110,15 @@ The choices are written to the capture's `capture.json` before any data is recor
 
 ### Scan screen
 
-Point at the wall from 1–3 m, tap **Start scan** and sweep slowly in overlapping rows. The status line shows
-point count, depth frames and the current segment. **Pause** / **Resume** stop and restart recording; when
+Stand about 2 m from the wall, face it squarely, tap **Start scan** and sweep slowly in overlapping horizontal
+rows at a walking pace, turning the phone rather than stepping in; keep the floor or a wall edge in frame at the
+row ends, and overlap a second scan of the same wall by a metre. A guide line under the status (#36,
+`core/ScanGuide.kt`, `scan/GuideSampler.kt`) reads the depth frame's central window a few times a second, before
+and during recording, and says when to step back (under 0.8 m: closer, a plain panel fills the frame and tracking
+drifts, as the 2026-11-06 12:25 scan did at 0.4 m), move in (beyond 85% of the depth range: 3 m in a gym, 4.3 m
+outdoors), face the wall (turned over 50° from the surface's normal about the vertical, so looking up at the top
+row does not count) or slow down (the window sweeping the wall faster than 2 m/s: the camera's speed plus its
+turning rate times the distance, smoothed over a second); a cue appears and clears after two agreeing readings. The status line shows point count, depth frames and the current segment. **Pause** / **Resume** stop and restart recording; when
 resuming, start on an area that is already scanned so the new segment overlaps the old data. The screen stays
 on while scanning. **Finish & process** runs the on-device pipeline and opens the viewer; it refuses to finish
 with too few points, and if no wall plane is found it still saves the points for analysis.
@@ -223,6 +230,7 @@ Each capture has a `scan.log`. Key lines, all with JST timestamps:
 | `gps: requesting fix from …`, `gps: lat, lon (±m) from provider`, `gps: location … coordinates set` | Position fix for a location without coordinates (`scan/GpsFix.kt`) |
 | `STATUS segments=… pos=… integrate(…) upload(…)` | Periodic position, processing counters and per-frame timings |
 | `COVERAGE thin depth in (row r, col c) …` | Cells of the 3 × 3 wall grid with little depth (row 0 = top, col 0 = left) |
+| `GUIDE <cue|ok> after Ns · distance=… facing=… speed=…` | The scan guide's cue changed (#36); `STATUS` lines carry the latest measurement as `guide(…)` |
 | `QUALITY plane share n% holds n/m² (→ drifted)` | Scan quality verdict (#35): share of the cloud on the wall plane and holds per m² of wall |
 | `orthophoto: WxH px …`, `hold shapes: …`, `hold search: n image-only holds …`, `hold model: …`, `hold split: …`, `hold prune: n dropped …`, `hold outlines: n of m redrawn by SAM …`, `hold depth merge: n pieces joined …`, `tape marks: n start holds …` | Photo-based stages of processing with timings |
 | `RESULT: plane … wallColor=… holds=… unassigned=… routes=…` or `RESULT: no wall plane` | Processing outcome (unassigned = holds left out of every route) |
