@@ -67,6 +67,10 @@ object SceneJson {
             sb.append("]")
         }
         sb.append("},\n")
+        result.quality?.let { q ->
+            sb.append("  \"quality\": {\"planeShare\": ").append(num(q.planeShare)).append(", \"holdDensity\": ").append(num(q.holdDensity))
+                .append(", \"drifted\": ").append(q.drifted).append("},\n")
+        }
         sb.append("  \"holds\": [\n")
         result.holds.forEachIndexed { i, h ->
             sb.append("    {\"id\": ").append(h.id)

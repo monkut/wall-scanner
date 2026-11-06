@@ -990,11 +990,14 @@ class MainActivity : AppCompatActivity() {
                 if (joined.isEmpty()) "" else getString(R.string.joined_from, joined.joinToString(" + ") { Labels.captureDate(c, it) }),
             )
             val meta = if (!CaptureStore.hasScene(dir)) getString(R.string.incomplete_capture) else runCatching {
-                val holds = JSONObject(CaptureStore.readScene(dir)).getJSONArray("holds").length()
+                val scene = JSONObject(CaptureStore.readScene(dir))
+                val holds = scene.getJSONArray("holds").length()
+                val drifted = scene.optJSONObject("quality")?.optBoolean("drifted") == true
                 val routes = RouteStore.routes(dir).filter { it.kind == RouteKind.ROUTE }
                 Labels.join(
                     c, Labels.plural(c, R.plurals.holds, holds), Labels.plural(c, R.plurals.routes_count, routes.size),
                     Labels.plural(c, R.plurals.confirmed_count, routes.count { it.confirmed }),
+                    if (drifted) getString(R.string.low_confidence) else "",
                 )
             }.getOrDefault("")
             bindRow(view, Labels.captureDate(c, dir.name), place, meta, thumbnails[dir.name], null)

@@ -45,11 +45,14 @@ class SceneBuilderTest {
     fun writesSceneJsonAndPly() {
         val cloud = buildCloud()
         val result = SceneBuilder.build(cloud, listOf(floatArrayOf(1.5f, 1.2f, 2f)), Random(7))!!
+        result.quality = ScanQuality.of(cloud, result.surface, result.holds.size, result.extent)
         val json = SceneJson.write(result, cloud.count, "2026-10-20T10:00:00+09:00", "test")
         assertTrue(json.contains("\"version\": ${SceneJson.VERSION}"))
         assertTrue(json.contains("\"holds\": ["))
         assertTrue(json.contains("\"name\": \"Red\""))
         assertTrue(json.contains("\"kind\": \"route\""))
+        assertTrue(json.contains("\"quality\": {\"planeShare\": "))
+        assertTrue(json.contains("\"drifted\": false"))
         assertEquals(result.holds.size, Regex("\"routeId\"").findAll(json).count())
 
         val out = ByteArrayOutputStream()

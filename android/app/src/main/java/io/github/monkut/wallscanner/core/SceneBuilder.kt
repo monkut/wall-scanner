@@ -20,6 +20,8 @@ class SceneResult(
     var photo: Orthophoto? = null
     /** Cells of the wall with little depth (Coverage); set by the scene pipeline. */
     var thinCoverage: List<Coverage.Cell> = emptyList()
+    /** The scan's quality verdict (ScanQuality, #35); set by the scene pipeline once the holds are final. */
+    var quality: ScanQuality? = null
 }
 
 /**
@@ -79,6 +81,7 @@ object SceneBuilder {
         return SceneResult(result.surface, result.planeInliers, sorted, routes, result.definition, result.wallColor, result.extent).also {
             it.photo = result.photo
             it.thinCoverage = result.thinCoverage
+            it.quality = result.quality
         }
     }
 
@@ -99,6 +102,7 @@ object SceneBuilder {
         return SceneResult(result.surface, result.planeInliers, result.holds, routes, result.definition, result.wallColor, result.extent).also {
             it.photo = result.photo
             it.thinCoverage = result.thinCoverage
+            it.quality = result.quality
         }
     }
 

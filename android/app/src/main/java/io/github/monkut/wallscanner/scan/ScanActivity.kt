@@ -427,8 +427,10 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             panel.update(ProcessingStage.WRITE, 1f)
             finished = true
             val thin = result.thinCoverage
+            val quality = result.quality
             runOnUiThread {
                 if (thin.isNotEmpty()) toast(getString(R.string.coverage_thin, thin.joinToString { Labels.coverageCell(this, it) }))
+                if (quality != null && quality.drifted) toast(getString(R.string.scan_drifted, Math.round(quality.planeShare * 100)))
                 startActivity(ViewerActivity.intent(this, captureDir.name))
                 finish()
             }
