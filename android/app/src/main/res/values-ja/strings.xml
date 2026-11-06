@@ -185,6 +185,11 @@
     <string name="guide_too_far">壁から遠すぎます（%1$.1f m）。2 m ほどまで近づいてください。</string>
     <string name="guide_face_wall">壁に正対してください。</string>
     <string name="guide_too_fast">ゆっくり動かしてください。</string>
+    <string name="track_hint_features">トラッキングの手がかりがありません。ホールドや壁の端、床に向けて少し静止してください。</string>
+    <string name="track_hint_light">暗すぎてトラッキングできません。明るい場所か、壁の明るい部分に向けてください。</string>
+    <string name="track_hint_motion">動きが速すぎました。トラッキングが戻るまで静止し、その後ゆっくり動かしてください。</string>
+    <string name="track_hint_camera">カメラを使用できません。他のカメラアプリを閉じてください。</string>
+    <string name="track_hint_bad_state">トラッキングを復帰できません。終了またはキャンセルして、スキャンをやり直してください。</string>
     <string name="scan_more">終了する前に、壁をもっとスキャンしてください</string>
     <string name="no_wall_found">壁の面が見つかりません。1〜3 m の距離から、ゆっくり重ねながらスキャンしてください。</string>
     <string name="camera_permission_needed">スキャンにはカメラの権限が必要です</string>

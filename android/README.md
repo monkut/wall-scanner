@@ -118,7 +118,7 @@ and during recording, and says when to step back (under 0.8 m: closer, a plain p
 drifts, as the 2026-11-06 12:25 scan did at 0.4 m), move in (beyond 85% of the depth range: 3 m in a gym, 4.3 m
 outdoors), face the wall (turned over 50° from the surface's normal about the vertical, so looking up at the top
 row does not count) or slow down (the window sweeping the wall faster than 2 m/s: the camera's speed plus its
-turning rate times the distance, smoothed over a second); a cue appears and clears after two agreeing readings. The status line shows point count, depth frames and the current segment. **Pause** / **Resume** stop and restart recording; when
+turning rate times the distance, smoothed over a second); a cue appears and clears after two agreeing readings. While tracking is lost the same line says what to do about ARCore's reason (nothing to track, too dark, moved too fast, camera unavailable, cannot recover) from the frame it is lost until it returns; the session's normal start (reason NONE) shows nothing. The status line shows point count, depth frames and the current segment. **Pause** / **Resume** stop and restart recording; when
 resuming, start on an area that is already scanned so the new segment overlaps the old data. The screen stays
 on while scanning. **Finish & process** runs the on-device pipeline and opens the viewer; it refuses to finish
 with too few points, and if no wall plane is found it still saves the points for analysis.
