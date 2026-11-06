@@ -13,6 +13,8 @@ import io.github.monkut.wallscanner.core.HoldSplit
 import io.github.monkut.wallscanner.core.Image
 import io.github.monkut.wallscanner.core.Keyframe
 import io.github.monkut.wallscanner.core.OrthophotoBuilder
+import io.github.monkut.wallscanner.core.ProcessingStage
+import io.github.monkut.wallscanner.core.ProgressListener
 import io.github.monkut.wallscanner.core.SceneBuilder
 import io.github.monkut.wallscanner.core.SceneJson
 import io.github.monkut.wallscanner.core.SceneResult
@@ -23,20 +25,23 @@ import kotlin.random.Random
 /**
  * The whole scene pipeline for a capture directory: SceneBuilder on the point cloud, then an orthophoto of
  * the wall from the saved keyframes (written as wall.png) and hold outlines refined on it, last by SAM
- * ([HoldSam]) from each hold's box. Used at Finish and by Reprocess; [log] receives one line per stage.
+ * ([HoldSam]) from each hold's box. Used at Finish and by Reprocess; [log] receives one line per stage and
+ * [progress] the stage under way with how far it has got ([ProcessingStage.CLOUD] to [ProcessingStage.WRITE]).
  */
 object ScenePipeline {
     private const val KEYFRAME_SUBSAMPLE = 2 // 960 × 540 is ~1.8 image px per 5 mm wall px at 2 m: enough, half the decode cost
 
-    fun build(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit): SceneResult? {
-        var result = SceneBuilder.build(cloud, cameras, Random(42), definition) ?: return null
+    fun build(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit, progress: ProgressListener = { _, _ -> }): SceneResult? {
+        var result = SceneBuilder.build(cloud, cameras, Random(42), definition) { progress(ProcessingStage.CLOUD, it) } ?: return null
         result.thinCoverage = Coverage.thinCells(cloud, result.surface, result.extent)
         if (result.thinCoverage.isNotEmpty()) {
             log("COVERAGE thin depth in ${result.thinCoverage.joinToString { "(row ${it.row}, col ${it.col})" }} of a ${Coverage.ROWS}x${Coverage.COLS} grid (row 0 = top, col 0 = left)")
         }
         val keyframes = CaptureStore.readKeyframes(dir)
         val t0 = System.currentTimeMillis()
-        val photo = runCatching { OrthophotoBuilder.build(cloud, result.surface, result.extent, keyframes, decode = { decode(dir, it) }) }
+        var decoded = 0
+        progress(ProcessingStage.ORTHOPHOTO, 0f)
+        val photo = runCatching { OrthophotoBuilder.build(cloud, result.surface, result.extent, keyframes, decode = { progress(ProcessingStage.ORTHOPHOTO, decoded++.toFloat() / keyframes.size); decode(dir, it) }) }
             .onFailure { log("orthophoto failed: $it") }
             .getOrNull()
         if (photo == null) {
@@ -45,6 +50,7 @@ object ScenePipeline {
         }
         log("orthophoto: ${photo.image.width}x${photo.image.height} px at ${OrthophotoBuilder.MM_PER_PX} mm from ${keyframes.size} keyframes (${System.currentTimeMillis() - t0} ms)")
         val t1 = System.currentTimeMillis()
+        progress(ProcessingStage.SHAPES, 0f)
         val patches = ColorPatches.forHolds(photo, result.wallColor)
         val refined = runCatching { HoldShapes.refine(result.holds, photo, patches, result.wallColor) }
             .onFailure { log("hold shapes failed: $it") }
@@ -56,6 +62,7 @@ object ScenePipeline {
             .getOrDefault(emptyList())
         log("hold search: ${extra.size} image-only holds added from the orthophoto (${System.currentTimeMillis() - t2} ms)")
         val t3 = System.currentTimeMillis()
+        progress(ProcessingStage.MODEL, 0f)
         val model = assets?.let { HoldModel.get(it) }
         val found = refined + extra
         val seen = if (model == null) HoldModel.Found(emptyList(), emptyList()) else runCatching { model.find(photo, result.surface, result.extent, (found.maxOfOrNull { it.id } ?: 0) + 1) }
@@ -75,8 +82,9 @@ object ScenePipeline {
             .getOrDefault(split)
         log("hold prune: ${split.size - pruned.size} dropped: tape, or at the edge or made of bare wall (neither coloured nor seen by the model)")
         val t4 = System.currentTimeMillis()
+        progress(ProcessingStage.OUTLINES, 0f)
         val sam = assets?.let { HoldSam.get(it) }
-        val refinedBySam = if (sam == null) null else runCatching { sam.refine(pruned, photo, result.surface, masks) }
+        val refinedBySam = if (sam == null) null else runCatching { sam.refine(pruned, photo, result.surface, masks) { progress(ProcessingStage.OUTLINES, it) } }
             .onFailure { log("hold outlines failed: $it") }
             .getOrNull()
         log(if (refinedBySam != null) "hold outlines: ${refinedBySam.redrawn} of ${pruned.size} redrawn by SAM, ${refinedBySam.merged} pieces merged into the hold around them, ${refinedBySam.added} model holds added where the outlines no longer cover them, ${refinedBySam.dropped} without contrast to the wall dropped (${System.currentTimeMillis() - t4} ms, encoder ${refinedBySam.encodeMs} ms)" else "hold outlines: SAM ${if (assets == null) "no assets" else HoldSam.loadError ?: "failed"}")
@@ -92,6 +100,7 @@ object ScenePipeline {
             .getOrDefault(0)
         log("tape marks: $starts start holds marked from tape strips")
         result = SceneBuilder.withHolds(result, holds)
+        progress(ProcessingStage.WRITE, 0f)
         CaptureStore.writeImage(dir, SceneJson.PHOTO_FILE, photo.image)
         CaptureStore.writeImage(dir, SceneJson.RELIEF_FILE, SceneJson.reliefImage(photo))
         result.photo = photo

@@ -35,8 +35,11 @@ object SceneBuilder {
         cameraPositions: List<FloatArray>,
         random: Random = Random(42),
         definition: Definition = Definition(),
+        /** Called with 0..1 as the plane, the faces and the holds are found. */
+        progress: (Float) -> Unit = {},
     ): SceneResult? {
         if (cloud.count == 0) return null
+        progress(0f)
         var tx = 0f; var ty = 0f; var tz = 0f
         if (cameraPositions.isNotEmpty()) {
             for (p in cameraPositions) { tx += p[0]; ty += p[1]; tz += p[2] }
@@ -47,15 +50,18 @@ object SceneBuilder {
             if (type.outdoor) PlaneFitter.fit(cloud, random, tx, ty, tz, Tuning.OUTDOOR_PLANE_INLIER_DIST, Tuning.OUTDOOR_MAX_WALL_NORMAL_Y)
             else PlaneFitter.fit(cloud, random, tx, ty, tz)
             ) ?: return null
+        progress(0.3f)
         val frame = WallFrame(fit.plane)
         // A gym wall may be several faces (a top that kicks back, a corner); outdoor rock keeps its one coarse plane and local relief.
         val surface = if (type.outdoor) WallSurface.single(frame) else Facets.find(cloud, frame).surface
         val wall = if (type.outdoor) null else WallColor.of(cloud, surface)
         val extent = extent(cloud, surface)
+        progress(0.45f)
         // Crash pads below the wall and beams above it reach the relief window; the wall surface itself ends at the extent.
         val holds = HoldDetector.detect(cloud, surface, localRelief = type.outdoor, wall = wall)
             .filter { type.outdoor || (it.v >= extent[1] - EXTENT_HOLD_MARGIN && it.v <= extent[3] + EXTENT_HOLD_MARGIN) }
             .mapIndexed { i, h -> Hold(i + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels, h.outline) }
+        progress(0.95f)
         val routes = if (type.colorIsRoute) RouteGrouper.group(holds, type.splitByPosition, wall) else emptyList()
         return SceneResult(surface, fit.inliers, holds, routes, definition, wall, extent)
     }

@@ -30,6 +30,7 @@ import io.github.monkut.wallscanner.core.CaptionFont
 import io.github.monkut.wallscanner.core.Corner
 import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.Length
+import io.github.monkut.wallscanner.core.Processing
 import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.core.TNutPattern
 import io.github.monkut.wallscanner.core.UnitSystem
@@ -937,9 +938,11 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.reprocess)
             .setMessage(R.string.reprocess_message)
             .setPositiveButton(R.string.reprocess) { _, _ ->
-                val progress = AlertDialog.Builder(this).setMessage(R.string.processing).setCancelable(false).show()
+                val view = LayoutInflater.from(this).inflate(R.layout.view_processing, null)
+                val panel = ProcessingPanel(view, Processing.REPROCESS)
+                val progress = AlertDialog.Builder(this).setView(view).setCancelable(false).show()
                 thread(name = "reprocess") {
-                    val summary = runCatching { CaptureStore.reprocess(this, dir) }.getOrNull()
+                    val summary = runCatching { CaptureStore.reprocess(this, dir, panel::update) }.getOrNull()
                     runOnUiThread {
                         if (isDestroyed) return@runOnUiThread
                         progress.dismiss()

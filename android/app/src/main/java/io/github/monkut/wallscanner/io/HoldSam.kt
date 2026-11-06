@@ -40,7 +40,7 @@ class HoldSam private constructor(private val encoder: Interpreter, private val 
      * One run at a time: the interpreters are not thread-safe.
      */
     @Synchronized
-    fun refine(holds: List<Hold>, photo: Orthophoto, surface: WallSurface, candidates: List<Hold> = emptyList()): Refined {
+    fun refine(holds: List<Hold>, photo: Orthophoto, surface: WallSurface, candidates: List<Hold> = emptyList(), progress: (Float) -> Unit = {}): Refined {
         val image = photo.image
         val scale = SamRefine.scale(image)
         val input = floats(SamRefine.input(image))
@@ -49,8 +49,9 @@ class HoldSam private constructor(private val encoder: Interpreter, private val 
         val t0 = System.currentTimeMillis()
         encoder.run(input, embedding)
         val encodeMs = System.currentTimeMillis() - t0
+        progress(ENCODE_SHARE)
         val old = holds.map { Raster.fillPolygon(ImageHold.polygon(it), photo) }
-        val masks = decodeAll(holds, old, photo, embedding, scale)
+        val masks = decodeAll(holds, old, photo, embedding, scale) { done -> progress(ENCODE_SHARE + (1 - ENCODE_SHARE) * done / holds.size) }
         // Pieces join the hold SAM drew around them; a new outline that takes from other holds is refused (and its pieces stay).
         val into = SamRefine.mergeInto(masks.asList())
         val group = IntArray(holds.size) { if (into[it] >= 0) into[it] else it }
@@ -95,11 +96,12 @@ class HoldSam private constructor(private val encoder: Interpreter, private val 
     }
 
     /** SAM's accepted mask for each of [holds] (null when refused or without an outline), the decoders sharing the holds out. */
-    private fun decodeAll(holds: List<Hold>, old: List<IntArray>, photo: Orthophoto, embedding: ByteBuffer, scale: Float): Array<IntArray?> {
+    private fun decodeAll(holds: List<Hold>, old: List<IntArray>, photo: Orthophoto, embedding: ByteBuffer, scale: Float, onDecoded: (Int) -> Unit = {}): Array<IntArray?> {
         val image = photo.image
         val masks = arrayOfNulls<IntArray>(holds.size)
         if (holds.isEmpty()) return masks
         val next = AtomicInteger()
+        val decoded = AtomicInteger()
         val pool = Executors.newFixedThreadPool(decoders.size)
         try {
             decoders.map { decoder ->
@@ -112,6 +114,7 @@ class HoldSam private constructor(private val encoder: Interpreter, private val 
                         val box = SamRefine.box(holds[index], photo)
                         val (logits, score) = run.decode(FloatArray(4) { box[it] * scale })
                         masks[index] = SamRefine.accept(SamRefine.maskPixels(logits, box, scale, image.width, image.height), old[index], score, image.width)
+                        onDecoded(decoded.incrementAndGet())
                     }
                 }
             }.forEach { it.get() }
@@ -153,6 +156,7 @@ class HoldSam private constructor(private val encoder: Interpreter, private val 
         private const val THREADS = 4
         private const val DECODERS = 3
         private const val DECODER_THREADS = 2
+        private const val ENCODE_SHARE = 0.25f // the encoder's share of a run (~2.7 s of ~10 s), for progress
         private var cached: HoldSam? = null
         private var tried = false
 

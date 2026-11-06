@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Processing a scan (#26): a bar paced by the pipeline's stages and the current stage's name. Included by the
+     scan screen's overlay and by the Reprocess dialog; bound by ProcessingPanel. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/processing"
+        android:textAppearance="?attr/textAppearanceBody1"
+        android:textColor="@color/chalk" />
+
+    <ProgressBar
+        android:id="@+id/processingBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="240dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:max="100"
+        android:progress="0"
+        android:progressBackgroundTint="@color/hairline"
+        android:progressTint="@color/tape" />
+
+    <TextView
+        android:id="@+id/processingStage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textAppearance="?attr/textAppearanceBody2"
+        android:textColor="@color/dust" />
+</LinearLayout>
