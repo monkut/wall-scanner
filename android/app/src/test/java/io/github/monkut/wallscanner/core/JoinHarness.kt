@@ -34,6 +34,35 @@ class JoinHarness {
         File(out, "scene-new.json").writeText(SceneJson.write(result, joined.count, "harness", "harness"))
     }
 
+    /**
+     * Registers every ordered pair of pulled captures that name the same wall in `capture.json` (joined captures
+     * skipped) and prints each outcome: which scans of a wall overlap enough to join, and in which order.
+     * `./gradlew :app:testDebugUnitTest --tests '*JoinHarness.registerPairsOfEachWall*' -i | grep PAIR`.
+     */
+    @Test
+    fun registerPairsOfEachWall() {
+        val root = generateSequence(File("").absoluteFile) { it.parentFile }.map { File(it, "captures") }.firstOrNull { it.isDirectory } ?: return
+        val byWall = root.listFiles { f -> f.isDirectory && File(f, "points.ply").isFile && File(f, "scene.json").isFile }.orEmpty()
+            .mapNotNull { dir ->
+                val meta = runCatching { JSONObject(File(dir, "capture.json").readText()) }.getOrNull() ?: return@mapNotNull null
+                if (meta.has("joined")) return@mapNotNull null
+                val wall = meta.optString("wall"); if (wall.isEmpty()) return@mapNotNull null
+                "${meta.optString("location")}/$wall" to dir
+            }.groupBy({ it.first }, { it.second }).filterValues { it.size >= 2 }
+        val clouds = HashMap<File, VoxelCloud>()
+        fun cloud(dir: File) = clouds.getOrPut(dir) { File(dir, "points.ply").inputStream().use { PlyReader.read(it) } }
+        for ((wall, dirs) in byWall) {
+            val sorted = dirs.sortedBy { it.name }
+            println("PAIR $wall: ${sorted.joinToString { it.name }}")
+            for (ref in sorted) for (mov in sorted) {
+                if (ref === mov) continue
+                val t0 = System.currentTimeMillis()
+                val reg = CaptureRegistration.register(cloud(ref), holds(ref), cloud(mov), holds(mov))
+                println("PAIR $wall ${mov.name} onto ${ref.name}: ${reg ?: "none"} (${System.currentTimeMillis() - t0} ms)")
+            }
+        }
+    }
+
     private fun holds(dir: File): List<HoldPoint> {
         val arr = JSONObject(File(dir, "scene.json").readText()).getJSONArray("holds")
         return List(arr.length()) { i ->

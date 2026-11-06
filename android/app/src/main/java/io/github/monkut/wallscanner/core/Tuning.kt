@@ -99,6 +99,10 @@ object Tuning {
     const val START_REACH = 0.8f // a tape-marked start hold's foot holds lie below it within this much to either side (#27)
     const val DOWN_CLIMB_MIN_WALL_HEIGHT = 3.4f // walls this tall carry grey down-climb holds (noborock 1F, 3.54 m); the 3.2 m walls of
     // Oct 29 have no grey route at all, and the grey group of a shorter wall may be a route
+    const val DRIFT_MAX_PLANE_SHARE = 0.11f // a scan with under this share of its cloud within PLANE_INLIER_DIST of the wall surface AND …
+    const val DRIFT_MIN_HOLD_DENSITY = 10f // … over this many holds per m² of wall was smeared by tracking drift (#35): the 11 good
+    // noborock scans of Oct 23 – Nov 6 score 15.7–37.5% (every face counted; 12:21's three faces: 35.6%) and 3.6–7.6/m², the drifted
+    // Main wall scan of 2026-11-06 12:25 8.8% and 14.6/m²
     const val MIN_ROUTE_HOLDS = 2
     const val MAX_ROUTE_HOLD_GAP = 1.4f // circuit walls: holds of one colour further apart than this are different problems
 }
