@@ -32,6 +32,7 @@ import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.Length
 import io.github.monkut.wallscanner.core.Processing
 import io.github.monkut.wallscanner.core.RouteDefinition
+import io.github.monkut.wallscanner.core.RouteKind
 import io.github.monkut.wallscanner.core.TNutPattern
 import io.github.monkut.wallscanner.core.UnitSystem
 import io.github.monkut.wallscanner.core.WallMap
@@ -990,7 +991,7 @@ class MainActivity : AppCompatActivity() {
             )
             val meta = if (!CaptureStore.hasScene(dir)) getString(R.string.incomplete_capture) else runCatching {
                 val holds = JSONObject(CaptureStore.readScene(dir)).getJSONArray("holds").length()
-                val routes = RouteStore.routes(dir)
+                val routes = RouteStore.routes(dir).filter { it.kind == RouteKind.ROUTE }
                 Labels.join(
                     c, Labels.plural(c, R.plurals.holds, holds), Labels.plural(c, R.plurals.routes_count, routes.size),
                     Labels.plural(c, R.plurals.confirmed_count, routes.count { it.confirmed }),

@@ -4,6 +4,7 @@ import android.content.Context
 import io.github.monkut.wallscanner.core.GradeSystem
 import io.github.monkut.wallscanner.core.HoldRole
 import io.github.monkut.wallscanner.core.RouteDefinition
+import io.github.monkut.wallscanner.core.RouteKind
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -19,6 +20,7 @@ class RouteRecord(
     val holdCount: Int,
     val confirmed: Boolean,
     val type: RouteDefinition,
+    val kind: RouteKind = RouteKind.ROUTE,
     val locationId: String,
     /** The gym set the capture belongs to; "" when none. */
     val setId: String = "",
@@ -98,7 +100,7 @@ object RouteStore {
                     dir.name, r.getInt("id"), r.optString("name"), r.optString("grade"),
                     GradeSystem.fromId(r.optString("gradeSystem")),
                     intArrayOf(c.getInt(0), c.getInt(1), c.getInt(2)),
-                    r.getJSONArray("holdIds").length(), r.optBoolean("confirmed", false), type, place.locationId, place.setId, place.wallId,
+                    r.getJSONArray("holdIds").length(), r.optBoolean("confirmed", false), type, RouteKind.fromId(r.optString("kind")), place.locationId, place.setId, place.wallId,
                 )
             }
         }.getOrDefault(emptyList())
@@ -117,9 +119,9 @@ object RouteStore {
         CaptureStore.writeScene(dir, scene.toString(1))
     }
 
-    /** Confirmed routes of every capture, newest capture first. */
+    /** Confirmed routes of every capture, newest capture first; a down-climb group is never one. */
     fun confirmedRoutes(context: Context): List<RouteRecord> =
-        CaptureStore.list(context).flatMap { dir -> routes(dir).filter { it.confirmed } }
+        CaptureStore.list(context).flatMap { dir -> routes(dir).filter { it.confirmed && it.kind == RouteKind.ROUTE } }
 
     private val EMPTY = SendLog(emptyList(), emptyMap(), emptyMap())
 

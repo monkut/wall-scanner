@@ -19,6 +19,7 @@ import io.github.monkut.wallscanner.core.Rules
 import io.github.monkut.wallscanner.core.PlyReader
 import io.github.monkut.wallscanner.core.ProcessingStage
 import io.github.monkut.wallscanner.core.ProgressListener
+import io.github.monkut.wallscanner.core.RouteKind
 import io.github.monkut.wallscanner.core.PlyWriter
 import io.github.monkut.wallscanner.core.SceneJson
 import io.github.monkut.wallscanner.core.Thumbnail
@@ -211,7 +212,7 @@ object CaptureStore {
                 log.log("REPROCESS: no wall plane (voxels=${cloud.count})")
                 return null
             }
-            val summary = "${result.holds.size} holds, ${result.routes.size} routes"
+            val summary = "${result.holds.size} holds, ${result.routes.count { it.kind == RouteKind.ROUTE }} routes"
             val p = result.frame.plane
             log.log(
                 "REPROCESS: plane origin=(${p.ox}, ${p.oy}, ${p.oz}) normal=(${p.nx}, ${p.ny}, ${p.nz}) " +

@@ -97,6 +97,25 @@ class RouteGrouperPaleTest {
     }
 
     @Test
+    fun greyHoldsOfATallWallAreTheDownClimbGroup() {
+        val greys = listOf(hold(65, 213f, 0.07f, 0.50f), hold(71, 209f, 0.16f, 0.52f), hold(72, 202f, 0.15f, 0.51f), hold(76, 206f, 0.11f, 0.52f))
+        val cyan = listOf(hold(1, 184f, 0.64f, 0.54f), hold(2, 187f, 0.61f, 0.64f))
+        val tall = RouteGrouper.group(greys + cyan, wallHeight = 3.54f)
+        val group = tall.first { it.name == RouteGrouper.DOWN_CLIMB_NAME }
+        assertEquals(RouteKind.DOWN_CLIMB, group.kind)
+        assertEquals(listOf(65, 71, 72, 76), group.holdIds.sorted())
+        assertEquals(RouteKind.ROUTE, tall.first { it.name == "Cyan" }.kind)
+        val short = RouteGrouper.group(greys + cyan, wallHeight = 2.97f)
+        assertEquals("Gray", routeOf(short, 65))
+        assertEquals(RouteKind.ROUTE, short.first { it.name == "Gray" }.kind)
+        assertEquals("Gray", routeOf(RouteGrouper.group(greys + cyan), 65)) // height unknown: a route
+        // On a circuit wall the colour groups split by position, the down-climb holds do not: here 2 m apart
+        val spread = greys.mapIndexed { i, g -> hold(g.id, g.hue, g.sat, g.value, u = i * 2f, v = i * 0.5f) }
+        val circuit = RouteGrouper.group(spread + cyan, splitByPosition = true, wallHeight = 3.54f)
+        assertEquals(listOf(65, 71, 72, 76), circuit.first { it.kind == RouteKind.DOWN_CLIMB }.holdIds.sorted())
+    }
+
+    @Test
     fun paleHoldsUnderAStartHoldAreItsFootHolds() {
         val start = hold(1, 347f, 0.55f, 0.64f, u = 1.0f, v = 0.0f).also { it.role = HoldRole.START }
         val red = hold(2, 350f, 0.57f, 0.62f, u = 1.3f, v = 1.2f)

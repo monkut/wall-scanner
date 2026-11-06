@@ -165,7 +165,8 @@ wall:       { origin, normal, up, right, inliers, color: [r, g, b], extent: [min
                                                  color = mean surface colour; extent = scanned area (1st..99th percentile);
                                                  photo = orthophoto from the keyframes (px metres per pixel, top row = maxV), absent when none
                                                  relief = each photo pixel's height off the wall in mm (red × 256 + green), from the point cloud; the viewer shows the wall in 3D with it
-routes[]:   { id, name, color, grade, gradeSystem: yds|kyu_dan|v|font|null, holdIds: [..], confirmed: bool }   # a hold may appear in several routes
+routes[]:   { id, name, color, grade, gradeSystem: yds|kyu_dan|v|font|null, holdIds: [..], confirmed: bool,
+              kind: route|downclimb }   # a hold may appear in several routes; a downclimb group (the grey down-climb holds of a tall wall) is never confirmed nor in the logbook; absent = route
 nextRouteId: int   # kept by the viewer so a deleted route's id is never reissued (sends.json keys by route id)
 wall.faces[]: { origin, normal, up, right, map: [cos, sin, tu, tv], seam: [u, v, du, dv], side: ±1 }   # v4, only when the wall is several planar faces (#8 phase 2)
 ```

@@ -31,6 +31,10 @@
   .route button { padding: 7px 10px; font-size: 13px; }
   .route button.confirm { background: transparent; color: var(--fg); border: 1px solid var(--line); font-weight: 400; }
   .route button.confirm.on { background: var(--send); color: var(--bg); border-color: var(--send); font-weight: 700; }
+  .route button.kind { background: transparent; color: var(--dust); border: 1px solid var(--line); font-weight: 400; padding: 7px 8px; white-space: nowrap; }
+  .route input.name { min-width: 56px; }
+  .route button.kind.on { color: var(--fg); border-style: dashed; }
+  .route.downclimb .swatch { border-style: dashed; }
   #add { margin-top: 10px; }
   #hint { padding: 10px 0 0; font-size: 13px; color: var(--dust); }
   #roles { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
@@ -82,9 +86,10 @@
     'en-US': {
       routes: 'Routes', loading: 'Loading…', save: 'Save', share: 'Share', confirm: 'Confirm', confirmed: 'Confirmed', points: 'Points',
       newRoute: 'New route', route: 'Route', grade: 'grade', pts: 'points', holds: 'holds', routesN: 'routes', confirmedN: 'confirmed',
+      downClimb: 'Down climb', markDownClimb: 'Marked as the down-climb holds: not a route, never in the logbook. Tap again to make it a route.', markRoute: 'A route again.',
       roles: { start: 'start', hand: 'hand', foot: 'foot', zone: 'zone', finish: 'finish' },
       hintRole: (r) => `Marking "${r}": tap holds to mark them, tap again to clear.`,
-      hintSelect: (type, n) => `${type}. Tap a swatch to select a route, tap holds to add or remove them, then confirm it. Sends are logged from the Logbook. ${n} unassigned holds.`,
+      hintSelect: (type, n) => `${type}. Tap a swatch to select a route, tap holds to add or remove them, then confirm it. ↓ marks a route as the wall's down-climb holds. Sends are logged from the Logbook. ${n} unassigned holds.`,
       hintEditing: (name) => `Editing "${name}": tap holds on the wall to add or remove them.`,
       hintPhoto: 'Long-press the wall to draw a hold, or a hold to split, merge, redraw or remove it.',
       wall: 'Wall', holdN: (id) => `Hold ${id}`, drawHold: 'Draw a hold', redrawHold: 'Redraw outline', splitHold: 'Split hold here', removeHold: 'Remove hold', cancel: 'Cancel',
@@ -100,9 +105,10 @@
     ja: {
       routes: 'ルート', loading: '読み込み中…', save: '保存', share: '共有', confirm: '確定', confirmed: '確定済み', points: '点群',
       newRoute: '新しいルート', route: 'ルート', grade: 'グレード', pts: '点', holds: 'ホールド', routesN: 'ルート', confirmedN: '確定',
+      downClimb: 'ダウンクライム', markDownClimb: 'ダウンクライム用ホールドに設定: ルートではなく、ログブックには出ません。もう一度タップでルートに戻ります。', markRoute: 'ルートに戻しました。',
       roles: { start: 'スタート', hand: '手', foot: '足', zone: 'ゾーン', finish: 'トップ' },
       hintRole: (r) => `「${r}」をマーク中: ホールドをタップして設定、もう一度タップで解除。`,
-      hintSelect: (type, n) => `${type}。スウォッチをタップしてルートを選び、ホールドをタップして追加・削除し、確定してください。記録はログブックから。未割り当てのホールド ${n}。`,
+      hintSelect: (type, n) => `${type}。スウォッチをタップしてルートを選び、ホールドをタップして追加・削除し、確定してください。↓ はそのルートをダウンクライム用ホールドにします。記録はログブックから。未割り当てのホールド ${n}。`,
       hintEditing: (name) => `「${name}」を編集中: 壁のホールドをタップして追加・削除します。`,
       hintPhoto: '壁を長押しでホールドを描く、ホールドを長押しで分割・結合・描き直し・削除。',
       wall: '壁', holdN: (id) => `ホールド ${id}`, drawHold: 'ホールドを描く', redrawHold: '輪郭を描き直す', splitHold: 'ここでホールドを分割', removeHold: 'ホールドを削除', cancel: 'キャンセル',
@@ -172,7 +178,8 @@
 
   const setStatus = (text) => { statusEl.textContent = text; };
   let pointCount = 0;
-  const showCounts = () => setStatus(`${T.definitions[scene.definition.type] || ''}, ${pointCount.toLocaleString()} ${T.pts}, ${scene.holds.length} ${T.holds}, ${scene.routes.length} ${T.routesN}, ${scene.routes.filter((r) => r.confirmed).length} ${T.confirmedN}`);
+  const isRoute = (r) => r.kind !== 'downclimb';
+  const showCounts = () => setStatus(`${T.definitions[scene.definition.type] || ''}, ${pointCount.toLocaleString()} ${T.pts}, ${scene.holds.length} ${T.holds}, ${scene.routes.filter(isRoute).length} ${T.routesN}, ${scene.routes.filter((r) => isRoute(r) && r.confirmed).length} ${T.confirmedN}`);
   const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
   const rgbCss = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
   const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -909,22 +916,30 @@
     routesEl.innerHTML = '';
     for (const r of scene.routes) {
       const row = document.createElement('div');
-      row.className = 'route' + (r.id === selectedRouteId ? ' selected' : '');
+      row.className = 'route' + (r.id === selectedRouteId ? ' selected' : '') + (isRoute(r) ? '' : ' downclimb');
+      // A down-climb group keeps its swatch, name, count and delete; its grade and confirmation are hidden, not
+      // cleared, so a route marked by mistake comes back whole (the logbook goes by kind).
       row.innerHTML =
         `<span class="swatch" style="background:${rgbCss(r.color)}"></span>` +
         `<input class="name" value="${esc(r.name)}">` +
-        `<select class="grade">${gradeOptions(r)}</select>` +
+        (isRoute(r) ? `<select class="grade">${gradeOptions(r)}</select>` : '') +
         `<span class="count">${r.holdIds.length}</span>` +
-        `<button class="confirm${r.confirmed ? ' on' : ''}">${r.confirmed ? '✓ ' + T.confirmed : T.confirm}</button>` +
+        (isRoute(r) ? `<button class="confirm${r.confirmed ? ' on' : ''}">${r.confirmed ? '✓ ' + T.confirmed : T.confirm}</button>` : '') +
+        `<button class="kind${isRoute(r) ? '' : ' on'}">${isRoute(r) ? '↓' : '✓ ' + T.downClimb}</button>` +
         `<button class="del secondary">✕</button>`;
       row.querySelector('.swatch').onclick = () => select(r.id);
       row.querySelector('.count').onclick = () => select(r.id);
       row.querySelector('.name').oninput = (e) => { r.name = e.target.value; };
-      row.querySelector('.grade').onchange = (e) => {
+      row.querySelector('.grade')?.addEventListener('change', (e) => {
         const [system, grade] = e.target.value ? e.target.value.split(':') : [null, ''];
         r.gradeSystem = system; r.grade = grade;
+      });
+      row.querySelector('.confirm')?.addEventListener('click', () => { r.confirmed = !r.confirmed; renderRoutes(); });
+      row.querySelector('.kind').onclick = () => {
+        r.kind = isRoute(r) ? 'downclimb' : 'route';
+        setStatus(isRoute(r) ? T.markRoute : T.markDownClimb);
+        renderRoutes(); showCounts();
       };
-      row.querySelector('.confirm').onclick = () => { r.confirmed = !r.confirmed; renderRoutes(); };
       row.querySelector('.del').onclick = () => {
         for (const id of r.holdIds) { const h = holdOf(id); h.routeIds = h.routeIds.filter((x) => x !== r.id); primaryRoute(h); }
         scene.routes = scene.routes.filter((x) => x !== r);
@@ -940,7 +955,7 @@
     add.textContent = '+ ' + T.newRoute;
     add.onclick = () => {
       const id = scene.nextRouteId++; // never reissued: sends and ratings in sends.json are keyed by route id
-      scene.routes.push({ id, name: `${T.route} ${id}`, color: randomColor(), grade: '', gradeSystem: null, holdIds: [], confirmed: false });
+      scene.routes.push({ id, name: `${T.route} ${id}`, color: randomColor(), grade: '', gradeSystem: null, holdIds: [], confirmed: false, kind: 'route' });
       selectedRouteId = id;
       renderRoutes();
       restyle();
@@ -1049,6 +1064,7 @@
     scene = sceneJson;
     delete scene.sends;                      // sends live in sends.json (RouteStore) since scene.json v3
     for (const r of scene.routes) {
+      r.kind = r.kind === 'downclimb' ? 'downclimb' : 'route';
       r.confirmed = !!r.confirmed;
       // Free-text grades from scene.json v2: keep them if they match a known scale value, else clear.
       if (r.grade && !r.gradeSystem) r.gradeSystem = Object.keys(GRADES).find((k) => GRADES[k].values.includes(r.grade)) || null;
