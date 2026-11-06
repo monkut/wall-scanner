@@ -53,7 +53,7 @@ object SceneBuilder {
         val wall = if (type.outdoor) null else WallColor.of(cloud, surface)
         val extent = extent(cloud, surface)
         // Crash pads below the wall and beams above it reach the relief window; the wall surface itself ends at the extent.
-        val holds = HoldDetector.detect(cloud, surface, localRelief = type.outdoor, wall = wall)
+        val holds = HoldDetector.detect(cloud, surface, localRelief = type.outdoor, wall = wall, wallExtent = extent)
             .filter { type.outdoor || (it.v >= extent[1] - EXTENT_HOLD_MARGIN && it.v <= extent[3] + EXTENT_HOLD_MARGIN) }
             .mapIndexed { i, h -> Hold(i + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels, h.outline) }
         val routes = if (type.colorIsRoute) RouteGrouper.group(holds, type.splitByPosition, wall) else emptyList()
