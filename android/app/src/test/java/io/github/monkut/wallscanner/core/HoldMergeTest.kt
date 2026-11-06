@@ -28,6 +28,33 @@ class HoldMergeTest {
         Hold(id, u, v, 0f, u, v, width, tall, 0.05f, 194, 59, 59, voxels, Raster.ellipse(u, v, width, tall))
 
     @Test
+    fun aHoldInsideAnotherIsAPieceOfIt() {
+        val p = photo { _, _ -> null }
+        val volume = hold(10, 0.5f, 0.5f, 0.56f, 0.23f) // the photo search's whole trapezoid, image-only
+        val face = hold(12, 0.52f, 0.52f, 0.31f, 0.13f, voxels = 479).also { it.role = HoldRole.START } // the depth's upper face of it
+        val beside = hold(13, 0.85f, 0.5f, 0.2f, 0.2f, voxels = 100) // overlaps the volume's edge, not inside it
+        val mounted = hold(14, 0.4f, 0.5f, 0.06f, 0.06f, voxels = 80) // a small hold on the volume: its own
+        val merged = HoldMerge.nested(listOf(volume, face, beside, mounted), p)
+        assertEquals(listOf(10, 13, 14), merged.map { it.id })
+        assertEquals(479, merged[0].voxels)
+        assertEquals(HoldRole.START, merged[0].role)
+        assertEquals(0.56f, merged[0].width, 0.02f)
+        assertEquals("the host's own colour stays", 194, merged[0].r)
+    }
+
+    @Test
+    fun imageOnlyHoldsOnAStepAreItsPaint() {
+        val p = photo { _, _ -> null }
+        val step = floatArrayOf(0.6f, 0.3f, 0.95f, 0.3f, 0.95f, 0.9f, 0.6f, 0.9f) // the step's rim, right third of the wall
+        val paint = hold(1, 0.75f, 0.6f, 0.1f, 0.2f) // image-only, on the step
+        val mounted = hold(2, 0.75f, 0.4f, 0.1f, 0.1f, voxels = 60) // seen by depth: stays
+        val beside = hold(3, 0.58f, 0.6f, 0.1f, 0.1f) // image-only, mostly off the step: stays
+        val kept = HoldMerge.dropOnSteps(listOf(paint, mounted, beside), listOf(step), p)
+        assertEquals(listOf(2, 3), kept.map { it.id })
+        assertEquals(3, HoldMerge.dropOnSteps(listOf(paint, mounted, beside), emptyList(), p).size)
+    }
+
+    @Test
     fun aHoldJoiningTwoMasksBecomesThem() {
         val p = photo { _, _ -> null }
         val blob = hold(3, 0.5f, 0.5f, 0.5f, 0.24f, voxels = 400).also { it.role = HoldRole.START; it.tape = 0x808080 }

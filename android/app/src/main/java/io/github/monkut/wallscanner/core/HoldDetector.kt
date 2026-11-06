@@ -31,6 +31,9 @@ class Hold(
     val value: Float get() = hsv[2]
 }
 
+/** Holds found, and the outlines in (u, v) of the steps of the wall that were set aside (#28). */
+class Detection(val holds: List<Hold>, val steps: List<FloatArray>)
+
 /**
  * Finds holds as bumps in a 2-D relief map of the wall.
  *
@@ -53,7 +56,7 @@ object HoldDetector {
      * Voxels matching [wall] are left out of a hold's colour when enough other voxels remain. [wallExtent] is the
      * wall's area in (u, v) as [minU, minV, maxU, maxV]; outside it the mat and the beams stand off the plane.
      */
-    fun detect(cloud: VoxelCloud, surface: WallSurface, localRelief: Boolean = false, wall: WallColor? = null, wallExtent: FloatArray? = null): List<Hold> {
+    fun detect(cloud: VoxelCloud, surface: WallSurface, localRelief: Boolean = false, wall: WallColor? = null, wallExtent: FloatArray? = null): Detection {
         val n = cloud.count
         val xyz = cloud.xyz
         // Every voxel measured against the face it lies on, in the unfolded (u, v).
@@ -62,14 +65,26 @@ object HoldDetector {
         for (i in 0 until n) { surface.project(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2], p); us[i] = p[0]; vs[i] = p[1]; relief[i] = p[2] }
         if (localRelief) subtractLocalSurface(relief, us, vs)
         val grid = Grid.build(cloud, us, vs, relief)
-        if (grid.count == 0) return emptyList()
+        if (grid.count == 0) return Detection(emptyList(), emptyList())
 
         val all = IntArray(grid.count) { it }
         val finals = ArrayList<IntArray>()
+        val steps = ArrayList<IntArray>()
         for (comp in grid.components(all, Tuning.MIN_HOLD_HEIGHT, Tuning.MAX_HOLD_HEIGHT)) {
             if (comp.size < Tuning.MIN_HOLD_CELLS) continue
-            finals.addAll(grid.split(comp, 0))
+            val pieces = grid.split(comp, 0)
+            // A wide piece that rises past any hold's height inside the wall's area is the rim of a step of the wall
+            // (a boxed-out section, a hangboard panel), not a hold on it (#28). A bottom hold's component may take
+            // in the mat, which is as high, but the mat lies outside the extent. The step's cells are claimed so
+            // that no hold of its colour grows into it. Scraps of its riser under STEP_MIN_EXTENT come through.
+            for (piece in pieces) {
+                if (grid.extent(piece) >= Tuning.STEP_MIN_EXTENT && grid.peakInside(piece, wallExtent) >= Tuning.MAX_HOLD_HEIGHT) steps.add(piece) else finals.add(piece)
+            }
         }
+        for (piece in steps) for (c in piece) grid.claimed[c] = true
+        // The mat passes the same test where it enters the extent at the bottom; it is claimed like a step but
+        // not reported as one, so that image-only holds along the bottom row are not taken for its paint.
+        val reported = if (wallExtent == null) steps else steps.filter { piece -> piece.all { (grid.cv[it] + 0.5f) * Tuning.CLUSTER_CELL > wallExtent[1] + Tuning.STEP_BOTTOM_MARGIN } }
 
         // Pass 1: accept components and measure their cores, claiming their cells so growth cannot cross holds.
         val candidates = ArrayList<Candidate>()
@@ -80,14 +95,6 @@ object HoldDetector {
             if (extent < Tuning.MIN_HOLD_EXTENT || extent > Tuning.MAX_HOLD_EXTENT) continue
             var peak = -Float.MAX_VALUE
             for (c in comp) if (grid.median[c] > peak) peak = grid.median[c]
-            // A wide component that rises past any hold's height inside the wall's area is the rim of a step of
-            // the wall (a boxed-out section, a hangboard panel), not a hold on it (#28). A bottom hold's component
-            // may take in the mat, which is as high, but the mat lies outside the extent. The step's cells are
-            // claimed so that no hold of its colour grows into it.
-            if (extent >= Tuning.STEP_MIN_EXTENT && grid.peakInside(comp, wallExtent) >= Tuning.MAX_HOLD_HEIGHT) {
-                for (c in comp) grid.claimed[c] = true
-                continue
-            }
             // Cells above MAX_HOLD_HEIGHT are already outside the component; a deep jug's own cells may still
             // carry a median above it from flying pixels, so the raw peak is reported but never rejected.
             if (peak < Tuning.HOLD_MIN_PEAK) continue
@@ -132,9 +139,10 @@ object HoldDetector {
             )
         }
         holds.sortWith(compareBy({ it.v }, { it.u }))
-        return holds.mapIndexed { index, h ->
-            Hold(index + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels, h.outline)
-        }
+        return Detection(
+            holds.mapIndexed { index, h -> Hold(index + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels, h.outline) },
+            reported.map { HoldOutline.trace(it, grid.cu, grid.cv, Tuning.CLUSTER_CELL) },
+        )
     }
 
     private class Candidate(val cells: IntArray, val voxels: Int, val color: IntArray, val peak: Float, val cx: Float, val cy: Float, val cz: Float)

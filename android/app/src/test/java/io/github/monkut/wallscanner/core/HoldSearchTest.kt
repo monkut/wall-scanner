@@ -41,6 +41,23 @@ class HoldSearchTest {
     }
 
     @Test
+    fun aSecondHoldBridgedToAFoundOneIsStillFound() {
+        // Two 24 × 12 cm red blocks 2 cm apart (the gap bridging joins their patches); the upper is a depth hold already.
+        val red = 0xffC23B3B.toInt()
+        val paint: (Float, Float) -> Int? = { u, v -> if (u in 0.88f..1.12f && (v in 1.0f..1.12f || v in 0.86f..0.98f)) red else null }
+        val p = photo(paint)
+        val upper = seedHold(1, 1.0f, 1.06f, red).also { it.outline = Raster.ellipse(1.0f, 1.06f, 0.25f, 0.13f) }
+        val found = HoldSearch.find(listOf(upper), patches(p), p, frame, extent)
+        assertEquals("the lower block, got ${found.map { "(${it.u}, ${it.v}) ${it.width}x${it.tall}" }}", 1, found.size)
+        assertTrue("v ${found[0].v}", abs(found[0].v - 0.92f) < 0.03f)
+        // A hold whose patch is only its own halo gets nothing more.
+        val halo: (Float, Float) -> Int? = { u, v -> if (hypot(u - 1.0f, v - 1.0f) <= 0.13f) red else null }
+        val q = photo(halo)
+        val own = seedHold(2, 1.0f, 1.0f, red).also { it.outline = Raster.ellipse(1.0f, 1.0f, 0.24f, 0.24f) }
+        assertEquals(0, HoldSearch.find(listOf(own), patches(q), q, frame, extent).size)
+    }
+
+    @Test
     fun tapeStripBelowAHoldMarksItAsStart() {
         val paint: (Float, Float) -> Int? = { u, v ->
             when {

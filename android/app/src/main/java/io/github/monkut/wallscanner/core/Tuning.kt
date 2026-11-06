@@ -44,6 +44,7 @@ object Tuning {
     const val MIN_HOLD_CELLS = 4
     const val MIN_HOLD_EXTENT = 0.03f
     const val MAX_HOLD_EXTENT = 1.2f // large slopers and volumes; mats and side walls come out wider
+    const val STEP_BOTTOM_MARGIN = 0.15f // a step reaching this close to the extent's bottom is the mat: claimed, not reported (#28)
     const val STEP_MIN_EXTENT = 0.6f // a component this wide whose cells inside the wall's extent reach MAX_HOLD_HEIGHT is
     // the rim of a step of the wall (a boxed-out section, a hangboard panel), not a hold: a deep jug is never this wide,
     // and the holds on a 0.8 m corner volume (Oct 21 6:21 PM) are 0.46 and 0.54 m across

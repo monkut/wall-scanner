@@ -22,6 +22,8 @@ class SceneResult(
     var thinCoverage: List<Coverage.Cell> = emptyList()
     /** The scan's quality verdict (ScanQuality, #35); set by the scene pipeline once the holds are final. */
     var quality: ScanQuality? = null
+    /** Outlines in (u, v) of the steps of the wall the detector set aside (#28): no hold is made of their rim. */
+    var steps: List<FloatArray> = emptyList()
 }
 
 /**
@@ -60,12 +62,13 @@ object SceneBuilder {
         val extent = extent(cloud, surface)
         progress(0.45f)
         // Crash pads below the wall and beams above it reach the relief window; the wall surface itself ends at the extent.
-        val holds = HoldDetector.detect(cloud, surface, localRelief = type.outdoor, wall = wall, wallExtent = extent)
+        val detection = HoldDetector.detect(cloud, surface, localRelief = type.outdoor, wall = wall, wallExtent = extent)
+        val holds = detection.holds
             .filter { type.outdoor || (it.v >= extent[1] - EXTENT_HOLD_MARGIN && it.v <= extent[3] + EXTENT_HOLD_MARGIN) }
             .mapIndexed { i, h -> Hold(i + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels, h.outline) }
         progress(0.95f)
         val routes = if (type.colorIsRoute) RouteGrouper.group(holds, type.splitByPosition, wall, extent[3] - extent[1]) else emptyList()
-        return SceneResult(surface, fit.inliers, holds, routes, definition, wall, extent)
+        return SceneResult(surface, fit.inliers, holds, routes, definition, wall, extent).also { it.steps = detection.steps }
     }
 
     /**
@@ -82,6 +85,7 @@ object SceneBuilder {
             it.photo = result.photo
             it.thinCoverage = result.thinCoverage
             it.quality = result.quality
+            it.steps = result.steps
         }
     }
 
@@ -103,6 +107,7 @@ object SceneBuilder {
             it.photo = result.photo
             it.thinCoverage = result.thinCoverage
             it.quality = result.quality
+            it.steps = result.steps
         }
     }
 
