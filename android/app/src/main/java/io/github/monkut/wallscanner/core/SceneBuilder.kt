@@ -62,7 +62,7 @@ object SceneBuilder {
             .filter { type.outdoor || (it.v >= extent[1] - EXTENT_HOLD_MARGIN && it.v <= extent[3] + EXTENT_HOLD_MARGIN) }
             .mapIndexed { i, h -> Hold(i + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels, h.outline) }
         progress(0.95f)
-        val routes = if (type.colorIsRoute) RouteGrouper.group(holds, type.splitByPosition, wall) else emptyList()
+        val routes = if (type.colorIsRoute) RouteGrouper.group(holds, type.splitByPosition, wall, extent[3] - extent[1]) else emptyList()
         return SceneResult(surface, fit.inliers, holds, routes, definition, wall, extent)
     }
 
@@ -75,7 +75,7 @@ object SceneBuilder {
             Hold(i + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels, h.outline).also { it.role = h.role; it.tape = h.tape }
         }
         val type = result.definition.type
-        val routes = if (type.colorIsRoute) RouteGrouper.group(sorted, type.splitByPosition, result.wallColor) else emptyList()
+        val routes = if (type.colorIsRoute) RouteGrouper.group(sorted, type.splitByPosition, result.wallColor, result.extent[3] - result.extent[1]) else emptyList()
         return SceneResult(result.surface, result.planeInliers, sorted, routes, result.definition, result.wallColor, result.extent).also {
             it.photo = result.photo
             it.thinCoverage = result.thinCoverage
@@ -90,7 +90,7 @@ object SceneBuilder {
         val offset = firstId - 1
         if (offset <= 0) return result
         val routes = result.routes.map { r ->
-            Route(r.id + offset, r.name, r.r, r.g, r.b, r.holdIds).also { it.grade = r.grade; it.gradeSystem = r.gradeSystem; it.confirmed = r.confirmed }
+            Route(r.id + offset, r.name, r.r, r.g, r.b, r.holdIds).also { it.grade = r.grade; it.gradeSystem = r.gradeSystem; it.confirmed = r.confirmed; it.kind = r.kind }
         }
         for (h in result.holds) {
             if (h.routeId != -1) h.routeId += offset

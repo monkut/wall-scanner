@@ -88,6 +88,8 @@ object Tuning {
     // saturation too (Oct 23 references: 3–6 of them agree within 30°, chroma 0.06–0.09); the 12 dusty purples of noborock 1F
     // (2026-11-05, #27) are at chroma 0.07–0.14, 9 of them above 0.08
     const val START_REACH = 0.8f // a tape-marked start hold's foot holds lie below it within this much to either side (#27)
+    const val DOWN_CLIMB_MIN_WALL_HEIGHT = 3.4f // walls this tall carry grey down-climb holds (noborock 1F, 3.54 m); the 3.2 m walls of
+    // Oct 29 have no grey route at all, and the grey group of a shorter wall may be a route
     const val MIN_ROUTE_HOLDS = 2
     const val MAX_ROUTE_HOLD_GAP = 1.4f // circuit walls: holds of one colour further apart than this are different problems
 }

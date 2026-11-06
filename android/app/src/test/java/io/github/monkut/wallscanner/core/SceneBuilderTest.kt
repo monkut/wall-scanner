@@ -49,6 +49,7 @@ class SceneBuilderTest {
         assertTrue(json.contains("\"version\": ${SceneJson.VERSION}"))
         assertTrue(json.contains("\"holds\": ["))
         assertTrue(json.contains("\"name\": \"Red\""))
+        assertTrue(json.contains("\"kind\": \"route\""))
         assertEquals(result.holds.size, Regex("\"routeId\"").findAll(json).count())
 
         val out = ByteArrayOutputStream()

@@ -52,4 +52,17 @@ enum class HoldRole(val id: String) {
 
 class Rules(val feet: FeetRule = FeetRule.FOLLOW, val volumesOn: Boolean = true)
 
+/**
+ * What a group of holds in scene.json `routes` is: a route to climb, or the grey down-climb holds a tall wall
+ * carries for getting down (#27), kept as a group so the viewer can show and edit them but never confirmed
+ * and never offered in the logbook.
+ */
+enum class RouteKind(val id: String) {
+    ROUTE("route"), DOWN_CLIMB("downclimb");
+
+    companion object {
+        fun fromId(id: String?): RouteKind = entries.firstOrNull { it.id == id } ?: ROUTE
+    }
+}
+
 class Definition(val type: RouteDefinition = RouteDefinition.DEFAULT, val rules: Rules = Rules())

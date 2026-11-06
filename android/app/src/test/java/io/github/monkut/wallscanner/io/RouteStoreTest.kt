@@ -1,5 +1,6 @@
 package io.github.monkut.wallscanner.io
 
+import io.github.monkut.wallscanner.core.RouteKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -15,6 +16,20 @@ class RouteStoreTest {
 
     private fun clip(id: Int, file: String, start: Long = 0, end: Long = 10_000, auto: Boolean = false) =
         Clip(id, id, file, 60_000, start, end, null, auto, "2026-10-24T18:00:00+09:00")
+
+    @Test
+    fun aDownClimbGroupIsReadWithItsKind() {
+        val dir = tmp.newFolder()
+        File(dir, "scene.json").writeText(
+            """{"version": 4, "definition": {"type": "mono_color"}, "holds": [],
+               "routes": [{"id": 1, "name": "Red", "color": [200, 40, 40], "grade": "", "gradeSystem": null, "holdIds": [1, 2], "confirmed": true},
+                          {"id": 2, "name": "Down climb", "color": [120, 120, 120], "grade": "", "gradeSystem": null, "holdIds": [3, 4, 5], "confirmed": false, "kind": "downclimb"}]}""",
+        )
+        val routes = RouteStore.routes(dir)
+        assertEquals(listOf(RouteKind.ROUTE, RouteKind.DOWN_CLIMB), routes.map { it.kind })
+        assertTrue(routes[0].confirmed)
+        assertEquals(3, routes[1].holdCount)
+    }
 
     @Test
     fun climbsWithClipsAndRouteCommentsRoundTrip() {

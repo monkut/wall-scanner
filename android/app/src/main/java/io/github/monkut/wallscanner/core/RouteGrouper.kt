@@ -6,13 +6,15 @@ class Route(val id: Int, var name: String, val r: Int, val g: Int, val b: Int, v
     var gradeSystem: GradeSystem? = null
     /** Identification is done: the route is a record that sends can be logged against (sends.json). */
     var confirmed: Boolean = false
+    var kind: RouteKind = RouteKind.ROUTE
 }
 
 /**
  * Groups holds into candidate routes by color: circular hue clusters for saturated holds, value bands otherwise.
  * Pale holds that still show a hue join the nearest hue cluster (see [attachPale]); enough of them of one hue
  * with no cluster to join are a route of their own (see [paleRoutes]); the pale holds under a tape-marked start
- * hold are its route's foot holds (see [anchorToStarts]).
+ * hold are its route's foot holds (see [anchorToStarts]). On a wall at least [Tuning.DOWN_CLIMB_MIN_WALL_HEIGHT]
+ * high the grey group is the down-climb holds ([RouteKind.DOWN_CLIMB]), not a route.
  * With [splitByPosition] (circuit walls) each colour group is further split into spatially connected problems.
  * Holds the colour of the [wall] (depth streaks at mats and edges, or wall seen through a sparse hold) stay
  * unassigned instead of bridging unrelated hues into one route.
@@ -20,8 +22,10 @@ class Route(val id: Int, var name: String, val r: Int, val g: Int, val b: Int, v
 object RouteGrouper {
     private const val BLACK_BELOW = 0.25f
     private const val WHITE_FROM = 0.65f
+    const val DOWN_CLIMB_NAME = "Down climb"
 
-    fun group(holds: List<Hold>, splitByPosition: Boolean = false, wall: WallColor? = null): List<Route> {
+    /** [wallHeight] is the scanned wall's height in metres (its extent), when known. */
+    fun group(holds: List<Hold>, splitByPosition: Boolean = false, wall: WallColor? = null, wallHeight: Float? = null): List<Route> {
         val candidates = holds.filter { wall?.matches(it.hsv) != true }
         val chromatic = candidates.filter { it.sat >= Tuning.MIN_ROUTE_SATURATION && it.value >= Tuning.MIN_ROUTE_VALUE }
         val achromatic = candidates.filter { it !in chromatic }
@@ -41,16 +45,19 @@ object RouteGrouper {
         if (white.isNotEmpty()) groups.add(white)
         if (gray.isNotEmpty()) groups.add(gray)
 
+        val tall = wallHeight != null && wallHeight >= Tuning.DOWN_CLIMB_MIN_WALL_HEIGHT
         val routes = ArrayList<Route>()
         for (colorGroup in groups) {
+            val kind = if (colorGroup === gray && tall) RouteKind.DOWN_CLIMB else RouteKind.ROUTE
             val name = when {
                 colorGroup === black -> "Black"
                 colorGroup === white -> "White"
-                colorGroup === gray -> "Gray"
+                colorGroup === gray -> if (kind == RouteKind.DOWN_CLIMB) DOWN_CLIMB_NAME else "Gray"
                 pale.any { it === colorGroup } -> ColorUtil.hueName(meanHue(colorGroup))
                 else -> ColorUtil.hueName(meanHue(colorGroup.filter { it in chromatic }))
             }
-            val problems = if (splitByPosition) connectedProblems(colorGroup) else listOf(colorGroup)
+            // The down-climb holds are one group however far apart they stand; circuit problems split by position.
+            val problems = if (splitByPosition && kind == RouteKind.ROUTE) connectedProblems(colorGroup) else listOf(colorGroup)
             for (members in problems) {
                 if (members.size < Tuning.MIN_ROUTE_HOLDS) continue
                 val id = routes.size + 1
@@ -61,6 +68,7 @@ object RouteGrouper {
                     members.sumOf { it.b } / members.size,
                     members.map { it.id }.toMutableList(),
                 )
+                route.kind = kind
                 members.forEach { it.routeId = id; it.routeIds.add(id) }
                 routes.add(route)
             }

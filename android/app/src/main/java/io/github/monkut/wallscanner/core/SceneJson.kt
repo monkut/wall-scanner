@@ -93,6 +93,7 @@ object SceneJson {
                 .append(", \"gradeSystem\": ").append(r.gradeSystem?.let { str(it.id) } ?: "null")
                 .append(", \"holdIds\": ").append(r.holdIds.joinToString(", ", "[", "]"))
                 .append(", \"confirmed\": ").append(r.confirmed)
+                .append(", \"kind\": ").append(str(r.kind.id))
                 .append("}").append(if (i < result.routes.size - 1) ",\n" else "\n")
         }
         sb.append("  ]\n")
