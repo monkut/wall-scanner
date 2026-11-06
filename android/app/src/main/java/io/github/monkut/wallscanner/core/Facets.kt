@@ -228,21 +228,6 @@ object Facets {
      * Unit eigenvector of the smallest eigenvalue of the symmetric matrix [c] = (xx, xy, xz, yy, yz, zz): power
      * iteration on (trace · I − C) from ([sx], [sy], [sz]), oriented to point the seed's way.
      */
-    private fun smallestEigenvector(c: DoubleArray, sx: Double, sy: Double, sz: Double): DoubleArray {
-        val shift = c[0] + c[3] + c[5]
-        val m00 = shift - c[0]; val m11 = shift - c[3]; val m22 = shift - c[5]
-        val m01 = -c[1]; val m02 = -c[2]; val m12 = -c[4]
-        var vx = sx; var vy = sy; var vz = sz
-        repeat(60) {
-            val nx = m00 * vx + m01 * vy + m02 * vz
-            val ny = m01 * vx + m11 * vy + m12 * vz
-            val nz = m02 * vx + m12 * vy + m22 * vz
-            val len = sqrt(nx * nx + ny * ny + nz * nz)
-            if (len > 1e-12) { vx = nx / len; vy = ny / len; vz = nz / len }
-        }
-        if (vx * sx + vy * sy + vz * sz < 0) { vx = -vx; vy = -vy; vz = -vz }
-        return doubleArrayOf(vx, vy, vz)
-    }
 
     /** Degrees between two unit normals. */
     fun degrees(ax: Float, ay: Float, az: Float, bx: Float, by: Float, bz: Float): Float =

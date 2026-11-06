@@ -39,6 +39,7 @@ import io.github.monkut.wallscanner.core.RouteDefinition
 import io.github.monkut.wallscanner.core.SceneJson
 import io.github.monkut.wallscanner.core.SegmentSnapper
 import io.github.monkut.wallscanner.core.Thumbnail
+import io.github.monkut.wallscanner.core.ScanGuide
 import io.github.monkut.wallscanner.core.Tuning
 import io.github.monkut.wallscanner.core.VoxelMap
 import io.github.monkut.wallscanner.io.CaptureStore
@@ -53,6 +54,8 @@ import kotlin.concurrent.thread
 class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
     private lateinit var glView: GLSurfaceView
     private lateinit var statusText: TextView
+    private lateinit var guideText: TextView
+    private var lastCueAtMs = 0L
     private lateinit var btnRecord: Button
     private lateinit var btnFinish: Button
     private lateinit var processingOverlay: View
@@ -81,6 +84,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         glView = findViewById(R.id.glView)
         statusText = findViewById(R.id.statusText)
+        guideText = findViewById(R.id.guideText)
         btnRecord = findViewById(R.id.btnRecord)
         btnFinish = findViewById(R.id.btnFinish)
         processingOverlay = findViewById(R.id.processingOverlay)
@@ -211,7 +215,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             log.log(
                 "STATUS segments=${segments.size} recording=${renderer.recording} tracking=$tracking voxels=$voxels " +
                     "evicted=${segments.totalEvictions()} pos=${fmtTranslation(renderer.lastTrackedPose)} · ${processor.stats()} " +
-                    renderer.uploadStats()
+                    renderer.uploadStats() + " " + renderer.guideStats()
             )
         }
     }
@@ -228,6 +232,24 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             log.log("TRACKING regained after $sinceLast lost · $state pose=${fmt(pose)}")
         } else {
             log.log("TRACKING lost ($reason) after $sinceLast tracked · $state lastPose=${fmt(pose)}")
+        }
+    }
+
+    override fun onGuide(cue: ScanGuide.Cue?, measure: ScanGuide.Measure?) {
+        val text = when (cue) {
+            ScanGuide.Cue.TOO_CLOSE -> getString(R.string.guide_too_close, measure?.distance ?: 0f)
+            ScanGuide.Cue.TOO_FAR -> getString(R.string.guide_too_far, measure?.distance ?: 0f)
+            ScanGuide.Cue.FACE_WALL -> getString(R.string.guide_face_wall)
+            ScanGuide.Cue.TOO_FAST -> getString(R.string.guide_too_fast)
+            null -> ""
+        }
+        val now = SystemClock.elapsedRealtime()
+        val held = if (lastCueAtMs == 0L) "" else " after ${(now - lastCueAtMs) / 1000.0}s"
+        log.log("GUIDE ${cue ?: "ok"}$held · ${measure ?: "no surface"} · recording=${renderer.recording}")
+        lastCueAtMs = now
+        runOnUiThread {
+            guideText.text = text
+            guideText.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
         }
     }
 
