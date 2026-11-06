@@ -10,7 +10,9 @@ class Route(val id: Int, var name: String, val r: Int, val g: Int, val b: Int, v
 
 /**
  * Groups holds into candidate routes by color: circular hue clusters for saturated holds, value bands otherwise.
- * Pale holds that still show a hue join the nearest hue cluster (see [attachPale]).
+ * Pale holds that still show a hue join the nearest hue cluster (see [attachPale]); enough of them of one hue
+ * with no cluster to join are a route of their own (see [paleRoutes]); the pale holds under a tape-marked start
+ * hold are its route's foot holds (see [anchorToStarts]).
  * With [splitByPosition] (circuit walls) each colour group is further split into spatially connected problems.
  * Holds the colour of the [wall] (depth streaks at mats and edges, or wall seen through a sparse hold) stay
  * unassigned instead of bridging unrelated hues into one route.
@@ -28,7 +30,10 @@ object RouteGrouper {
         val clusters = hueClusters(chromatic).map { it.toMutableList() }
         groups.addAll(clusters)
         val attached = attachPale(clusters, achromatic, wall)
-        val rest = achromatic.filter { it !in attached }
+        val pale = paleRoutes(achromatic.filter { it !in attached }, wall)
+        groups.addAll(pale)
+        val anchored = anchorToStarts(clusters + pale, achromatic.filter { it !in attached && pale.none { p -> it in p } })
+        val rest = achromatic.filter { it !in attached && it !in anchored && pale.none { p -> it in p } }
         val black = rest.filter { it.value < BLACK_BELOW }
         val white = rest.filter { it.value >= WHITE_FROM }
         val gray = rest.filter { it !in black && it !in white }
@@ -42,6 +47,7 @@ object RouteGrouper {
                 colorGroup === black -> "Black"
                 colorGroup === white -> "White"
                 colorGroup === gray -> "Gray"
+                pale.any { it === colorGroup } -> ColorUtil.hueName(meanHue(colorGroup))
                 else -> ColorUtil.hueName(meanHue(colorGroup.filter { it in chromatic }))
             }
             val problems = if (splitByPosition) connectedProblems(colorGroup) else listOf(colorGroup)
@@ -86,6 +92,41 @@ object RouteGrouper {
             attached.add(hold)
         }
         return attached
+    }
+
+    /**
+     * Routes made of pale holds alone: the [holds] left by [attachPale] that show a hue (saturation from
+     * [Tuning.PALE_MIN_SAT], saturation × value from [Tuning.PALE_ROUTE_MIN_CHROMA], under the white band, not
+     * the wall's hue) are clustered by hue like the saturated ones, and a cluster of [Tuning.PALE_ROUTE_MIN_HOLDS]
+     * is a route. A dusty purple route under warm light reads at 0.11–0.30 saturation with no saturated purple
+     * anywhere to join (noborock 1F, 2026-11-05, #27); fewer agreeing holds are grey holds whose hue is noise.
+     */
+    private fun paleRoutes(holds: List<Hold>, wall: WallColor?): List<MutableList<Hold>> {
+        val wallHue = wall?.takeIf { it.sat >= Tuning.WALL_GREY_SAT }?.hue
+        val hued = holds.filter { hold ->
+            hold.sat >= Tuning.PALE_MIN_SAT && hold.sat * hold.value >= Tuning.PALE_ROUTE_MIN_CHROMA && hold.value < WHITE_FROM &&
+                (wallHue == null || ColorUtil.hueDistance(hold.hue, wallHue) > Tuning.PALE_WALL_HUE_TOL)
+        }
+        return hueClusters(hued).filter { it.size >= Tuning.PALE_ROUTE_MIN_HOLDS }.map { it.toMutableList() }
+    }
+
+    /**
+     * Below a start hold there are, in most cases, foot holds of the same colour for its route (the climber's
+     * rule, #27). The pale [holds] under a tape-marked start hold of a hue [group] (lower on the wall, within
+     * [Tuning.START_REACH] to either side, hue within [Tuning.PALE_HUE_TOL] of the start hold's, not black)
+     * join that group whatever their saturation; returns the holds added.
+     */
+    private fun anchorToStarts(groups: List<MutableList<Hold>>, holds: List<Hold>): Set<Hold> {
+        val anchored = HashSet<Hold>()
+        for (group in groups) for (start in group.filter { it.role == HoldRole.START }) {
+            for (hold in holds) {
+                if (hold in anchored || hold.value < BLACK_BELOW) continue
+                if (hold.v >= start.v || kotlin.math.abs(hold.u - start.u) > Tuning.START_REACH) continue
+                if (ColorUtil.hueDistance(hold.hue, start.hue) > Tuning.PALE_HUE_TOL) continue
+                group.add(hold); anchored.add(hold)
+            }
+        }
+        return anchored
     }
 
     /** 0 inside the circular hue range [lo]..[hi], otherwise the distance to its nearer end. */

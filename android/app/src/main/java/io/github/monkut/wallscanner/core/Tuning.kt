@@ -80,6 +80,11 @@ object Tuning {
     const val PALE_MIN_CHROMA = 0.1f // … when saturation × value shows a hue (a dark hold's hue is noise) …
     const val PALE_HUE_TOL = 15f // … within this of the cluster's hue range …
     const val PALE_WALL_HUE_TOL = 20f // … and not this close to a coloured wall's hue (bare wall bled into the hold)
+    const val PALE_ROUTE_MIN_HOLDS = 5 // pale holds left over after attachPale form a route of their own when a route's worth agree in hue …
+    const val PALE_ROUTE_MIN_CHROMA = 0.08f // … at this saturation × value. Grey holds under gym light read bluish or purplish at 0.2–0.3
+    // saturation too (Oct 23 references: 3–6 of them agree within 30°, chroma 0.06–0.09); the 12 dusty purples of noborock 1F
+    // (2026-11-05, #27) are at chroma 0.07–0.14, 9 of them above 0.08
+    const val START_REACH = 0.8f // a tape-marked start hold's foot holds lie below it within this much to either side (#27)
     const val MIN_ROUTE_HOLDS = 2
     const val MAX_ROUTE_HOLD_GAP = 1.4f // circuit walls: holds of one colour further apart than this are different problems
 }
