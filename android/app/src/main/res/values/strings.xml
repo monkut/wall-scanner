@@ -238,6 +238,7 @@
     <string name="coverage_thin">Little depth data at the %1$s of the wall. Sweep there on the next scan so holds are found from depth, not only from the photos.</string>
     <string name="coverage_cell">%1$s %2$s</string>
     <string name="scan_drifted">Low confidence: the wall surface is smeared (%1$d%% of the points lie on the wall plane). Tracking probably drifted during the scan. Rescan this part of the wall.</string>
+    <string name="scan_ghosted">Low confidence: the photos disagree at the %1$s of the wall (%2$d%% of the wall). Tracking probably drifted there. Rescan that part.</string>
     <string name="low_confidence">low confidence</string>
     <string name="row_top">top</string>
     <string name="row_middle">middle</string>

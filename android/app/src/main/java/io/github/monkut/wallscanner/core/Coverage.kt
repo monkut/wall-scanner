@@ -15,19 +15,24 @@ object Coverage {
 
     class Cell(val row: Int, val col: Int)
 
-    fun thinCells(cloud: VoxelCloud, surface: WallSurface, extent: FloatArray): List<Cell> {
+    /** Index (row × [COLS] + col) of the grid cell holding wall point ([u], [v]) of [extent], or -1 outside it. */
+    fun cellOf(u: Float, v: Float, extent: FloatArray): Int {
         val width = extent[2] - extent[0]; val height = extent[3] - extent[1]
-        if (width <= 0f || height <= 0f) return emptyList()
+        if (width <= 0f || height <= 0f) return -1
+        val col = ((u - extent[0]) / width * COLS).toInt()
+        val row = ((extent[3] - v) / height * ROWS).toInt()
+        return if (col !in 0 until COLS || row !in 0 until ROWS) -1 else row * COLS + col
+    }
+
+    fun thinCells(cloud: VoxelCloud, surface: WallSurface, extent: FloatArray): List<Cell> {
         val counts = IntArray(ROWS * COLS)
         val xyz = cloud.xyz
         val p = FloatArray(3)
         for (i in 0 until cloud.count) {
             surface.project(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2], p)
             if (p[2] < MIN_RELIEF || p[2] > MAX_RELIEF) continue
-            val col = ((p[0] - extent[0]) / width * COLS).toInt()
-            val row = ((extent[3] - p[1]) / height * ROWS).toInt()
-            if (col !in 0 until COLS || row !in 0 until ROWS) continue
-            counts[row * COLS + col]++
+            val k = cellOf(p[0], p[1], extent)
+            if (k >= 0) counts[k]++
         }
         val sorted = counts.copyOf(); sorted.sort()
         val median = sorted[sorted.size / 2]

@@ -124,7 +124,7 @@ object HoldMerge {
         for (i in holds.indices.sortedBy { pixels[it].size }) {
             val px = pixels[i]
             if (px.isEmpty()) continue
-            val host = holds.indices.filter { it != i && into[it] < 0 && pixels[it].size > px.size && px.size >= NESTED_MIN_SHARE * pixels[it].size && deltaE(lab[i], lab[it]) <= NESTED_MAX_DE }
+            val host = holds.indices.filter { it != i && into[it] < 0 && pixels[it].size > px.size && px.size >= NESTED_MIN_SHARE * pixels[it].size && ColorUtil.deltaE(lab[i], lab[it]) <= NESTED_MAX_DE }
                 .firstOrNull { j -> val set = sets.getOrPut(j) { pixels[j].toHashSet() }; px.count { it in set } >= NESTED_INSIDE * px.size }
             if (host != null) into[i] = host
         }
@@ -206,7 +206,7 @@ object HoldMerge {
         for ((key, edge) in edges) {
             val a = (key / holds.size).toInt(); val b = (key % holds.size).toInt()
             val lower = minOf(height[a], height[b])
-            if (lower < DEPTH_MIN_HEIGHT || deltaE(lab[a], lab[b]) > DEPTH_MAX_DE) continue
+            if (lower < DEPTH_MIN_HEIGHT || ColorUtil.deltaE(lab[a], lab[b]) > DEPTH_MAX_DE) continue
             val ridge = edge.map { photo.relief[it] }.sorted()[edge.size / 2]
             if (ridge - lower >= DEPTH_RIDGE) parent[find(a)] = find(b)
         }
@@ -230,9 +230,6 @@ object HoldMerge {
         val lab = pixels.map { val p = image.pixels[it]; ColorUtil.rgbToLab(p shr 16 and 0xff, p shr 8 and 0xff, p and 0xff) }
         return FloatArray(3) { c -> lab.map { it[c] }.sorted()[lab.size / 2] }
     }
-
-    private fun deltaE(a: FloatArray, b: FloatArray): Float =
-        kotlin.math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2]))
 
     /** Whether the smaller of two pixel sets has at least [TOUCH] of its outline pixels within [TOUCH_PX] of the other. */
     private fun touching(a: IntArray, b: IntArray, w: Int, h: Int): Boolean {

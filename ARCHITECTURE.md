@@ -166,8 +166,10 @@ wall:       { origin, normal, up, right, inliers, color: [r, g, b], extent: [min
                                                  photo = orthophoto from the keyframes (px metres per pixel, top row = maxV), absent when none
                                                  relief = each photo pixel's height off the wall in mm (red × 256 + green), from the point cloud; the viewer shows the wall in 3D with it
 steps:      [[[u, v], ...], ...]                   # outlines of the wall's steps the hold detector set aside (#28): a boxed-out section, a hangboard panel
-quality:    { planeShare, holdDensity, drifted: bool }   # share of the cloud within 2 cm of the wall surface (all faces), holds per m² of extent; drifted = both past
-                                                 their thresholds (core/ScanQuality.kt, #35): tracking drifted mid-scan, the wall is laid down twice
+quality:    { planeShare, holdDensity, ghostShare?, ghostCells?: [[row, col]], drifted: bool }
+                                                 share of the cloud within 2 cm of the wall surface (all faces), holds per m² of extent, share of the
+                                                 wall where two keyframe views disagree and the 3 × 3 cells where that share is high; drifted = the first
+                                                 two past their thresholds, or the ghost share and a cell past theirs (core/ScanQuality.kt, #35)
 routes[]:   { id, name, color, grade, gradeSystem: yds|kyu_dan|v|font|null, holdIds: [..], confirmed: bool,
               kind: route|downclimb }   # a hold may appear in several routes; a downclimb group (the grey down-climb holds of a tall wall) is never confirmed nor in the logbook; absent = route
 nextRouteId: int   # kept by the viewer so a deleted route's id is never reissued (sends.json keys by route id)

@@ -235,6 +235,7 @@
     <string name="coverage_thin">壁の%1$sの深度データが少なめです。次回は写真だけでなく深度からもホールドを見つけられるよう、その部分もスキャンしてください。</string>
     <string name="coverage_cell">%2$s%1$s</string>
     <string name="scan_drifted">信頼度の低いスキャンです: 壁面がぶれています（壁の平面上にある点は%1$d%%）。スキャン中にトラッキングがずれた可能性があります。この部分をもう一度スキャンしてください。</string>
+    <string name="scan_ghosted">信頼度の低いスキャンです: 壁の%1$sで写真同士が食い違っています（壁の%2$d%%）。その部分でトラッキングがずれた可能性があります。そこをもう一度スキャンしてください。</string>
     <string name="low_confidence">信頼度低</string>
     <string name="row_top">上</string>
     <string name="row_middle">中央</string>
