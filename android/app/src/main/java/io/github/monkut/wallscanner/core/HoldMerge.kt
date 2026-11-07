@@ -20,7 +20,8 @@ object HoldMerge {
     private const val NESTED_INSIDE = 0.9f // a hold with this much of its outline inside another's is a piece of it (#29 B) …
     private const val NESTED_MIN_SHARE = 0.2f // … when it is this much of the host's area (a volume's face, not a hold mounted on a volume:
     private const val NESTED_MAX_DE = 25f     // 3% and 1% of their hosts in the Oct 21 and Oct 23 references) and about its colour
-    private const val ON_STEP_SHARE = 0.5f // an image-only hold with this much of itself on a step of the wall is the step's paint or wood (#29 A)
+    private const val ON_STEP_SHARE = 0.4f // an image-only hold with this much of itself on a step of the wall is the step's paint or wood (#29 A):
+    // the 1F painted edge sits 50% on its step; the real green foothold at the foot of the Main wall's hangboard 36%
     private const val STRIP_MAX_WIDTH = 0.03f // an outline narrower than this …
     private const val STRIP_MIN_ASPECT = 6f   // … and this many times as long is a strip, not a hold
 
