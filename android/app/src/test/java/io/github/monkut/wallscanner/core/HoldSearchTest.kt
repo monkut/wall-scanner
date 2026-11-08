@@ -46,7 +46,8 @@ class HoldSearchTest {
         val red = 0xffC23B3B.toInt()
         val paint: (Float, Float) -> Int? = { u, v -> if (u in 0.88f..1.12f && (v in 1.0f..1.12f || v in 0.86f..0.98f)) red else null }
         val p = photo(paint)
-        val upper = seedHold(1, 1.0f, 1.06f, red).also { it.outline = Raster.ellipse(1.0f, 1.06f, 0.25f, 0.13f) }
+        // SAM drew the upper block a little small: its halo must not tie the lower block to it
+        val upper = seedHold(1, 1.0f, 1.06f, red).also { it.outline = Raster.ellipse(1.0f, 1.06f, 0.22f, 0.11f) }
         val found = HoldSearch.find(listOf(upper), patches(p), p, frame, extent)
         assertEquals("the lower block, got ${found.map { "(${it.u}, ${it.v}) ${it.width}x${it.tall}" }}", 1, found.size)
         assertTrue("v ${found[0].v}", abs(found[0].v - 0.92f) < 0.03f)
@@ -166,5 +167,16 @@ class HoldSearchTest {
         val p = photo(paint)
         val found = HoldSearch.find(listOf(existing), patches(p), p, frame, wallBottomAt20cm)
         assertEquals("nothing new: ${found.map { "(${it.u}, ${it.v}) ${it.width}x${it.tall}" }}", 0, found.size)
+    }
+
+    @Test
+    fun theSecondSearchWantsBothSidesHoldSized() {
+        // A 5.5 × 20 cm painted edge: too wide for tape, a hold at the 4 cm floor, paint at the 6 cm one.
+        val p = photo { u, v -> if (u in 1.0f..1.2f && v in 1.0f..1.055f) purple else null }
+        assertEquals(1, HoldSearch.find(emptyList(), patches(p), p, frame, extent).size)
+        assertEquals(0, HoldSearch.find(emptyList(), patches(p), p, frame, extent, minSide = HoldSearch.SECOND_MIN_SIDE).size)
+        // 8 × 20 cm passes both
+        val q = photo { u, v -> if (u in 1.0f..1.2f && v in 1.0f..1.08f) purple else null }
+        assertEquals(1, HoldSearch.find(emptyList(), patches(q), q, frame, extent, minSide = HoldSearch.SECOND_MIN_SIDE).size)
     }
 }

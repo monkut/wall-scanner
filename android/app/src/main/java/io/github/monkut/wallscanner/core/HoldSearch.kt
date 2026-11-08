@@ -13,36 +13,44 @@ import kotlin.math.min
  */
 object HoldSearch {
     private const val MIN_SIDE = 0.04f
+    const val SECOND_MIN_SIDE = 0.06f // the search after SAM's outlines reports holds at least this across both ways: what the final outlines uncover at the edges is mostly paint (a 4 × 14 cm strip on 1F)
     private const val MAX_SIDE = 1.0f
     private const val MAX_COVERED = 0.3f // patches already this covered by a hold are that hold …
-    private const val MIN_REMNANT = 0.4f // … unless the uncovered remainder is this much of the patch, compact, and hold-sized: a
-    private const val REMNANT_FILL = 0.5f // second hold of the same colour that the gap bridging joined to the first (#29 C)
-    private const val PAD_RELIEF = 0.12f // crash pads stand this far off the wall …
+    private const val MIN_REMNANT = 0.2f // … unless the uncovered remainder is this much of the patch, compact, and hold-sized: a
+    private const val REMNANT_FILL = 0.5f // second hold of the same colour that the gap bridging joined to the first (#29 C) …
+    private const val HALO_M = 0.02f     // … once the halo this close around the covering outlines is counted as covered too (on 1F the
+    // lower red volume is 28% of a patch that also holds the upper volume and the trapezoid above it)
+    private const val PAD_RELIEF = 0.12f // crash pads stand this far off the wall (median of the patch: a volume on the mat line touches it only along its bottom rows, #29 C) …
     private const val PAD_ZONE = 0.35f // … within this height of the wall's bottom edge
 
-    fun find(holds: List<Hold>, patches: ColorPatches, photo: Orthophoto, surface: WallSurface, extent: FloatArray): List<Hold> {
+    fun find(holds: List<Hold>, patches: ColorPatches, photo: Orthophoto, surface: WallSurface, extent: FloatArray, minSide: Float = MIN_SIDE): List<Hold> {
         val w = photo.image.width; val h = photo.image.height
         val covered = BooleanArray(w * h)
         for (hold in holds) for (i in Raster.fillPolygon(ImageHold.polygon(hold), photo)) covered[i] = true
-        val minSidePx = max(2, (MIN_SIDE / photo.px).toInt())
+        // A hold's halo (its tint and shadow just outside the outline) joins the remainder of its patch to the
+        // next hold's; counted as covered, it leaves the second hold standing on its own.
+        val near = SamRefine.dilateSquare(covered, w, h, max(1, (HALO_M / photo.px + 0.5f).toInt()))
+        val minSidePx = max(2, (minSide / photo.px).toInt())
         val found = ArrayList<Hold>()
         var nextId = (holds.maxOfOrNull { it.id } ?: 0) + 1
         for (p in 1..patches.count) {
             val count = patches.size[p]
             if (count < minSidePx * minSidePx) continue
             val longM = max(patches.maxX[p] - patches.minX[p], patches.maxY[p] - patches.minY[p]).plus(1) * photo.px
-            if (longM < MIN_SIDE || longM > MAX_SIDE) continue
+            val shortM = min(patches.maxX[p] - patches.minX[p], patches.maxY[p] - patches.minY[p]).plus(1) * photo.px
+            if (shortM < minSide || longM > MAX_SIDE) continue
             val members = patches.members(p)
             if (members.count { covered[it] } >= MAX_COVERED * count) {
                 // The patch is a found hold and whatever its colour bridged to within HOLD_GAP_M: on 1F two red
                 // volumes 2 cm apart, the lower one unseen by depth (#29 C). A hold's own halo outside its outline
                 // is a thin ring; a second hold is a compact remainder of the patch's own size.
-                for (rem in remnants(members, covered, w)) {
+                for (rem in remnants(members, near, w)) {
                     if (rem.size < MIN_REMNANT * count || rem.size < minSidePx * minSidePx) continue
                     var x0 = w; var x1 = -1; var y0 = h; var y1 = -1
                     for (i in rem) { val x = i % w; val y = i / w; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
                     val long = max(x1 - x0, y1 - y0).plus(1) * photo.px
-                    if (long < MIN_SIDE || long > MAX_SIDE || rem.size < REMNANT_FILL * (x1 - x0 + 1) * (y1 - y0 + 1)) continue
+                    val short = min(x1 - x0, y1 - y0).plus(1) * photo.px
+                    if (short < minSide || long > MAX_SIDE || rem.size < REMNANT_FILL * (x1 - x0 + 1) * (y1 - y0 + 1)) continue
                     if (!plausible(rem, rem.size, photo, extent)) continue
                     found.add(ImageHold.fromPixels(nextId++, rem, 0, photo, surface))
                 }
@@ -88,9 +96,10 @@ object HoldSearch {
         if (TapeMarks.isStrip(length, width)) return false
         val cv = photo.v(my + 0.5f)
         if (cv < extent[1]) return false
+        // The pad's top stands off the wall over its whole patch; a volume on the mat line only along its bottom rows.
         val rel = FloatArray(count) { photo.relief[members[it]] }
         rel.sort()
-        return !(rel[(count * 9) / 10] > PAD_RELIEF && cv < extent[1] + PAD_ZONE)
+        return !(rel[count / 2] > PAD_RELIEF && cv < extent[1] + PAD_ZONE)
     }
 }
 

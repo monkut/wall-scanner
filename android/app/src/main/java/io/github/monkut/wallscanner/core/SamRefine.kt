@@ -206,7 +206,7 @@ object SamRefine {
     }
 
     /** [src] grown by [r] pixels in square steps (a (2r+1)² max filter), rows then columns. */
-    private fun dilateSquare(src: BooleanArray, w: Int, h: Int, r: Int): BooleanArray {
+    internal fun dilateSquare(src: BooleanArray, w: Int, h: Int, r: Int): BooleanArray {
         val rows = BooleanArray(src.size)
         for (y in 0 until h) for (x in 0 until w) if (src[y * w + x]) for (dx in max(0, x - r)..min(w - 1, x + r)) rows[y * w + dx] = true
         val out = BooleanArray(src.size)

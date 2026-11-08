@@ -113,10 +113,19 @@ object ScenePipeline {
             .onFailure { log("hold depth merge failed: $it") }
             .getOrDefault(outlined)
         log("hold depth merge: ${outlined.size - joined.size} pieces joined to a touching hold with no depth valley between them")
-        val unnested = runCatching { HoldMerge.nested(joined, photo) }
+        // SAM shrinks outlines to the hold's edge; a colour patch the earlier outlines covered may now stand clear (on
+        // 1F the lower of two red volumes 2 cm apart, which the depth had merged into the upper, #29 C). Search again
+        // on the final outlines and judge the finds as before.
+        val t5 = System.currentTimeMillis()
+        val uncovered = runCatching { HoldMerge.prune(HoldSearch.find(joined, patches, photo, result.surface, result.extent, minSide = HoldSearch.SECOND_MIN_SIDE), masks, seen.tape, photo, patches, result.wallColor, result.extent) }
+            .onFailure { log("hold search (after outlines) failed: $it") }
+            .getOrDefault(emptyList())
+        log("hold search (after outlines): ${uncovered.size} image-only holds added where the final outlines cover no colour patch (${System.currentTimeMillis() - t5} ms)${if (uncovered.isEmpty()) "" else ": " + uncovered.joinToString { "(%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
+        val candidates = joined + uncovered
+        val unnested = runCatching { HoldMerge.nested(candidates, photo) }
             .onFailure { log("hold nested failed: $it") }
-            .getOrDefault(joined)
-        if (unnested.size != joined.size) log("hold nested: ${joined.size - unnested.size} holds inside another merged into it: ${(joined.map { it.id } - unnested.map { it.id }.toSet()).joinToString { "#$it" }}")
+            .getOrDefault(candidates)
+        if (unnested.size != candidates.size) log("hold nested: ${candidates.size - unnested.size} holds inside another merged into it: ${(candidates.map { it.id } - unnested.map { it.id }.toSet()).joinToString { "#$it" }}")
         val unstripped = HoldMerge.dropStrips(unnested)
         if (unstripped.size != unnested.size) log("hold strips: ${unnested.size - unstripped.size} dropped (under 3 cm across, 6× as long: a column or panel edge)")
         val holds = HoldMerge.dropOnSteps(unstripped, result.steps, photo)

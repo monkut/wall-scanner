@@ -58,8 +58,12 @@ class RealCaptureHarness {
                 // The JVM cannot run the hold model: holds are judged by colour alone here.
                 val pruned = HoldMerge.prune(split, emptyList(), emptyList(), photo, patches, result.wallColor, result.extent)
                 println("HARNESS ${dir.name} hold prune: ${split.size - pruned.size} dropped: ${(split - pruned.toSet()).joinToString { "#${it.id} (%.2f, %.2f) %.2f×%.2f vox=${it.voxels} rgb=(${it.r},${it.g},${it.b})".format(it.u, it.v, it.width, it.tall) }}")
-                val unnested = HoldMerge.nested(pruned, photo)
-                if (unnested.size != pruned.size) println("HARNESS ${dir.name} hold nested: ${pruned.size - unnested.size} merged: ${(pruned.map { it.id } - unnested.map { it.id }.toSet()).joinToString { "#$it" }}")
+                // The app searches again on SAM's final outlines; here the outlines are the shapes', so this mostly finds nothing.
+                val uncovered = HoldMerge.prune(HoldSearch.find(pruned, patches, photo, result.surface, result.extent, minSide = HoldSearch.SECOND_MIN_SIDE), emptyList(), emptyList(), photo, patches, result.wallColor, result.extent)
+                if (uncovered.isNotEmpty()) println("HARNESS ${dir.name} hold search (after outlines): +${uncovered.size}: ${uncovered.joinToString { "#${it.id} (%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
+                val candidates = pruned + uncovered
+                val unnested = HoldMerge.nested(candidates, photo)
+                if (unnested.size != candidates.size) println("HARNESS ${dir.name} hold nested: ${candidates.size - unnested.size} merged: ${(candidates.map { it.id } - unnested.map { it.id }.toSet()).joinToString { "#$it" }}")
                 val holds = HoldMerge.dropOnSteps(unnested, result.steps, photo)
                 if (holds.size != unnested.size) println("HARNESS ${dir.name} hold steps: ${unnested.size - holds.size} image-only holds on a step dropped: ${(unnested - holds.toSet()).joinToString { "#${it.id} (%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
                 val starts = TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent)
