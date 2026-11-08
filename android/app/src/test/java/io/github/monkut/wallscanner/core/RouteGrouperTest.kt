@@ -1,6 +1,7 @@
 package io.github.monkut.wallscanner.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /** Hold colours (hue, saturation, value) taken from the noborock captures of 2026-10-23 and 2026-10-29. */
@@ -60,12 +61,12 @@ class RouteGrouperTest {
 
 /** The pale-route and start-anchor rules (#27), with colours from noborock 1F, 2026-11-05. */
 class RouteGrouperPaleTest {
-    private fun hold(id: Int, hue: Float, sat: Float, value: Float, u: Float = id * 0.1f, v: Float = 0f): Hold {
+    private fun hold(id: Int, hue: Float, sat: Float, value: Float, u: Float = id * 0.1f, v: Float = 0f, width: Float = 0.1f, tall: Float = 0.1f): Hold {
         fun channel(n: Int): Int {
             val k = (n + hue / 60f) % 6f
             return Math.round(255f * (value - value * sat * maxOf(0f, minOf(k, 4f - k, 1f))))
         }
-        return Hold(id, 0f, 0f, 0f, u, v, 0.1f, 0.1f, 0.03f, channel(5), channel(3), channel(1), 100)
+        return Hold(id, 0f, 0f, 0f, u, v, width, tall, 0.03f, channel(5), channel(3), channel(1), 100)
     }
 
     private fun routeOf(routes: List<Route>, id: Int): String = routes.firstOrNull { id in it.holdIds }?.name ?: "-"
@@ -82,8 +83,9 @@ class RouteGrouperPaleTest {
         val cyan = listOf(hold(30, 184f, 0.64f, 0.54f), hold(31, 187f, 0.61f, 0.64f)).map { hold(it.id + 70, it.hue, it.sat, it.value) }
         val routes = RouteGrouper.group(purples + greys + cyan)
         val purple = routes.first { it.name == "Purple" }
-        // Under the chroma floor: #31 #42 #55; #61 at 283° splits off by the hue-span rule. The rest is the route.
-        assertEquals(listOf(5, 14, 24, 29, 43, 45, 56, 59), purple.holdIds.sorted())
+        // Nine pass the chroma floor and form the route; #31 #42 #55 (under it) and #61 (283°, past the hue span) join it
+        // as its dusty stragglers, as the climber labelled them (2026-11-08).
+        assertEquals(purples.map { it.id }.sorted(), purple.holdIds.sorted())
         for (g in greys) assertEquals("Gray", routeOf(routes, g.id))
         assertEquals("Cyan", routeOf(routes, 100))
     }
@@ -128,5 +130,45 @@ class RouteGrouperPaleTest {
         assertEquals("Gray", routeOf(routes, 5)) // above the start hold
         start.role = HoldRole.ANY
         assertEquals("-", routeOf(RouteGrouper.group(listOf(start, red, footBelow)), 3))
+    }
+
+    @Test
+    fun downClimbHoldsAreGreyHandSizedJugsOnTheUpperWall() {
+        // The climber's rules on the Nov 5 scans (#27): a 3.54 m wall whose extent starts at v = -1.61
+        val jugs = listOf(hold(71, 209f, 0.16f, 0.52f, v = 1.5f), hold(72, 202f, 0.15f, 0.51f, v = 1.6f))
+        val atTheMat = hold(1, 38f, 0.05f, 0.60f, v = -1.54f) // the lower third of the wall has no down-climb holds
+        val start = hold(38, 240f, 0.05f, 0.55f, v = 0.5f).also { it.role = HoldRole.START } // a start hold is never one
+        val bar = hold(47, 218f, 0.17f, 0.26f, v = 0.35f, width = 0.70f, tall = 0.61f) // a long bar, dark: black
+        val chip = hold(69, 210f, 0.16f, 0.43f, v = 1.36f, width = 0.12f, tall = 0.07f) // a chip, darkish: black
+        val dark = hold(54, 220f, 0.08f, 0.30f, v = 0.54f) // jug-sized but dark grey-blue: black
+        val cyan = listOf(hold(101, 184f, 0.64f, 0.54f), hold(102, 187f, 0.61f, 0.64f))
+        val routes = RouteGrouper.group(jugs + listOf(atTheMat, start, bar, chip, dark) + cyan, wallHeight = 3.54f, wallBottom = -1.61f)
+        assertEquals(listOf(71, 72), routes.first { it.kind == RouteKind.DOWN_CLIMB }.holdIds.sorted())
+        for (id in listOf(47, 69, 54)) assertEquals("#$id", "Black", routeOf(routes, id))
+        for (id in listOf(1, 38)) assertNotEquals("#$id", RouteGrouper.DOWN_CLIMB_NAME, routeOf(routes, id))
+        // Without the wall's bottom edge the position rule is skipped; the others still hold
+        val noBottom = RouteGrouper.group(jugs + listOf(atTheMat, bar) + cyan, wallHeight = 3.54f)
+        assertEquals(listOf(1, 71, 72), noBottom.first { it.kind == RouteKind.DOWN_CLIMB }.holdIds.sorted())
+        // The group is a bucket, not a problem: a lone jug (the Main wall's #42) is still reported
+        val lone = RouteGrouper.group(listOf(jugs[0], bar) + cyan, wallHeight = 3.71f, wallBottom = -1.86f)
+        assertEquals(listOf(71), lone.first { it.kind == RouteKind.DOWN_CLIMB }.holdIds)
+    }
+
+    @Test
+    fun aPaleRouteTakesItsDustyNeighbours() {
+        // 1F: the dusty purple route (242–260°, 0.25) and the darker or wider-hued purples the climber put with it
+        val purples = (1..8).map { hold(it, 242f + it * 2f, 0.25f, 0.42f) }
+        val stragglers = listOf(hold(31, 261f, 0.22f, 0.30f), hold(42, 267f, 0.13f, 0.33f), hold(55, 261f, 0.23f, 0.34f), hold(61, 282f, 0.28f, 0.47f), hold(66, 278f, 0.28f, 0.42f))
+        val greys = listOf(hold(71, 209f, 0.16f, 0.52f), hold(72, 202f, 0.15f, 0.51f))
+        val cyan = listOf(hold(101, 184f, 0.64f, 0.54f), hold(102, 187f, 0.61f, 0.64f))
+        val routes = RouteGrouper.group(purples + stragglers + greys + cyan, wallHeight = 3.54f)
+        for (s in stragglers) assertEquals("#${s.id}", "Purple", routeOf(routes, s.id))
+        assertEquals(RouteGrouper.DOWN_CLIMB_NAME, routeOf(routes, 71))
+        // Beside a SATURATED purple route the same dusty hold is a grey hold whose hue is noise (Oct 23 references)
+        val saturated = (1..5).map { hold(it, 250f + it * 2f, 0.45f, 0.5f) }
+        assertNotEquals("Purple", routeOf(RouteGrouper.group(saturated + listOf(hold(20, 267f, 0.13f, 0.33f)) + greys + cyan), 20))
+        // A straggler nearer a saturated blue cluster than the pale purple route is not taken by the route
+        val blues = listOf(hold(201, 212f, 0.6f, 0.5f), hold(202, 222f, 0.6f, 0.5f))
+        assertNotEquals("Purple", routeOf(RouteGrouper.group(purples + blues + listOf(hold(99, 228f, 0.15f, 0.4f)) + greys + cyan), 99))
     }
 }
