@@ -19,7 +19,10 @@ class RouteHarness {
             val scene = JSONObject(File(dir, "scene.json").readText())
             val wall = wallColor(File(dir, "scan.log"))
             val holds = holds(scene)
-            val routes = RouteGrouper.group(holds, wall = wall)
+            // The wall's extent decides whether its grey holds are the down-climb group and where they may stand.
+            val extent = scene.optJSONObject("wall")?.optJSONArray("extent")
+            val wallHeight = extent?.let { (it.getDouble(3) - it.getDouble(1)).toFloat() }; val wallBottom = extent?.let { it.getDouble(1).toFloat() }
+            val routes = RouteGrouper.group(holds, wall = wall, wallHeight = wallHeight, wallBottom = wallBottom)
             println("ROUTES ${dir.name} stored: ${summary(scene)} | new: ${routes.joinToString { "${it.name}(${it.holdIds.size})" }}")
             val storedNames = scene.optJSONArray("routes")?.let { ra -> (0 until ra.length()).map { ra.getJSONObject(it).getString("name") } } ?: emptyList()
             for (r in routes.filter { it.name !in storedNames }) println("ROUTES ${dir.name} new route ${r.name}: holds ${r.holdIds.sorted()}")
@@ -30,7 +33,7 @@ class RouteHarness {
             val refRoute = HashMap<Int, Int>()
             val arr = ref.getJSONArray("holds")
             for (i in 0 until arr.length()) refRoute[arr.getJSONObject(i).getInt("id")] = arr.getJSONObject(i).optInt("routeId", -1)
-            val newRoutes = RouteGrouper.group(refHolds, wall = wall)
+            val newRoutes = RouteGrouper.group(refHolds, wall = wall, wallHeight = wallHeight, wallBottom = wallBottom)
             val newRoute = refHolds.associate { it.id to it.routeId }
             var sameRef = 0; var sameNew = 0; var both = 0
             val ids = refHolds.map { it.id }
