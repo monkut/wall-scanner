@@ -69,7 +69,8 @@ object SceneJson {
         sb.append("},\n")
         result.quality?.let { q ->
             sb.append("  \"quality\": {\"planeShare\": ").append(num(q.planeShare)).append(", \"holdDensity\": ").append(num(q.holdDensity))
-                .append(", \"drifted\": ").append(q.drifted).append("},\n")
+            if (!q.ghostShare.isNaN()) sb.append(", \"ghostShare\": ").append(num(q.ghostShare)).append(", \"ghostCells\": [").append(q.ghostCells.joinToString { "[${it.row}, ${it.col}]" }).append("]")
+            sb.append(", \"drifted\": ").append(q.drifted).append("},\n")
         }
         if (result.steps.isNotEmpty()) sb.append("  \"steps\": [").append(result.steps.joinToString(", ") { outline(it) }).append("],\n")
         sb.append("  \"holds\": [\n")

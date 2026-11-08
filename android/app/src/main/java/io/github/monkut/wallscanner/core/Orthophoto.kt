@@ -12,7 +12,15 @@ class Keyframe(val file: String, val worldFromCamera: Rigid, val fx: Float, val 
  * Front view of the wall assembled from keyframes: [px] metres per pixel, top row at [maxV]. [relief] is the
  * depth-measured height above the plane at each pixel (0 where the scan has no points), one float per pixel.
  */
-class Orthophoto(val image: Image, val minU: Float, val minV: Float, val maxU: Float, val maxV: Float, val px: Float, val relief: FloatArray, val source: IntArray? = null) {
+class Orthophoto(
+    val image: Image, val minU: Float, val minV: Float, val maxU: Float, val maxV: Float, val px: Float, val relief: FloatArray, val source: IntArray? = null,
+    /**
+     * Per pixel, how far the second-best view's colour is from the best's (CIE ΔE), or NaN where no second
+     * keyframe saw the pixel comparably well. Two good views of a wall agree; a scan whose tracking drifted
+     * lays the wall down twice, offset, and its views disagree over whole regions (#35).
+     */
+    val ghost: FloatArray? = null,
+) {
     fun x(u: Float): Float = (u - minU) / px
     fun y(v: Float): Float = (maxV - v) / px
     fun u(x: Float): Float = minU + x * px
@@ -31,6 +39,7 @@ object OrthophotoBuilder {
     private const val MIN_DEPTH = 0.3f
     private const val RELIEF_CELL = 0.02f
     private const val MAX_RELIEF = 0.8f // volumes included, as for hold detection
+    private const val SECOND_VIEW_MIN = 0.5f // a second keyframe scoring this much of the best is a comparable view of the pixel
 
     /**
      * [extent] is the scanned wall area [minU, minV, maxU, maxV]; [decode] returns a keyframe's pixels (ARGB,
@@ -70,6 +79,8 @@ object OrthophotoBuilder {
         val best = FloatArray(n)
         val out = IntArray(n)
         val source = IntArray(n) { -1 }
+        val second = FloatArray(n)
+        val other = IntArray(n)
         var used = 0
         for ((ki, k) in keyframes.withIndex()) {
             val img = decode(k) ?: continue
@@ -93,7 +104,12 @@ object OrthophotoBuilder {
                 val p = faces[faceOf[i].toInt()].plane
                 val cos = abs((dx * p.nx + dy * p.ny + dz * p.nz) / dist)
                 val score = (cos * cos / max(dist, 0.5)).toFloat()
-                if (score <= best[i]) continue
+                if (score <= best[i]) {
+                    // Only a comparable view can become the second; best only grows, so a lesser one never will.
+                    if (score > second[i] && score >= SECOND_VIEW_MIN * best[i]) { second[i] = score; other[i] = bilinear(img, ix, iy) }
+                    continue
+                }
+                second[i] = best[i]; other[i] = out[i]
                 best[i] = score
                 out[i] = bilinear(img, ix, iy)
                 source[i] = ki
@@ -102,7 +118,12 @@ object OrthophotoBuilder {
             if (hits > 0) used++
         }
         if (used == 0) return null
-        return Orthophoto(Image(w, h, out), minU, minV, maxU, maxV, px, reliefPx, source)
+        val ghost = FloatArray(n) { i ->
+            if (best[i] <= 0f || second[i] < SECOND_VIEW_MIN * best[i]) Float.NaN
+            else if (out[i] == other[i]) 0f
+            else ColorUtil.deltaE(ColorUtil.rgbToLab(out[i] shr 16 and 0xff, out[i] shr 8 and 0xff, out[i] and 0xff), ColorUtil.rgbToLab(other[i] shr 16 and 0xff, other[i] shr 8 and 0xff, other[i] and 0xff))
+        }
+        return Orthophoto(Image(w, h, out), minU, minV, maxU, maxV, px, reliefPx, source, ghost)
     }
 
     private fun bilinear(img: Image, x: Float, y: Float): Int {

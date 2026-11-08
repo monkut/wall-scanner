@@ -48,4 +48,8 @@ object ColorUtil {
         hue < 300f -> "Purple"
         else -> "Pink"
     }
+
+    /** CIE76 ΔE between two Lab colours. */
+    fun deltaE(a: FloatArray, b: FloatArray): Float =
+        kotlin.math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2]))
 }

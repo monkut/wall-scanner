@@ -74,6 +74,10 @@ class RealCaptureHarness {
                         "starts=${result.holds.filter { it.role == HoldRole.START }.map { it.id }} routes=${result.routes.joinToString { "${it.name}(${it.holdIds.size})" }}"
                 )
                 writePpm(File(dir, "wall-new.ppm"), photo.image)
+                photo.ghost?.let { g ->
+                    println("HARNESS ${dir.name} quality: ${ScanQuality.of(cloud, result.surface, result.holds.size, result.extent, photo)}")
+                    writePpm(File(dir, "ghost-new.ppm"), Image(photo.image.width, photo.image.height, IntArray(g.size) { val d = g[it]; if (d.isNaN()) 0xff202020.toInt() else { val c = (d * 4).toInt().coerceIn(0, 255); (0xff shl 24) or (c shl 16) or ((255 - c) shl 8) } }))
+                }
                 // Which keyframe each pixel came from, one colour per keyframe: the seams of the stitching.
                 photo.source?.let { src -> writePpm(File(dir, "wall-source.ppm"), Image(photo.image.width, photo.image.height, IntArray(src.size) { if (src[it] < 0) 0 else (src[it] * 2654435761L).toInt() or 0x404040 })) }
             } else {

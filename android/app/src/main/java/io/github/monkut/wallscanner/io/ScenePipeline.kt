@@ -47,7 +47,7 @@ object ScenePipeline {
             else -> null
         }
         if (why != null) { log("QUALITY not judged: $why"); return }
-        result.quality = ScanQuality.of(cloud, result.surface, result.holds.size, result.extent)
+        result.quality = ScanQuality.of(cloud, result.surface, result.holds.size, result.extent, result.photo)
         log("QUALITY ${result.quality}")
     }
 

@@ -104,6 +104,11 @@ object Tuning {
     const val DRIFT_MIN_HOLD_DENSITY = 10f // … over this many holds per m² of wall was smeared by tracking drift (#35): the 11 good
     // noborock scans of Oct 23 – Nov 6 score 15.7–37.5% (every face counted; 12:21's three faces: 35.6%) and 3.6–7.6/m², the drifted
     // Main wall scan of 2026-11-06 12:25 8.8% and 14.6/m²
+    const val GHOST_DE = 25f // two comparable keyframe views of a wall pixel that differ by this much CIE ΔE disagree (Orthophoto.ghost) …
+    const val GHOST_MIN_SHARE = 0.12f // … over this share of the wall's compared pixels AND …
+    const val GHOST_CELL_SHARE = 0.3f // … over this share of some cell of the 3 × 3 grid is a ghosted scan (#35): the six good noborock scans
+    // of Nov 5–6 disagree on 3.6–9.3% overall with their worst cell at 9–23%; the drifted 12:25 scan on 16.1%, with 31–53% in the three
+    // cells where its orthophoto repeats itself
     const val MIN_ROUTE_HOLDS = 2
     const val MAX_ROUTE_HOLD_GAP = 1.4f // circuit walls: holds of one colour further apart than this are different problems
 }

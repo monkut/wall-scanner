@@ -472,7 +472,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             val quality = result.quality
             runOnUiThread {
                 if (thin.isNotEmpty()) toast(getString(R.string.coverage_thin, thin.joinToString { Labels.coverageCell(this, it) }))
-                if (quality != null && quality.drifted) toast(getString(R.string.scan_drifted, Math.round(quality.planeShare * 100)))
+                if (quality != null && quality.ghosted) toast(getString(R.string.scan_ghosted, quality.ghostCells.joinToString { Labels.coverageCell(this, it) }, Math.round(quality.ghostShare * 100)))
+                else if (quality != null && quality.smeared) toast(getString(R.string.scan_drifted, Math.round(quality.planeShare * 100)))
                 startActivity(ViewerActivity.intent(this, captureDir.name))
                 finish()
             }
