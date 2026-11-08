@@ -138,12 +138,21 @@ object TapeMarks {
     private const val EDGE_MARGIN = 0.05f
     private const val PLACARD_SAT = 0.15f // a white card: unsaturated and bright
     private const val PLACARD_VAL = 0.7f
+    // Second look, on a wall whose starts hang from placards: under a warm wall the camera's white balance tints some
+    // cards cool (noborock 1F "20", 2026-11-05: hue 218°, saturation 0.18, 37% strict white). A pixel this tinted counts
+    // as card when it is bright and its hue is far from the wall's: the bright floor keeps silver tape out (median 0.70),
+    // the hue gap keeps cream wall paint out (near the wall's hue). Only on a coloured wall: a grey wall's hue is noise.
+    private const val PLACARD_TINT_SAT = 0.25f
+    private const val PLACARD_TINT_VAL = 0.78f
+    private const val PLACARD_TINT_HUE = 90f
     private const val PLACARD_MIN_W = 0.05f
     private const val PLACARD_MAX_W = 0.25f
     private const val PLACARD_MIN_H = 0.025f
     private const val PLACARD_MAX_H = 0.1f
     private const val PLACARD_FILL = 0.5f // of the card's box, its enclosed holes (grade text, a coloured header) counted as card
-    private const val PLACARD_GAP = 0.015f // tape is traced from this far above the card, clear of its blurred edge
+    private const val PLACARD_GAP = 0.015f // tape is traced from this far above the card, clear of its blurred edge …
+    private const val PLACARD_BAND = 0.01f // … and, in the second look, from the rows up to this much higher: where silver tape has dark edges
+    // its tip at the gap row is edge alone (1F "20": 3 dark pixels), and a growth started from an edge colour stops there
     private const val MIN_TAPE = 0.02f
     private const val TAPE_COLOR_TOL = 48f // RGB distance from the tape's colour where it leaves the card
 
@@ -173,6 +182,7 @@ object TapeMarks {
         val tinted = BooleanArray(n)
         val eligible = BooleanArray(n)
         val white = BooleanArray(n)
+        val cool = BooleanArray(n) // card pixels only under the second look's tint test
         val offWall = BooleanArray(n)
         for (i in 0 until n) {
             val p = pixels[i]
@@ -180,12 +190,17 @@ object TapeMarks {
             if (wall != null && wall.matches(c)) continue
             offWall[i] = true
             white[i] = c[1] <= PLACARD_SAT && c[2] >= PLACARD_VAL
+            cool[i] = !white[i] && wall != null && wall.sat >= Tuning.WALL_GREY_SAT && c[1] <= PLACARD_TINT_SAT && c[2] >= PLACARD_TINT_VAL && ColorUtil.hueDistance(c[0], wall.hue) >= PLACARD_TINT_HUE
             val offHue = wall != null && wall.sat >= Tuning.WALL_GREY_SAT && c[1] >= TINT_SAT && ColorUtil.hueDistance(c[0], wall.hue) > TINT_HUE
             tinted[i] = c[2] >= MIN_VAL && (offHue || c[1] >= MIN_SAT) // near-black shadows carry noise hues
             eligible[i] = tinted[i] && !inHold[i]
         }
         // Without a wall colour every pixel is off the wall, and tape cannot be told apart from it.
         var marked = if (wall != null) markFromPlacards(holds, photo, holdAt, inHold, white, offWall) else 0
+        // A wall that marks starts with placards gets a second look at the cards the strict test missed (tinted cool by
+        // the light), with tape traced from a band of rows. Only there: on a wall without placard starts a pale patch
+        // taken for a card would switch off the strip search below (the Oct 23 2:00 PM wall).
+        if (marked > 0) marked += markFromPlacards(holds, photo, holdAt, inHold, BooleanArray(n) { white[it] || cool[it] }, offWall, strict = white)
         // A wall with placards marks every start that way; the strip search below is for walls without them,
         // and on a busy wall it mistakes a hold's shaded edge for tape.
         if (marked > 0) return marked
@@ -260,7 +275,7 @@ object TapeMarks {
      * tape joins the card's coloured header into a hold-sized patch (Oct 29 5:24 PM: 35 × 13 cm). The tape's
      * colour, width and [MAX_LONG] bound the growth instead.
      */
-    private fun markFromPlacards(holds: List<Hold>, photo: Orthophoto, holdAt: IntArray, stop: BooleanArray, white: BooleanArray, offWall: BooleanArray): Int {
+    private fun markFromPlacards(holds: List<Hold>, photo: Orthophoto, holdAt: IntArray, stop: BooleanArray, white: BooleanArray, offWall: BooleanArray, strict: BooleanArray? = null): Int {
         val w = photo.image.width; val h = photo.image.height
         val n = w * h
         val pixels = photo.image.pixels
@@ -269,6 +284,7 @@ object TapeMarks {
         val tapeSeen = BooleanArray(n)
         val tape = IntArray(n)
         val gapPx = max(1, (PLACARD_GAP / photo.px + 0.5f).toInt())
+        val bandPx = if (strict == null) 0 else (PLACARD_BAND / photo.px + 0.5f).toInt()
         val longPx = (MAX_LONG / photo.px).toInt()
         val maxTapePx = (2 * MAX_LONG * MAX_SHORT / (photo.px * photo.px)).toInt() // larger growths leaked into something that is not tape
         var marked = 0
@@ -291,18 +307,21 @@ object TapeMarks {
             }
             val cardW = (x1 - x0 + 1) * photo.px; val cardH = (y1 - y0 + 1) * photo.px
             if (cardW !in PLACARD_MIN_W..PLACARD_MAX_W || cardH !in PLACARD_MIN_H..PLACARD_MAX_H || cardW < cardH) continue
-            if (tail + enclosed(queue, tail, x0, y0, x1, y1, w) < PLACARD_FILL * (x1 - x0 + 1) * (y1 - y0 + 1)) continue
+            val enc = enclosed(queue, tail, x0, y0, x1, y1, w); val box = (x1 - x0 + 1) * (y1 - y0 + 1)
+            if (tail + enc < PLACARD_FILL * box) continue
+            // The second look is for the cards the first one missed: a card white enough under the strict test had its turn.
+            if (strict != null && (0 until tail).count { strict[queue[it]] } + enc >= PLACARD_FILL * box) continue
             val top = y0 - gapPx
             if (top < 0) continue
             val minY = max(0, top - longPx)
-            for (sx in x0..x1) {
-                val s = top * w + sx
+            for (row in top downTo max(minY, top - bandPx)) for (sx in x0..x1) {
+                val s = row * w + sx
                 if (tapeSeen[s] || !offWall[s] || white[s] || holdAt[s] >= 0) continue
                 // Tape is one even colour: the run of off-wall pixels where it leaves the card sets it, which keeps
                 // the growth out of the hold's shadow beside it.
                 var th = 0; var tt = 0
                 var ex = sx
-                while (ex <= x1 && offWall[top * w + ex] && !white[top * w + ex] && holdAt[top * w + ex] < 0) { tape[tt++] = top * w + ex; tapeSeen[top * w + ex] = true; ex++ }
+                while (ex <= x1 && !tapeSeen[row * w + ex] && offWall[row * w + ex] && !white[row * w + ex] && holdAt[row * w + ex] < 0) { tape[tt++] = row * w + ex; tapeSeen[row * w + ex] = true; ex++ }
                 val ref = medianColor(pixels, tape, tt)
                 val contacts = HashMap<Int, Int>()
                 while (th < tt && tt < maxTapePx) {
@@ -328,7 +347,8 @@ object TapeMarks {
                     val u = photo.u(sxSum.toFloat() / c + 0.5f); val v = photo.v(ty.toFloat())
                     holds.filter { it.v > v }.minByOrNull { distanceToOutline(it, u, v) }?.takeIf { distanceToOutline(it, u, v) <= REACH }
                 } ?: continue
-                hold.tape = medianColor(pixels, tape, tt)
+                // The second look never repaints a tape found before it (the first pass's, or an earlier growth along the tape's edge).
+                if (strict == null || hold.tape == null) hold.tape = medianColor(pixels, tape, tt)
                 if (hold.role == HoldRole.ANY) { hold.role = HoldRole.START; marked++ }
             }
         }

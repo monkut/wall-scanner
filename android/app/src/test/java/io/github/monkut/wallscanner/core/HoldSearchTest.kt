@@ -136,6 +136,46 @@ class HoldSearchTest {
         assertEquals(purple and 0xffffff, holds[0].tape)
     }
 
+    @Test
+    fun aCoolTintedCardGetsASecondLookOnAWallThatUsesPlacards() {
+        // noborock 1F "20" (2026-11-05): under a warm wall the card reads cool (hue 218°, saturation 0.2), and its silver
+        // tape has dark edges, so where the tape leaves the card its tip is edge alone.
+        val white = 0xffF4F2EE.toInt(); val green = 0xff5D783C.toInt()
+        val coolCard = 0xffB3C3DF.toInt(); val print = 0xff202020.toInt()
+        val silver = 0xff92A1B3.toInt(); val edge = 0xff5A5F69.toInt()
+        val placardStart: (Float, Float) -> Int? = { u, v ->
+            when {
+                hypot(u - 1.0f, v - 1.45f) <= 0.05f -> green                       // hold 1
+                u in 0.99f..1.01f && v in 1.28f..1.40f -> purple                  // its tape
+                u in 0.955f..1.045f && v in 1.19f..1.28f -> white                 // a plain white card
+                else -> null
+            }
+        }
+        val coolStart: (Float, Float) -> Int? = { u, v ->
+            when {
+                hypot(u - 1.5f, v - 1.45f) <= 0.05f -> green                       // hold 2
+                u in 1.485f..1.515f && v >= 1.22f && v <= 1.40f -> silver          // silver tape up to it …
+                u in 1.485f..1.515f && v >= 1.205f && v < 1.22f -> edge            // … whose tip is its dark edge
+                u in 1.48f..1.52f && v in 1.14f..1.18f -> print                    // the grade number
+                u in 1.45f..1.55f && v in 1.12f..1.20f -> coolCard                 // a 10 × 8 cm card tinted cool
+                else -> null
+            }
+        }
+        val tanWall = WallColor(0xC9, 0xB4, 0x96, 36f, 0.25f, 0.1f, 0.6f, 0.95f)
+        fun run(paint: (Float, Float) -> Int?): List<Hold> {
+            val photo = photo(paint)
+            val holds = listOf(seedHold(1, 1.0f, 1.45f, green, 0.1f), seedHold(2, 1.5f, 1.45f, green, 0.1f))
+            TapeMarks.markStarts(holds, photo, tanWall, ColorPatches.forHolds(photo, tanWall), extent)
+            return holds
+        }
+        val both = run { u, v -> placardStart(u, v) ?: coolStart(u, v) }
+        assertEquals(HoldRole.START, both[0].role)
+        assertEquals("the cool card anchors hold 2 once the wall has shown it uses placards", HoldRole.START, both[1].role)
+        assertEquals(silver and 0xffffff, both[1].tape)
+        // On a wall with no placard start the cool card is not taken for one (Oct 23 2:00 PM: pale patches read as cards)
+        assertEquals(null, run(coolStart)[1].tape)
+    }
+
     private fun seedHold(id: Int, u: Float, v: Float, color: Int, size: Float = 0.2f): Hold =
         Hold(id, u, v, 0f, u, v, size, size, 0.05f, color shr 16 and 0xff, color shr 8 and 0xff, color and 0xff, 100, Raster.ellipse(u, v, size, size))
 
