@@ -2,10 +2,12 @@
 # requires-python = ">=3.11"
 # dependencies = ["pillow>=10"]
 # ///
-"""Decodes a capture's keyframe JPEGs to half-size binary PPM files for the JVM test harness.
+"""Decodes a capture's keyframe JPEGs to half-size binary PPM files for the JVM test harnesses, and its
+orthophoto `wall.png` (when pulled) to `wall.ppm`.
 
-Android unit tests compile against android.jar, which has no JPEG decoder (no javax.imageio, no
-BitmapFactory), so `RealCaptureHarness` reads `frames-ppm/frame-NNNN.ppm` instead when present.
+Android unit tests compile against android.jar, which has no JPEG or PNG decoder (no javax.imageio, no
+BitmapFactory), so `RealCaptureHarness` reads `frames-ppm/frame-NNNN.ppm` and `StartHarness` reads
+`wall.ppm` instead when present.
 
     uv run tools/frames_to_ppm.py captures/<id>
 """
@@ -27,3 +29,7 @@ for cap in sys.argv[1:]:
         im.save(dst / (jpg.stem + ".ppm"))
         n += 1
     print(f"{cap}: {n} keyframes -> {dst}")
+    wall = Path(cap) / "wall.png"
+    if wall.is_file():
+        Image.open(wall).convert("RGB").save(Path(cap) / "wall.ppm")
+        print(f"{cap}: wall.png -> wall.ppm")
