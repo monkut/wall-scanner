@@ -182,18 +182,22 @@ object HoldMerge {
      * removes most tape in [prune]; strips it misses reach the final outlines as holds (Main wall 2026-11-10 #27
      * and #75, 1F 2026-11-05 #19). Runs before the start marks, so a tape strip is never a start hold.
      */
-    fun dropTapeShaped(holds: List<Hold>, photo: Orthophoto): List<Hold> = holds.filterNot { isTapeShaped(it, photo) }
+    fun dropTapeShaped(holds: List<Hold>, photo: Orthophoto, extent: FloatArray): List<Hold> = holds.filterNot { isTapeShaped(it, photo, extent) }
 
     /**
      * Whether [hold] is a tape strip: no depth points (tape is flat; the depth is too coarse to say so for small
      * holds, but a hold it did see is no tape), a narrow rectangle (narrow side, length over width, and how much of
      * its smallest enclosing rectangle the outline fills) of one even brightness, where a hold shows its shading.
-     * On the seven labelled scans: all three tape strips, one of 436 holds and a piece of another. Tuned on three strips: the margins
-     * are thin (shading 0.17 against 0.18, fill 0.78 against 0.75), so a small one-colour hold the depth missed
-     * can go with them; the drop is logged (`hold tape:`).
+     * A hold whose outline reaches within [EDGE_M] of the [extent]'s edge stays: the scan cut it, and the cut is
+     * its straight side (Main wall 2026-11-10 blue #100 at the top edge, blue #49 at the left).
+     * On the seven labelled scans: all three tape strips and no hold. Tuned on three strips: the margins are thin
+     * (shading 0.17 against 0.18, fill 0.78 against 0.75), so a small one-colour hold the depth missed can go with
+     * them; the drop is logged (`hold tape:`).
      */
-    fun isTapeShaped(hold: Hold, photo: Orthophoto): Boolean {
+    fun isTapeShaped(hold: Hold, photo: Orthophoto, extent: FloatArray): Boolean {
         if (hold.voxels > 0 || hold.outline.size < 6) return false
+        val o = hold.outline
+        if ((0 until o.size / 2).any { minOf(o[2 * it] - extent[0], extent[2] - o[2 * it], o[2 * it + 1] - extent[1], extent[3] - o[2 * it + 1]) < EDGE_M }) return false
         val (short, long, rectArea) = smallestRectangle(hold.outline) ?: return false
         if (short > TAPE_MAX_SHORT || long < TAPE_MIN_ASPECT * short || polygonArea(hold.outline) < TAPE_MIN_FILL * rectArea) return false
         val source = photo.source

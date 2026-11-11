@@ -20,7 +20,9 @@ class TapeHarness {
         for (dir in root.listFiles { f -> File(f, "scene.json").isFile && File(f, "wall.ppm").isFile }!!.sortedBy { it.name }) {
             val scene = JSONObject(File(dir, "scene.json").readText())
             val photo = StartHarness.photoOf(dir, scene, "TAPE") ?: continue
-            val tape = StartHarness.holds(scene).filter { HoldMerge.isTapeShaped(it, photo) }
+            val e = scene.getJSONObject("wall").getJSONArray("extent")
+            val extent = FloatArray(4) { e.getDouble(it).toFloat() }
+            val tape = StartHarness.holds(scene).filter { HoldMerge.isTapeShaped(it, photo, extent) }
             val ref = File(dir, "reference.json").takeIf { it.isFile }?.let { StartHarness.holds(JSONObject(it.readText())) }
             fun inRef(h: Hold) = ref?.any { inside(h.u, h.v, it.outline) || inside(it.u, it.v, h.outline) }
             val line = tape.joinToString { "#${it.id} (%.2f, %.2f) %.2f×%.2f%s".format(it.u, it.v, it.width, it.tall, when (inRef(it)) { true -> " REFERENCE HOLD"; false -> " not a reference hold"; null -> "" }) }

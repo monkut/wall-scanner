@@ -132,7 +132,7 @@ object ScenePipeline {
         if (unstripped.size != unnested.size) log("hold strips: ${unnested.size - unstripped.size} dropped (under 3 cm across, 6× as long: a column or panel edge)")
         val unstepped = HoldMerge.dropOnSteps(unstripped, result.steps, photo)
         if (unstepped.size != unstripped.size) log("hold steps: ${unstripped.size - unstepped.size} image-only holds on a step of the wall dropped (its paint or wood): ${(unstripped - unstepped.toSet()).joinToString { "(%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
-        val holds = runCatching { HoldMerge.dropTapeShaped(unstepped, photo) }
+        val holds = runCatching { HoldMerge.dropTapeShaped(unstepped, photo, result.extent) }
             .onFailure { log("hold tape failed: $it") }
             .getOrDefault(unstepped)
         if (holds.size != unstepped.size) log("hold tape: ${unstepped.size - holds.size} image-only holds shaped like tape dropped (flat, narrow, rectangular, evenly lit): ${(unstepped - holds.toSet()).joinToString { "(%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
