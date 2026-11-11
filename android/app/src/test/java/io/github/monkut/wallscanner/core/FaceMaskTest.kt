@@ -82,31 +82,6 @@ class FaceMaskTest {
     }
 
     @Test
-    fun uprightRotationFollowsWhereTheWorldsUpPointsInTheImage() {
-        // Row-major world-from-camera rotations; world up in camera coordinates is the second row.
-        val landscapeUpright = doubleArrayOf(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
-        assertEquals(0, FaceMask.uprightRotation(landscapeUpright))
-        val upAtImageRight = doubleArrayOf(0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0) // camera x points up in the world
-        assertEquals(270, FaceMask.uprightRotation(upAtImageRight))
-        val upAtImageLeft = doubleArrayOf(0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
-        assertEquals(90, FaceMask.uprightRotation(upAtImageLeft))
-        val upsideDown = doubleArrayOf(-1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0)
-        assertEquals(180, FaceMask.uprightRotation(upsideDown))
-    }
-
-    @Test
-    fun rotatedBoxesComeBackWhereTheyStarted() {
-        val b = Box(0.1f, 0.2f, 0.3f, 0.1f)
-        val cw = FaceMask.rotate(b, 90) // the left edge (x = 0.1) ends up near the top
-        assertEquals(0.1f, cw.y, 1e-6f)
-        assertEquals(1f - 0.3f, cw.x, 1e-6f) // y 0.2..0.3 → x 0.7..0.8
-        for (d in listOf(90, 180, 270)) {
-            val back = FaceMask.rotate(FaceMask.rotate(b, d), -d)
-            assertEquals(b.x, back.x, 1e-6f); assertEquals(b.y, back.y, 1e-6f); assertEquals(b.w, back.w, 1e-6f); assertEquals(b.h, back.h, 1e-6f)
-        }
-    }
-
-    @Test
     fun expandAndClampStayInsideTheFrame() {
         val b = Box(0.95f, 0.0f, 0.1f, 0.1f).expand(0.5f).clamp()
         assertEquals(1f, b.right, 1e-6f)

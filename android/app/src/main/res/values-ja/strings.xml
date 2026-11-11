@@ -169,7 +169,6 @@
     <string name="processing">スキャンを処理中…</string>
     <string name="processing_stage">%1$s · %2$d%%</string>
     <string name="stage_merge">セグメントを結合中</string>
-    <string name="stage_faces">キーフレームの顔を隠しています</string>
     <string name="stage_cloud">壁面とホールドを検出中</string>
     <string name="stage_orthophoto">壁の写真を作成中</string>
     <string name="stage_shapes">ホールドの形を整えています</string>
@@ -295,7 +294,7 @@
     <string name="face_mask_climber">自分の顔</string>
     <string name="face_mask_bystanders">周囲の人の顔</string>
     <string name="setting_off">オフ</string>
-    <string name="face_masks_hint">再生時と共有時にマスクを表示します。録画そのものは撮影したまま、この端末にだけ残ります。スキャンの写真でも周囲の人の顔を隠します。</string>
+    <string name="face_masks_hint">再生時と共有時にマスクを表示します。録画そのものは撮影したまま、この端末にだけ残ります。</string>
     <string name="rendering_clip">クリップを準備中… %1$d%%</string>
     <string name="rendering_clip_wait">クリップを準備中…</string>
     <string name="caption">キャプション</string>

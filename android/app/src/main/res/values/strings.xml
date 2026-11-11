@@ -172,7 +172,6 @@
     <string name="processing">Processing scan…</string>
     <string name="processing_stage">%1$s · %2$d%%</string>
     <string name="stage_merge">Merging segments</string>
-    <string name="stage_faces">Hiding faces in keyframes</string>
     <string name="stage_cloud">Finding the wall and holds</string>
     <string name="stage_orthophoto">Building the wall photo</string>
     <string name="stage_shapes">Refining hold shapes</string>
@@ -307,7 +306,7 @@
     <string name="face_mask_climber">My face</string>
     <string name="face_mask_bystanders">Bystanders\' faces</string>
     <string name="setting_off">Off</string>
-    <string name="face_masks_hint">Masks are drawn when a climb is played or shared; the recording stays as filmed, on this phone only. Scans mask bystanders\' faces too.</string>
+    <string name="face_masks_hint">Masks are drawn when a climb is played or shared; the recording stays as filmed, on this phone only.</string>
     <string name="rendering_clip">Preparing the clip… %1$d%%</string>
     <string name="rendering_clip_wait">Preparing the clip…</string>
     <!-- Caption (Settings): gym, set and route written in a corner of climb videos -->

@@ -25,7 +25,6 @@ class ProcessingPanel(private val root: View, stages: List<ProcessingStage>) {
 
     private fun label(stage: ProcessingStage) = when (stage) {
         ProcessingStage.MERGE -> R.string.stage_merge
-        ProcessingStage.FACES -> R.string.stage_faces
         ProcessingStage.CLOUD -> R.string.stage_cloud
         ProcessingStage.ORTHOPHOTO -> R.string.stage_orthophoto
         ProcessingStage.SHAPES -> R.string.stage_shapes

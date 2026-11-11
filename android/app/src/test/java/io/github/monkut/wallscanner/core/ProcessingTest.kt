@@ -17,9 +17,8 @@ class ProcessingTest {
 
     @Test
     fun aStageThatDoesNotRunAddsNothing() {
-        val p = Processing(Processing.atFinish(maskFaces = false))
-        assertEquals(p.fraction(ProcessingStage.CLOUD, 0f), p.fraction(ProcessingStage.FACES, 1f), 1e-6f)
-        assertTrue(Processing.atFinish(maskFaces = true).contains(ProcessingStage.FACES))
+        val p = Processing(listOf(ProcessingStage.MERGE, ProcessingStage.CLOUD, ProcessingStage.WRITE))
+        assertEquals(p.fraction(ProcessingStage.WRITE, 0f), p.fraction(ProcessingStage.ORTHOPHOTO, 1f), 1e-6f)
         assertTrue(ProcessingStage.MERGE !in Processing.REPROCESS)
     }
 

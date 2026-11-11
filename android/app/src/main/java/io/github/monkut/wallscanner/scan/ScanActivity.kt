@@ -28,9 +28,6 @@ import com.google.ar.core.exceptions.UnsupportedConfigurationException
 import io.github.monkut.wallscanner.Labels
 import io.github.monkut.wallscanner.ProcessingPanel
 import io.github.monkut.wallscanner.R
-import io.github.monkut.wallscanner.Settings
-import io.github.monkut.wallscanner.io.FaceFinder
-import io.github.monkut.wallscanner.io.KeyframeFaces
 import io.github.monkut.wallscanner.core.Definition
 import io.github.monkut.wallscanner.core.Processing
 import io.github.monkut.wallscanner.core.ProcessingStage
@@ -395,8 +392,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         processing = true
         renderer.recording = false
         processingOverlay.visibility = View.VISIBLE
-        val maskFaces = Settings.maskBystanders(this)
-        val panel = ProcessingPanel(processingOverlay, Processing.atFinish(maskFaces))
+        val panel = ProcessingPanel(processingOverlay, Processing.FINISH)
         panel.update(ProcessingStage.MERGE, 0f)
         thread(name = "scene-builder") {
             val t0 = System.currentTimeMillis()
@@ -437,9 +433,6 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             processor.awaitKeyframes()
             val keyframes = processor.keyframes?.resolve(segmentTransforms) ?: 0
             log.log("keyframes: $keyframes resolved to world poses (${CaptureStore.FRAMES_RESOLVED})")
-            if (maskFaces) runCatching { FaceFinder(this).use { KeyframeFaces.mask(captureDir, it) { done -> panel.update(ProcessingStage.FACES, done) } } }
-                .onSuccess { log.log("keyframe faces: ${it.faces} hidden in ${it.withFaces} of ${it.frames} keyframes (${it.ms} ms)") }
-                .onFailure { log.log("keyframe faces failed: $it") }
             val cloud = reference
             log.log("merged: voxels=${cloud.count} cameraPositions=${cameras.size} (${System.currentTimeMillis() - t0} ms)")
             CaptureStore.writePly(captureDir, cloud)

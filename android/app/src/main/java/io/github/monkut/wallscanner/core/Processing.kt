@@ -7,8 +7,6 @@ package io.github.monkut.wallscanner.core
 enum class ProcessingStage(val weight: Int) {
     /** Segments merged, keyframes resolved to world poses (Finish only). */
     MERGE(1),
-    /** Bystanders' faces hidden in the keyframes (Finish only, when the setting is on). */
-    FACES(9),
     /** Plane fit, wall faces, depth holds and routes (SceneBuilder). */
     CLOUD(11),
     ORTHOPHOTO(3),
@@ -37,11 +35,10 @@ class Processing(private val stages: List<ProcessingStage>) {
     }
 
     companion object {
-        /** The stages Finish runs: all of them, [ProcessingStage.FACES] only when faces are masked. */
-        fun atFinish(maskFaces: Boolean): List<ProcessingStage> =
-            ProcessingStage.entries.filter { it != ProcessingStage.FACES || maskFaces }
+        /** The stages Finish runs: all of them. */
+        val FINISH: List<ProcessingStage> = ProcessingStage.entries
 
-        /** The stages Reprocess runs: the pipeline on the saved cloud and keyframes, no merge or face masking. */
-        val REPROCESS: List<ProcessingStage> = ProcessingStage.entries.filter { it != ProcessingStage.MERGE && it != ProcessingStage.FACES }
+        /** The stages Reprocess runs: the pipeline on the saved cloud and keyframes, no merge. */
+        val REPROCESS: List<ProcessingStage> = ProcessingStage.entries.filter { it != ProcessingStage.MERGE }
     }
 }
