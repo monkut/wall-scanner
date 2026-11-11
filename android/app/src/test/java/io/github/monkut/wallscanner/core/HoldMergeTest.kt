@@ -127,6 +127,42 @@ class HoldMergeTest {
         assertEquals(0, kept.size)
     }
 
+    @Test
+    fun aFlatEvenlyLitNarrowRectangleIsTapeAndAShadedOrDepthSeenOneIsNot() {
+        val extent = floatArrayOf(0f, 0f, 1f, 1f)
+        fun rect(id: Int, u: Float, v: Float, w: Float, h: Float, voxels: Int = 0) =
+            Hold(id, u, v, 0f, u, v, w, h, 0f, 194, 59, 59, voxels, floatArrayOf(u - w / 2, v - h / 2, u + w / 2, v - h / 2, u + w / 2, v + h / 2, u - w / 2, v + h / 2))
+        // A 5 × 12 cm red strip of one colour, and a 5 × 12 cm red hold lit from above (bright top, shadowed base)
+        val p = photo { u, v ->
+            when {
+                u in 0.275f..0.325f && v in 0.44f..0.56f -> red
+                u in 0.675f..0.725f && v in 0.44f..0.56f -> if (v > 0.5f) 0xffF06060.toInt() else 0xff702020.toInt()
+                else -> null
+            }
+        }
+        val tape = rect(1, 0.3f, 0.5f, 0.05f, 0.12f)
+        assertTrue(HoldMerge.isTapeShaped(tape, p, extent))
+        assertEquals(listOf(2, 3, 4), HoldMerge.dropTapeShaped(listOf(tape, rect(2, 0.3f, 0.5f, 0.05f, 0.12f, voxels = 40), rect(3, 0.7f, 0.5f, 0.05f, 0.12f),
+            rect(4, 0.3f, 0.5f, 0.12f, 0.12f)), p, extent).map { it.id }) // seen by depth; shaded; square
+        // The same strip cut by the scan's top edge (extent top at v 0.54): a hold the scan cut, kept
+        assertTrue(!HoldMerge.isTapeShaped(tape, p, floatArrayOf(0f, 0f, 1f, 0.54f)))
+    }
+
+    @Test
+    fun aSlantedStripIsMeasuredAlongItsOwnAxesAndATriangleIsNoStrip() {
+        val extent = floatArrayOf(0f, 0f, 1f, 1f)
+        // A 5 × 12 cm strip turned 30°: its axis-aligned box is 10 × 13 cm, its own rectangle 5 × 12
+        val c = kotlin.math.cos(Math.toRadians(30.0)).toFloat(); val s = kotlin.math.sin(Math.toRadians(30.0)).toFloat()
+        fun local(u: Float, v: Float) = (u - 0.5f) * c + (v - 0.5f) * s to -(u - 0.5f) * s + (v - 0.5f) * c
+        val p = photo { u, v -> val (a, b) = local(u, v); if (kotlin.math.abs(a) <= 0.025f && kotlin.math.abs(b) <= 0.06f) red else if (u in 0.1f..0.2f && v in 0.1f..0.2f && (u - 0.1f) * 1.5f >= (v - 0.1f) * 0.75f) red else null }
+        val corners = listOf(-0.025f to -0.06f, 0.025f to -0.06f, 0.025f to 0.06f, -0.025f to 0.06f).flatMap { (a, b) -> listOf(0.5f + a * c - b * s, 0.5f + a * s + b * c) }
+        val slanted = Hold(1, 0.5f, 0.5f, 0f, 0.5f, 0.5f, 0.1f, 0.13f, 0f, 194, 59, 59, 0, corners.toFloatArray())
+        assertTrue(HoldMerge.isTapeShaped(slanted, p, extent))
+        // A narrow triangle (6 × 12 cm) fills half its rectangle: no tape
+        val triangle = Hold(2, 0.13f, 0.14f, 0f, 0.13f, 0.14f, 0.06f, 0.12f, 0f, 194, 59, 59, 0, floatArrayOf(0.1f, 0.08f, 0.16f, 0.08f, 0.16f, 0.2f))
+        assertTrue(!HoldMerge.isTapeShaped(triangle, p, extent))
+    }
+
     /** Two touching rectangles, left (u 0.2..0.5) and right (u 0.5..0.8), on a relief of [height] (metres) by u. */
     private fun twoPieces(rightColour: Int, height: (Float) -> Float): Pair<Orthophoto, List<Hold>> {
         val n = (1f / px).toInt()

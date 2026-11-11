@@ -171,6 +171,84 @@ object HoldMerge {
         thin >= STRIP_MAX_WIDTH || maxOf(hold.width, hold.tall) < STRIP_MIN_ASPECT * thin
     }
 
+    // Tape left as a hold: a flat strip, under TAPE_MAX_SHORT across (the climber's labels: 4.5–6.4 cm) …
+    private const val TAPE_MAX_SHORT = 0.07f
+    private const val TAPE_MIN_ASPECT = 1.5f  // … at least this many times as long (1.7–2.4) …
+    private const val TAPE_MIN_FILL = 0.75f   // … filling this much of its smallest enclosing rectangle (0.78–0.86; holds without depth: median 0.74) …
+    private const val TAPE_MAX_SHADE = 0.18f  // … and evenly lit: brightness spread, std over mean (0.08–0.17; holds without depth: median 0.22)
+
+    /**
+     * [holds] without the image-only ones shaped and lit like tape ([isTapeShaped]). The hold model's tape class
+     * removes most tape in [prune]; strips it misses reach the final outlines as holds (Main wall 2026-11-10 #27
+     * and #75, 1F 2026-11-05 #19). Runs before the start marks, so a tape strip is never a start hold.
+     */
+    fun dropTapeShaped(holds: List<Hold>, photo: Orthophoto, extent: FloatArray): List<Hold> = holds.filterNot { isTapeShaped(it, photo, extent) }
+
+    /**
+     * Whether [hold] is a tape strip: no depth points (tape is flat; the depth is too coarse to say so for small
+     * holds, but a hold it did see is no tape), a narrow rectangle (narrow side, length over width, and how much of
+     * its smallest enclosing rectangle the outline fills) of one even brightness, where a hold shows its shading.
+     * A hold whose outline reaches within [EDGE_M] of the [extent]'s edge stays: the scan cut it, and the cut is
+     * its straight side (Main wall 2026-11-10 blue #100 at the top edge, blue #49 at the left).
+     * On the seven labelled scans: all three tape strips and no hold. Tuned on three strips: the margins are thin
+     * (shading 0.17 against 0.18, fill 0.78 against 0.75), so a small one-colour hold the depth missed can go with
+     * them; the drop is logged (`hold tape:`).
+     */
+    fun isTapeShaped(hold: Hold, photo: Orthophoto, extent: FloatArray): Boolean {
+        if (hold.voxels > 0 || hold.outline.size < 6) return false
+        val o = hold.outline
+        if ((0 until o.size / 2).any { minOf(o[2 * it] - extent[0], extent[2] - o[2 * it], o[2 * it + 1] - extent[1], extent[3] - o[2 * it + 1]) < EDGE_M }) return false
+        val (short, long, rectArea) = smallestRectangle(hold.outline) ?: return false
+        if (short > TAPE_MAX_SHORT || long < TAPE_MIN_ASPECT * short || polygonArea(hold.outline) < TAPE_MIN_FILL * rectArea) return false
+        val source = photo.source
+        var n = 0; var sum = 0.0; var sumSq = 0.0
+        for (i in Raster.fillPolygon(hold.outline, photo)) {
+            if (source != null && source[i] < 0) continue // no keyframe saw it: black, not the strip's colour
+            val c = photo.image.pixels[i]
+            val v = maxOf((c shr 16) and 0xff, (c shr 8) and 0xff, c and 0xff) / 255.0
+            n++; sum += v; sumSq += v * v
+        }
+        if (n < 5) return false
+        val mean = sum / n
+        if (mean <= 0.0) return false
+        return kotlin.math.sqrt(maxOf(0.0, sumSq / n - mean * mean)) <= TAPE_MAX_SHADE * mean
+    }
+
+    /** Area of a polygon given as (u, v) pairs. */
+    private fun polygonArea(p: FloatArray): Float {
+        var a = 0f
+        for (i in 0 until p.size / 2) { val j = (i + 1) % (p.size / 2); a += p[2 * i] * p[2 * j + 1] - p[2 * j] * p[2 * i + 1] }
+        return kotlin.math.abs(a) / 2
+    }
+
+    /** The smallest rectangle around a polygon's (u, v) points, as (narrow side, long side, area); one edge lies on the convex hull. */
+    private fun smallestRectangle(p: FloatArray): Triple<Float, Float, Float>? {
+        val pts = (0 until p.size / 2).map { p[2 * it] to p[2 * it + 1] }.distinct().sortedWith(compareBy({ it.first }, { it.second }))
+        if (pts.size < 3) return null
+        fun cross(o: Pair<Float, Float>, a: Pair<Float, Float>, b: Pair<Float, Float>) = (a.first - o.first) * (b.second - o.second) - (a.second - o.second) * (b.first - o.first)
+        val hull = ArrayList<Pair<Float, Float>>()
+        for (pass in 0..1) {
+            val start = hull.size
+            for (q in if (pass == 0) pts else pts.asReversed()) {
+                while (hull.size >= start + 2 && cross(hull[hull.size - 2], hull[hull.size - 1], q) <= 0) hull.removeAt(hull.size - 1)
+                hull.add(q)
+            }
+            hull.removeAt(hull.size - 1)
+        }
+        var best: Triple<Float, Float, Float>? = null
+        for (i in hull.indices) {
+            val a = hull[i]; val b = hull[(i + 1) % hull.size]
+            val len = kotlin.math.hypot(b.first - a.first, b.second - a.second)
+            if (len == 0f) continue
+            val ux = (b.first - a.first) / len; val uy = (b.second - a.second) / len
+            var minA = Float.MAX_VALUE; var maxA = -Float.MAX_VALUE; var minB = Float.MAX_VALUE; var maxB = -Float.MAX_VALUE
+            for ((x, y) in pts) { val s = x * ux + y * uy; val t = -x * uy + y * ux; minA = minOf(minA, s); maxA = maxOf(maxA, s); minB = minOf(minB, t); maxB = maxOf(maxB, t) }
+            val w = maxA - minA; val h = maxB - minB
+            if (best == null || w * h < best.third) best = Triple(minOf(w, h), maxOf(w, h), w * h)
+        }
+        return best
+    }
+
     private const val DEPTH_MAX_DE = 25f      // pieces of one hold are about one colour (CIE ΔE of the medians) …
     private const val DEPTH_MIN_HEIGHT = 0.015f // … both stand off the wall (75th percentile of relief) above the depth noise …
     private const val DEPTH_RIDGE = 0.005f    // … and their shared edge is this much higher than the lower piece: no valley

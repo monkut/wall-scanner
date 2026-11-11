@@ -66,8 +66,11 @@ class RealCaptureHarness {
                 val candidates = pruned + uncovered
                 val unnested = HoldMerge.nested(candidates, photo)
                 if (unnested.size != candidates.size) println("HARNESS ${dir.name} hold nested: ${candidates.size - unnested.size} merged: ${(candidates.map { it.id } - unnested.map { it.id }.toSet()).joinToString { "#$it" }}")
-                val holds = HoldMerge.dropOnSteps(unnested, result.steps, photo)
-                if (holds.size != unnested.size) println("HARNESS ${dir.name} hold steps: ${unnested.size - holds.size} image-only holds on a step dropped: ${(unnested - holds.toSet()).joinToString { "#${it.id} (%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
+                val unstripped = HoldMerge.dropStrips(unnested)
+                val unstepped = HoldMerge.dropOnSteps(unstripped, result.steps, photo)
+                if (unstepped.size != unstripped.size) println("HARNESS ${dir.name} hold steps: ${unstripped.size - unstepped.size} image-only holds on a step dropped: ${(unstripped - unstepped.toSet()).joinToString { "#${it.id} (%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
+                val holds = HoldMerge.dropTapeShaped(unstepped, photo, result.extent)
+                if (holds.size != unstepped.size) println("HARNESS ${dir.name} hold tape: ${unstepped.size - holds.size} dropped: ${(unstepped - holds.toSet()).joinToString { "#${it.id} (%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
                 val starts = TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent)
                 result.photo = photo
                 result = SceneBuilder.withHolds(result, holds, knownHeight)
