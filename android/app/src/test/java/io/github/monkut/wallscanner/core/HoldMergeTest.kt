@@ -163,6 +163,15 @@ class HoldMergeTest {
         assertTrue(!HoldMerge.isTapeShaped(triangle, p, extent))
     }
 
+    @Test
+    fun aHoldTheScansEdgeCutsOffIsDroppedAndOneJustInsideStays() {
+        val p = photo { _, _ -> null } // photo u 0..1, v 0..1
+        val cut = hold(1, 0.96f, 0.5f, 0.08f, 0.1f)    // reaches u 1.0: runs off the photo
+        val inside = hold(2, 0.94f, 0.5f, 0.08f, 0.1f) // ends at u 0.98
+        val bottom = hold(3, 0.5f, 0.03f, 0.1f, 0.06f) // reaches v 0.0
+        assertEquals(listOf(2), HoldMerge.dropCut(listOf(cut, inside, bottom), p).map { it.id })
+    }
+
     /** Two touching rectangles, left (u 0.2..0.5) and right (u 0.5..0.8), on a relief of [height] (metres) by u. */
     private fun twoPieces(rightColour: Int, height: (Float) -> Float): Pair<Orthophoto, List<Hold>> {
         val n = (1f / px).toInt()
