@@ -114,6 +114,34 @@ object CaptureStore {
 
     fun readLocationId(dir: File): String = readPlace(dir).locationId
 
+    /**
+     * The height of [dir]'s wall known from elsewhere: its hand-entered map ([WallStore]) when it has one, else the
+     * tallest other scan of it ([tallestOtherScan]); null when the capture names no wall or neither is known. A scan
+     * that misses the top of a tall wall then still gets the tall wall's down-climb group (#27).
+     */
+    fun knownWallHeight(context: Context, dir: File): Float? {
+        val wallId = readPlace(dir).wallId.ifEmpty { return null }
+        return WallStore.readMap(context, wallId)?.height ?: tallestOtherScan(dir, wallId)
+    }
+
+    /** The tallest wall extent among the other captures of wall [wallId] beside [dir] (same `wall` in capture.json), only judged scans that did not drift; null when there is none. */
+    fun tallestOtherScan(dir: File, wallId: String = readPlace(dir).wallId): Float? {
+        if (wallId.isEmpty()) return null
+        val others = dir.parentFile?.listFiles { f -> f.isDirectory && f != dir && hasScene(f) && readPlace(f).wallId == wallId } ?: return null
+        return others.mapNotNull(::measuredHeight).maxOrNull()
+    }
+
+    /**
+     * The wall height scene.json's extent spans; null for a drifted scan (its ghosts can stretch it), a scene with no
+     * quality verdict (older than #35, or without an orthophoto: unjudged) or an unreadable one.
+     */
+    private fun measuredHeight(dir: File): Float? = runCatching {
+        val scene = JSONObject(readScene(dir))
+        if (scene.optJSONObject("quality")?.optBoolean("drifted", true) != false) return null
+        val e = scene.getJSONObject("wall").getJSONArray("extent")
+        (e.getDouble(3) - e.getDouble(1)).toFloat()
+    }.getOrNull()
+
     /** Re-assigns an existing capture (older ones have no location) without touching the rest of capture.json. */
     fun setLocation(dir: File, locationId: String, setId: String, wallId: String = "") {
         val file = File(dir, META_FILE)
@@ -208,7 +236,7 @@ object CaptureStore {
         try {
             val t0 = System.currentTimeMillis()
             val cloud = ply.inputStream().use { PlyReader.read(it) }
-            val result = ScenePipeline.build(dir, cloud, readCameraPositions(dir), readDefinition(dir), context.assets, { log.log("REPROCESS $it") }, progress)
+            val result = ScenePipeline.build(dir, cloud, readCameraPositions(dir), readDefinition(dir), context.assets, { log.log("REPROCESS $it") }, progress, knownWallHeight(context, dir))
                 ?.let { SceneBuilder.withFirstRouteId(it, nextRouteId(dir)) }
             if (result == null) {
                 log.log("REPROCESS: no wall plane (voxels=${cloud.count})")
