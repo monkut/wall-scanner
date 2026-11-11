@@ -130,8 +130,12 @@ object ScenePipeline {
         if (unnested.size != candidates.size) log("hold nested: ${candidates.size - unnested.size} holds inside another merged into it: ${(candidates.map { it.id } - unnested.map { it.id }.toSet()).joinToString { "#$it" }}")
         val unstripped = HoldMerge.dropStrips(unnested)
         if (unstripped.size != unnested.size) log("hold strips: ${unnested.size - unstripped.size} dropped (under 3 cm across, 6× as long: a column or panel edge)")
-        val holds = HoldMerge.dropOnSteps(unstripped, result.steps, photo)
-        if (holds.size != unstripped.size) log("hold steps: ${unstripped.size - holds.size} image-only holds on a step of the wall dropped (its paint or wood): ${(unstripped - holds.toSet()).joinToString { "(%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
+        val unstepped = HoldMerge.dropOnSteps(unstripped, result.steps, photo)
+        if (unstepped.size != unstripped.size) log("hold steps: ${unstripped.size - unstepped.size} image-only holds on a step of the wall dropped (its paint or wood): ${(unstripped - unstepped.toSet()).joinToString { "(%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
+        val holds = runCatching { HoldMerge.dropTapeShaped(unstepped, photo) }
+            .onFailure { log("hold tape failed: $it") }
+            .getOrDefault(unstepped)
+        if (holds.size != unstepped.size) log("hold tape: ${unstepped.size - holds.size} image-only holds shaped like tape dropped (flat, narrow, rectangular, evenly lit): ${(unstepped - holds.toSet()).joinToString { "(%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
         val starts = runCatching { TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent) }
             .onFailure { log("tape marks failed: $it") }
             .getOrDefault(0)

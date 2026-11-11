@@ -21,15 +21,8 @@ class StartHarness {
         for (dir in root.listFiles { f -> File(f, "scene.json").isFile && File(f, "wall.ppm").isFile }!!.sortedBy { it.name }) {
             val scene = JSONObject(File(dir, "scene.json").readText())
             val wallJ = scene.getJSONObject("wall")
-            val photoJ = wallJ.optJSONObject("photo") ?: run { println("STARTS ${dir.name}: skipped, no orthophoto in scene.json"); null } ?: continue
+            val photo = photoOf(dir, scene, "STARTS") ?: continue
             val wall = wallColor(File(dir, "scan.log")) ?: run { println("STARTS ${dir.name}: skipped, no wallColor in scan.log"); null } ?: continue
-            val b = photoJ.getJSONArray("bounds")
-            val img = readPpm(File(dir, "wall.ppm"))
-            // wall.ppm must be this scene's photo: a Reprocess that moved the bounds leaves a stale one behind
-            val px = photoJ.getDouble("px")
-            val expectW = Math.round((b.getDouble(2) - b.getDouble(0)) / px).toInt(); val expectH = Math.round((b.getDouble(3) - b.getDouble(1)) / px).toInt()
-            if (kotlin.math.abs(img.width - expectW) > 1 || kotlin.math.abs(img.height - expectH) > 1) { println("STARTS ${dir.name}: skipped, wall.ppm ${img.width}×${img.height} is not this scene's ${expectW}×${expectH} photo"); continue }
-            val photo = Orthophoto(img, b.getDouble(0).toFloat(), b.getDouble(1).toFloat(), b.getDouble(2).toFloat(), b.getDouble(3).toFloat(), photoJ.getDouble("px").toFloat(), FloatArray(img.pixels.size))
             val e = wallJ.getJSONArray("extent"); val extent = FloatArray(4) { e.getDouble(it).toFloat() }
             val holds = holds(scene)
             TapeMarks.markStarts(holds, photo, wall, ColorPatches.forHolds(photo, wall), extent)
@@ -45,32 +38,46 @@ class StartHarness {
         println("STARTS all references: found $found/$refTotal reference starts, $correct/$marked marked are reference starts")
     }
 
-    /** The holds of [scene]; START roles are kept when [keepRoles] (reference reads), else every hold starts as ANY. */
-    private fun holds(scene: JSONObject, keepRoles: Boolean = false): List<Hold> {
-        val arr = scene.getJSONArray("holds")
-        return List(arr.length()) { i ->
-            val h = arr.getJSONObject(i)
-            val c = h.getJSONArray("center"); val uv = h.getJSONArray("uv"); val col = h.getJSONArray("color"); val size = h.getJSONArray("size")
-            val o = h.optJSONArray("outline")
-            val outline = if (o == null) FloatArray(0) else FloatArray(o.length() * 2) { k -> o.getJSONArray(k / 2).getDouble(k % 2).toFloat() }
-            Hold(h.getInt("id"), c.getDouble(0).toFloat(), c.getDouble(1).toFloat(), c.getDouble(2).toFloat(), uv.getDouble(0).toFloat(), uv.getDouble(1).toFloat(),
-                size.getDouble(0).toFloat(), size.getDouble(1).toFloat(), size.getDouble(2).toFloat(), col.getInt(0), col.getInt(1), col.getInt(2), h.optInt("voxels"), outline)
-                .also { if (keepRoles && h.optString("role") == "start") it.role = HoldRole.START }
+    companion object {
+        /** [dir]'s wall.ppm as the orthophoto of [scene], or null (with a skip line under [tag]) when there is none or it is another scene's. */
+        internal fun photoOf(dir: File, scene: JSONObject, tag: String): Orthophoto? {
+            val photoJ = scene.getJSONObject("wall").optJSONObject("photo") ?: run { println("$tag ${dir.name}: skipped, no orthophoto in scene.json"); return null }
+            val b = photoJ.getJSONArray("bounds")
+            val img = readPpm(File(dir, "wall.ppm"))
+            // wall.ppm must be this scene's photo: a Reprocess that moved the bounds leaves a stale one behind
+            val px = photoJ.getDouble("px")
+            val expectW = Math.round((b.getDouble(2) - b.getDouble(0)) / px).toInt(); val expectH = Math.round((b.getDouble(3) - b.getDouble(1)) / px).toInt()
+            if (kotlin.math.abs(img.width - expectW) > 1 || kotlin.math.abs(img.height - expectH) > 1) { println("$tag ${dir.name}: skipped, wall.ppm ${img.width}×${img.height} is not this scene's ${expectW}×${expectH} photo"); return null }
+            return Orthophoto(img, b.getDouble(0).toFloat(), b.getDouble(1).toFloat(), b.getDouble(2).toFloat(), b.getDouble(3).toFloat(), px.toFloat(), FloatArray(img.pixels.size))
         }
-    }
 
-    /** The wall colour the phone logged at RESULT, or null. */
-    private fun wallColor(log: File): WallColor? {
-        if (!log.isFile) return null
-        val m = Regex("""wallColor=rgb\((\d+), (\d+), (\d+)\) hue=(\d+)±(\d+) sat=([\d.]+)±([\d.]+) val=([\d.]+)\.\.([\d.]+)""").findAll(log.readText()).lastOrNull() ?: return null
-        val g = m.groupValues
-        return WallColor(g[1].toInt(), g[2].toInt(), g[3].toInt(), g[4].toFloat(), g[6].toFloat(), g[7].toFloat(), g[8].toFloat(), g[9].toFloat())
-    }
+        /** The holds of [scene]; START roles are kept when [keepRoles] (reference reads), else every hold starts as ANY. */
+        internal fun holds(scene: JSONObject, keepRoles: Boolean = false): List<Hold> {
+            val arr = scene.getJSONArray("holds")
+            return List(arr.length()) { i ->
+                val h = arr.getJSONObject(i)
+                val c = h.getJSONArray("center"); val uv = h.getJSONArray("uv"); val col = h.getJSONArray("color"); val size = h.getJSONArray("size")
+                val o = h.optJSONArray("outline")
+                val outline = if (o == null) FloatArray(0) else FloatArray(o.length() * 2) { k -> o.getJSONArray(k / 2).getDouble(k % 2).toFloat() }
+                Hold(h.getInt("id"), c.getDouble(0).toFloat(), c.getDouble(1).toFloat(), c.getDouble(2).toFloat(), uv.getDouble(0).toFloat(), uv.getDouble(1).toFloat(),
+                    size.getDouble(0).toFloat(), size.getDouble(1).toFloat(), size.getDouble(2).toFloat(), col.getInt(0), col.getInt(1), col.getInt(2), h.optInt("voxels"), outline)
+                    .also { if (keepRoles && h.optString("role") == "start") it.role = HoldRole.START }
+            }
+        }
 
-    private fun readPpm(file: File): Image = DataInputStream(file.inputStream().buffered()).use { s ->
-        fun token(): String { val sb = StringBuilder(); while (true) { val c = s.read(); if (c < 0) break; if (Character.isWhitespace(c)) { if (sb.isNotEmpty()) break else continue }; sb.append(c.toChar()) }; return sb.toString() }
-        require(token() == "P6"); val w = token().toInt(); val h = token().toInt(); token()
-        val buf = ByteArray(w * h * 3); s.readFully(buf)
-        Image(w, h, IntArray(w * h) { (0xff shl 24) or ((buf[it * 3].toInt() and 0xff) shl 16) or ((buf[it * 3 + 1].toInt() and 0xff) shl 8) or (buf[it * 3 + 2].toInt() and 0xff) })
+        /** The wall colour the phone logged at RESULT, or null. */
+        private fun wallColor(log: File): WallColor? {
+            if (!log.isFile) return null
+            val m = Regex("""wallColor=rgb\((\d+), (\d+), (\d+)\) hue=(\d+)±(\d+) sat=([\d.]+)±([\d.]+) val=([\d.]+)\.\.([\d.]+)""").findAll(log.readText()).lastOrNull() ?: return null
+            val g = m.groupValues
+            return WallColor(g[1].toInt(), g[2].toInt(), g[3].toInt(), g[4].toFloat(), g[6].toFloat(), g[7].toFloat(), g[8].toFloat(), g[9].toFloat())
+        }
+
+        private fun readPpm(file: File): Image = DataInputStream(file.inputStream().buffered()).use { s ->
+            fun token(): String { val sb = StringBuilder(); while (true) { val c = s.read(); if (c < 0) break; if (Character.isWhitespace(c)) { if (sb.isNotEmpty()) break else continue }; sb.append(c.toChar()) }; return sb.toString() }
+            require(token() == "P6"); val w = token().toInt(); val h = token().toInt(); token()
+            val buf = ByteArray(w * h * 3); s.readFully(buf)
+            Image(w, h, IntArray(w * h) { (0xff shl 24) or ((buf[it * 3].toInt() and 0xff) shl 16) or ((buf[it * 3 + 1].toInt() and 0xff) shl 8) or (buf[it * 3 + 2].toInt() and 0xff) })
+        }
     }
 }
