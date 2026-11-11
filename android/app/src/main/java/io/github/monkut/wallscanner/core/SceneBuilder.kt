@@ -39,6 +39,8 @@ object SceneBuilder {
         cameraPositions: List<FloatArray>,
         random: Random = Random(42),
         definition: Definition = Definition(),
+        /** The wall's height when known from elsewhere (its map, another scan): a scan that misses the top still groups as the wall it is (the upper-wall share still counts from this scan's own bottom). */
+        knownHeight: Float? = null,
         /** Called with 0..1 as the plane, the faces and the holds are found. */
         progress: (Float) -> Unit = {},
     ): SceneResult? {
@@ -67,7 +69,7 @@ object SceneBuilder {
             .filter { type.outdoor || (it.v >= extent[1] - EXTENT_HOLD_MARGIN && it.v <= extent[3] + EXTENT_HOLD_MARGIN) }
             .mapIndexed { i, h -> Hold(i + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels, h.outline) }
         progress(0.95f)
-        val routes = if (type.colorIsRoute) RouteGrouper.group(holds, type.splitByPosition, wall, extent[3] - extent[1], extent[1]) else emptyList()
+        val routes = if (type.colorIsRoute) RouteGrouper.group(holds, type.splitByPosition, wall, wallHeight(extent, knownHeight), extent[1]) else emptyList()
         return SceneResult(surface, fit.inliers, holds, routes, definition, wall, extent).also { it.steps = detection.steps }
     }
 
@@ -75,12 +77,12 @@ object SceneBuilder {
      * [result] with [holds] instead of its own: holds re-numbered bottom-up, left-to-right, routes regrouped
      * under the same definition. Used after image-only holds are added to the depth detections.
      */
-    fun withHolds(result: SceneResult, holds: List<Hold>): SceneResult {
+    fun withHolds(result: SceneResult, holds: List<Hold>, knownHeight: Float? = null): SceneResult {
         val sorted = holds.sortedWith(compareBy({ it.v }, { it.u })).mapIndexed { i, h ->
             Hold(i + 1, h.cx, h.cy, h.cz, h.u, h.v, h.width, h.tall, h.height, h.r, h.g, h.b, h.voxels, h.outline).also { it.role = h.role; it.tape = h.tape }
         }
         val type = result.definition.type
-        val routes = if (type.colorIsRoute) RouteGrouper.group(sorted, type.splitByPosition, result.wallColor, result.extent[3] - result.extent[1], result.extent[1]) else emptyList()
+        val routes = if (type.colorIsRoute) RouteGrouper.group(sorted, type.splitByPosition, result.wallColor, wallHeight(result.extent, knownHeight), result.extent[1]) else emptyList()
         return SceneResult(result.surface, result.planeInliers, sorted, routes, result.definition, result.wallColor, result.extent).also {
             it.photo = result.photo
             it.thinCoverage = result.thinCoverage
@@ -88,6 +90,9 @@ object SceneBuilder {
             it.steps = result.steps
         }
     }
+
+    /** The wall's height for route grouping: the scan's own extent, or [knownHeight] when that is taller. */
+    fun wallHeight(extent: FloatArray, knownHeight: Float?): Float = maxOf(extent[3] - extent[1], knownHeight ?: 0f)
 
     /**
      * The same scene with its routes renumbered from [firstId]. Reprocess uses it so a new route never takes

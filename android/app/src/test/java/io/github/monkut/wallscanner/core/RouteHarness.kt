@@ -1,5 +1,6 @@
 package io.github.monkut.wallscanner.core
 
+import io.github.monkut.wallscanner.io.CaptureStore
 import org.json.JSONObject
 import org.junit.Test
 import java.io.File
@@ -19,9 +20,10 @@ class RouteHarness {
             val scene = JSONObject(File(dir, "scene.json").readText())
             val wall = wallColor(File(dir, "scan.log"))
             val holds = holds(scene)
-            // The wall's extent decides whether its grey holds are the down-climb group and where they may stand.
+            // The wall's extent decides whether its grey holds are the down-climb group and where they may stand; a taller
+            // pulled scan of the same wall (capture.json `wall`) counts for the height, as on the phone when the wall has no map.
             val extent = scene.optJSONObject("wall")?.optJSONArray("extent")
-            val wallHeight = extent?.let { (it.getDouble(3) - it.getDouble(1)).toFloat() }; val wallBottom = extent?.let { it.getDouble(1).toFloat() }
+            val wallHeight = extent?.let { e -> SceneBuilder.wallHeight(FloatArray(4) { e.getDouble(it).toFloat() }, CaptureStore.tallestOtherScan(dir)) }; val wallBottom = extent?.let { it.getDouble(1).toFloat() }
             val routes = RouteGrouper.group(holds, wall = wall, wallHeight = wallHeight, wallBottom = wallBottom)
             println("ROUTES ${dir.name} stored: ${summary(scene)} | new: ${routes.joinToString { "${it.name}(${it.holdIds.size})" }}")
             val storedNames = scene.optJSONArray("routes")?.let { ra -> (0 until ra.length()).map { ra.getJSONObject(it).getString("name") } } ?: emptyList()

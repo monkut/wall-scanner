@@ -21,6 +21,7 @@ import io.github.monkut.wallscanner.core.SceneJson
 import io.github.monkut.wallscanner.core.SceneResult
 import io.github.monkut.wallscanner.core.VoxelCloud
 import java.io.File
+import java.util.Locale
 import kotlin.random.Random
 
 /**
@@ -32,8 +33,8 @@ import kotlin.random.Random
 object ScenePipeline {
     private const val KEYFRAME_SUBSAMPLE = 2 // 960 × 540 is ~1.8 image px per 5 mm wall px at 2 m: enough, half the decode cost
 
-    fun build(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit, progress: ProgressListener = { _, _ -> }): SceneResult? =
-        stages(dir, cloud, cameras, definition, assets, log, progress)?.also { judge(it, cloud, log) }
+    fun build(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit, progress: ProgressListener = { _, _ -> }, knownHeight: Float? = null): SceneResult? =
+        stages(dir, cloud, cameras, definition, assets, log, progress, knownHeight)?.also { judge(it, cloud, log) }
 
     /**
      * The scan's quality verdict from the final holds (#35), logged and set on [result]. Only for a gym scan that
@@ -51,8 +52,9 @@ object ScenePipeline {
         log("QUALITY ${result.quality}")
     }
 
-    private fun stages(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit, progress: ProgressListener): SceneResult? {
-        var result = SceneBuilder.build(cloud, cameras, Random(42), definition) { progress(ProcessingStage.CLOUD, it) } ?: return null
+    private fun stages(dir: File, cloud: VoxelCloud, cameras: List<FloatArray>, definition: Definition, assets: AssetManager?, log: (String) -> Unit, progress: ProgressListener, knownHeight: Float?): SceneResult? {
+        var result = SceneBuilder.build(cloud, cameras, Random(42), definition, knownHeight) { progress(ProcessingStage.CLOUD, it) } ?: return null
+        if (knownHeight != null) log(String.format(Locale.US, "wall height: %.2f m measured, %.2f m known for this wall (its map or another scan), %.2f m used for routes", result.extent[3] - result.extent[1], knownHeight, SceneBuilder.wallHeight(result.extent, knownHeight)))
         result.thinCoverage = Coverage.thinCells(cloud, result.surface, result.extent)
         if (result.thinCoverage.isNotEmpty()) {
             log("COVERAGE thin depth in ${result.thinCoverage.joinToString { "(row ${it.row}, col ${it.col})" }} of a ${Coverage.ROWS}x${Coverage.COLS} grid (row 0 = top, col 0 = left)")
@@ -134,7 +136,7 @@ object ScenePipeline {
             .onFailure { log("tape marks failed: $it") }
             .getOrDefault(0)
         log("tape marks: $starts start holds marked from tape strips")
-        result = SceneBuilder.withHolds(result, holds)
+        result = SceneBuilder.withHolds(result, holds, knownHeight)
         progress(ProcessingStage.WRITE, 0f)
         CaptureStore.writeImage(dir, SceneJson.PHOTO_FILE, photo.image)
         CaptureStore.writeImage(dir, SceneJson.RELIEF_FILE, SceneJson.reliefImage(photo))

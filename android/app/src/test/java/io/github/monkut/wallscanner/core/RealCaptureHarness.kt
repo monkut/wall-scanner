@@ -1,5 +1,6 @@
 package io.github.monkut.wallscanner.core
 
+import io.github.monkut.wallscanner.io.CaptureStore
 import org.junit.Test
 import java.io.DataInputStream
 import java.io.File
@@ -30,7 +31,8 @@ class RealCaptureHarness {
             val type = Regex(""""type":\s*"([a-z_]+)"""").find(File(dir, "capture.json").takeIf { it.isFile }?.readText() ?: "")
                 ?.groupValues?.get(1)
             val t0 = System.currentTimeMillis()
-            var result = SceneBuilder.build(cloud, cameras, definition = Definition(RouteDefinition.fromId(type)))
+            val knownHeight = CaptureStore.tallestOtherScan(dir)
+            var result = SceneBuilder.build(cloud, cameras, definition = Definition(RouteDefinition.fromId(type)), knownHeight = knownHeight)
             val ms = System.currentTimeMillis() - t0
             if (result == null) { println("HARNESS ${dir.name} voxels=${cloud.count} no wall plane"); continue }
             println("HARNESS ${dir.name} faces=${SceneJson.facesSummary(result.surface)} regions=${Facets.find(cloud, result.frame).summary}")
@@ -68,7 +70,7 @@ class RealCaptureHarness {
                 if (holds.size != unnested.size) println("HARNESS ${dir.name} hold steps: ${unnested.size - holds.size} image-only holds on a step dropped: ${(unnested - holds.toSet()).joinToString { "#${it.id} (%.2f, %.2f) %.2f×%.2f".format(it.u, it.v, it.width, it.tall) }}")
                 val starts = TapeMarks.markStarts(holds, photo, result.wallColor, patches, result.extent)
                 result.photo = photo
-                result = SceneBuilder.withHolds(result, holds)
+                result = SceneBuilder.withHolds(result, holds, knownHeight)
                 println(
                     "HARNESS ${dir.name} hold search: +${extra.size} image-only holds, $starts tape starts (${System.currentTimeMillis() - t3} ms) → holds=${result.holds.size} " +
                         "starts=${result.holds.filter { it.role == HoldRole.START }.map { it.id }} routes=${result.routes.joinToString { "${it.name}(${it.holdIds.size})" }}"
