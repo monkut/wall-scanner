@@ -124,35 +124,6 @@ object FaceMask {
         }
     }
 
-    /**
-     * How far (clockwise degrees: 0, 90, 180 or 270) to turn an image so that the world's up points to its top, from
-     * the camera's world-from-camera rotation [r] (row-major; camera x right, y up in the image). Keyframes are
-     * stored in sensor orientation, and the face model wants upright faces.
-     */
-    fun uprightRotation(r: DoubleArray): Int {
-        val ux = r[3] // world up along the image's x axis (right)
-        val uyDown = -r[4] // and along its y axis, downward
-        return when {
-            kotlin.math.abs(uyDown) >= kotlin.math.abs(ux) -> if (uyDown <= 0) 0 else 180
-            ux > 0 -> 270 // up is at the image's right: turn it anticlockwise
-            else -> 90
-        }
-    }
-
-    /** [box] after the image it is on is turned clockwise by [degrees] (a multiple of 90, negative for anticlockwise). */
-    fun rotate(box: Box, degrees: Int): Box {
-        val d = ((degrees % 360) + 360) % 360
-        fun point(x: Float, y: Float): Pair<Float, Float> = when (d) {
-            90 -> (1 - y) to x
-            180 -> (1 - x) to (1 - y)
-            270 -> y to (1 - x)
-            else -> x to y
-        }
-        val corners = listOf(point(box.x, box.y), point(box.right, box.y), point(box.x, box.bottom), point(box.right, box.bottom))
-        val l = corners.minOf { it.first }; val t = corners.minOf { it.second }
-        return Box(l, t, corners.maxOf { it.first } - l, corners.maxOf { it.second } - t)
-    }
-
     /** Index of the last frame at or before [tMs]; -1 before the first. */
     private fun lastAtOrBefore(frames: List<FaceFrame>, tMs: Long): Int {
         var lo = 0; var hi = frames.size - 1; var found = -1
