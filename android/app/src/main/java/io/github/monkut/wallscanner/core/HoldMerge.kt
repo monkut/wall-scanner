@@ -171,6 +171,21 @@ object HoldMerge {
         thin >= STRIP_MAX_WIDTH || maxOf(hold.width, hold.tall) < STRIP_MIN_ASPECT * thin
     }
 
+    private const val CUT_M = 0.005f // one orthophoto pixel: an outline this close to the photo's border runs off it
+
+    /**
+     * [holds] without the ones the scan cut off ([isCut]). A hold not wholly in the scan belongs to a route beside
+     * the one scanned: it is neither numbered nor grouped into a route (1F 2026-11-10 17:49 #1, #11, #24, #28 at
+     * the right edge). Runs before the holds are numbered and before the start marks.
+     */
+    fun dropCut(holds: List<Hold>, photo: Orthophoto): List<Hold> = holds.filterNot { isCut(it, photo) }
+
+    /** Whether [hold]'s outline reaches within [CUT_M] of the [photo]'s border: the hold runs past what the scan saw. */
+    fun isCut(hold: Hold, photo: Orthophoto): Boolean {
+        val o = hold.outline
+        return (0 until o.size / 2).any { minOf(o[2 * it] - photo.minU, photo.maxU - o[2 * it], o[2 * it + 1] - photo.minV, photo.maxV - o[2 * it + 1]) < CUT_M }
+    }
+
     // Tape left as a hold: a flat strip, under TAPE_MAX_SHORT across (the climber's labels: 4.5–6.4 cm) …
     private const val TAPE_MAX_SHORT = 0.07f
     private const val TAPE_MIN_ASPECT = 1.5f  // … at least this many times as long (1.7–2.4) …
