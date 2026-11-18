@@ -6,7 +6,11 @@ import android.os.SystemClock
 import android.util.Log
 import com.google.ar.core.Camera
 import com.google.ar.core.Frame
+import com.google.ar.core.ImageMetadata
 import com.google.ar.core.exceptions.NotYetAvailableException
+import io.github.monkut.wallscanner.core.Blur
+import io.github.monkut.wallscanner.core.GyroBuffer
+import io.github.monkut.wallscanner.core.SharpPicker
 import io.github.monkut.wallscanner.core.Tuning
 import io.github.monkut.wallscanner.io.ScanLog
 import java.util.concurrent.Executors
@@ -14,6 +18,23 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.sqrt
+
+/** Camera settings of one colour image from ARCore's image metadata; -1 where the camera did not report a value. */
+class Exposure(val exposureNs: Long, val rollingShutterSkewNs: Long, val iso: Int) {
+    companion object {
+        val UNKNOWN = Exposure(-1L, -1L, -1)
+
+        fun of(frame: Frame): Exposure {
+            val m = try { frame.imageMetadata } catch (e: Exception) { return UNKNOWN }
+            fun long(key: Int) = try { m.getLong(key) } catch (e: Exception) { -1L }
+            val iso = try { m.getInt(ImageMetadata.SENSOR_SENSITIVITY) } catch (e: Exception) { -1 }
+            return Exposure(long(ImageMetadata.SENSOR_EXPOSURE_TIME), long(ImageMetadata.SENSOR_ROLLING_SHUTTER_SKEW), iso)
+        }
+    }
+}
+
+/** A frame offered as a keyframe, with the gyro's mean rate over its exposure. */
+private class Candidate(val frame: FrameData, val rate: FloatArray?)
 
 /** Raw bytes of one image plane plus its strides. */
 private class PlaneData(val bytes: ByteArray, val rowStride: Int, val pixelStride: Int)
@@ -30,9 +51,12 @@ private class FrameData(
     val localFromCamera: FloatArray,
     val cameraPosition: FloatArray,
     val timestampNs: Long,
+    /** The colour image's own timestamp (start of exposure, sensor clock) and its exposure, -1 when unknown (#59). */
+    val imageTimestampNs: Long,
+    val exposure: Exposure,
 ) {
     companion object {
-        fun copy(segment: Segment, camera: Camera, depth: Image, confidence: Image, color: Image): FrameData {
+        fun copy(segment: Segment, camera: Camera, depth: Image, confidence: Image, color: Image, exposure: Exposure): FrameData {
             val tex = camera.textureIntrinsics
             val img = camera.imageIntrinsics
             val local = segment.anchorPose.inverse().compose(camera.pose)
@@ -46,7 +70,7 @@ private class FrameData(
                 tex.focalLength[0], tex.focalLength[1], tex.principalPoint[0], tex.principalPoint[1],
                 tex.imageDimensions[0], tex.imageDimensions[1],
                 img.focalLength[0], img.focalLength[1], img.principalPoint[0], img.principalPoint[1],
-                matrix, local.translation, depth.timestamp,
+                matrix, local.translation, depth.timestamp, color.timestamp, exposure,
             )
         }
 
@@ -88,6 +112,15 @@ class DepthFrameProcessor {
     @Volatile
     var keyframes: KeyframeWriter? = null
 
+    /** Recent gyro samples for each keyframe's blur estimate (#59); without them keyframes are taken as before. */
+    @Volatile
+    var gyro: GyroBuffer? = null
+
+    /** Used on the integration thread only, like [KeyframeWriter.claim]. */
+    private val picker = SharpPicker<Candidate>(Tuning.KEYFRAME_MAX_BLUR_PX, Tuning.KEYFRAME_MAX_WAIT_MS)
+    private val keyframeBlur = ArrayList<Float>()
+    private val keyframeExposureMs = ArrayList<Float>()
+
     /** Points further than this from the camera are rejected (metres); set from the route definition. */
     @Volatile
     var maxDepth: Float = Tuning.MAX_DEPTH_RANGE
@@ -108,9 +141,25 @@ class DepthFrameProcessor {
             "range=$rejectedRange outOfImage=$rejectedOutOfImage skipped(busy=$skippedBusy stale=$skippedStaleDepth notReady=$skippedNotAvailable) " +
             "integrate(avg=${if (depthFrames == 0) 0 else integrateMsTotal / depthFrames}ms max=${integrateMsMax}ms)"
 
-    /** Blocks until every keyframe claimed so far has been written; call before resolving frames.jsonl. */
+    /**
+     * Blocks until every keyframe claimed so far has been written, including one still waiting for a sharper frame;
+     * call before resolving frames.jsonl.
+     */
     fun awaitKeyframes() {
-        try { keyframeExecutor.submit {}.get() } catch (e: Exception) { log?.log("awaitKeyframes: $e") }
+        try {
+            executor.submit { picker.flush()?.let { (c, blur) -> writeKeyframe(c, blur, System.currentTimeMillis()) } }.get()
+            keyframeExecutor.submit {}.get()
+        } catch (e: Exception) { log?.log("awaitKeyframes: $e") }
+    }
+
+    /** One line for scan.log: how the keyframes were taken and their blur and exposure, to tune the limits (#59). */
+    fun keyframeStats(): String {
+        fun pct(values: List<Float>, q: Double) = if (values.isEmpty()) "n/a" else "%.1f".format(java.util.Locale.US, values.sorted()[((values.size - 1) * q).toInt()])
+        val blur: List<Float>; val exposure: List<Float>
+        synchronized(keyframeBlur) { blur = keyframeBlur.toList(); exposure = keyframeExposureMs.toList() }
+        return "sharp at once ${picker.takenSharp}, sharp after waiting ${picker.takenAfterWait}, blurred at the wait limit ${picker.takenBlurred}, " +
+            "no blur estimate ${picker.takenUnknown} (limit ${Tuning.KEYFRAME_MAX_BLUR_PX} px, wait ${Tuning.KEYFRAME_MAX_WAIT_MS} ms); " +
+            "blur px median ${pct(blur, 0.5)} p90 ${pct(blur, 0.9)}; exposure ms median ${pct(exposure, 0.5)} p90 ${pct(exposure, 0.9)}"
     }
 
     fun process(frame: Frame, segment: Segment) {
@@ -135,7 +184,7 @@ class DepthFrameProcessor {
         }
         lastDepthTimestamp = depth.timestamp
         val data = try {
-            FrameData.copy(segment, frame.camera, depth, confidence, color)
+            FrameData.copy(segment, frame.camera, depth, confidence, color, Exposure.of(frame))
         } finally {
             depth.close(); confidence.close(); color.close()
         }
@@ -231,23 +280,44 @@ class DepthFrameProcessor {
 
         f.segment.map.addAll(xyz, rgb, n)
         f.segment.addCameraPosition(f.cameraPosition)
-        writeKeyframe(f)
+        offerKeyframe(f)
         samplesSeen += seen; rejectedNoDepth += noDepth; rejectedConfidence += lowConf
         rejectedRange += range; rejectedOutOfImage += outOfImage; kept += n
         depthFrames++
     }
 
-    /** Claims a keyframe on this thread and encodes it on [keyframeExecutor]; [f] owns its byte arrays, so no copy is needed. */
-    private fun writeKeyframe(f: FrameData) {
+    /**
+     * Offers [f] as a keyframe: when one is due (or one is waiting for a sharper frame), the gyro's blur estimate decides
+     * whether this frame is taken now ([SharpPicker], #59).
+     */
+    private fun offerKeyframe(f: FrameData) {
         val writer = keyframes ?: return
-        val index = writer.claim(f.segment.id, f.localFromCamera, System.currentTimeMillis())
-        if (index < 0) return
+        val now = System.currentTimeMillis()
+        val due = writer.due(f.segment.id, f.localFromCamera, now)
+        if (!due && !picker.waiting) return
+        val e = f.exposure
+        val rate = if (e.exposureNs > 0) gyro?.mean(f.imageTimestampNs, f.imageTimestampNs + e.exposureNs + max(0L, e.rollingShutterSkewNs)) else null
+        val blur = Blur.px(rate, e.exposureNs, f.imgFx, f.imgW)
+        val (c, pickedBlur) = picker.offer(Candidate(f, rate), blur, due, now) ?: return
+        writeKeyframe(c, pickedBlur, now)
+    }
+
+    /** Claims a keyframe on this thread and encodes it on [keyframeExecutor]; the frame owns its byte arrays, so no copy is needed. */
+    private fun writeKeyframe(c: Candidate, blurPx: Float, nowMs: Long) {
+        val writer = keyframes ?: return
+        val f = c.frame
+        val index = writer.claim(f.segment.id, f.localFromCamera, nowMs)
+        synchronized(keyframeBlur) {
+            if (!blurPx.isNaN()) keyframeBlur.add(blurPx)
+            if (f.exposure.exposureNs > 0) keyframeExposureMs.add(f.exposure.exposureNs / 1e6f)
+        }
         keyframeExecutor.execute {
             try {
                 writer.write(
                     index, f.segment.id, f.localFromCamera, f.timestampNs,
                     f.yPlane.bytes, f.yPlane.rowStride, f.uPlane.bytes, f.vPlane.bytes, f.uPlane.rowStride, f.uPlane.pixelStride,
                     f.imgW, f.imgH, f.imgFx, f.imgFy, f.imgCx, f.imgCy,
+                    f.imageTimestampNs, f.exposure, c.rate, blurPx,
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Keyframe write failed", e)

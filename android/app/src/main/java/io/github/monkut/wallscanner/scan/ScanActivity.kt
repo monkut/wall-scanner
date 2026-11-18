@@ -64,6 +64,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
     private lateinit var renderer: ArRenderer
     private lateinit var captureDir: File
     private lateinit var log: ScanLog
+    private lateinit var imu: ImuRecorder
     private lateinit var definition: Definition
     private var session: Session? = null
     private var installRequested = false
@@ -93,6 +94,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         ScanLog.active = log
         processor.log = log
         processor.keyframes = KeyframeWriter(captureDir)
+        imu = ImuRecorder(this, File(captureDir, CaptureStore.IMU_FILE), log)
+        processor.gyro = imu.gyro
         definition = Definition(RouteDefinition.fromId(intent.getStringExtra(EXTRA_DEFINITION)))
         CaptureStore.writeMeta(captureDir, definition, intent.getStringExtra(EXTRA_LOCATION) ?: "", intent.getStringExtra(EXTRA_SET) ?: "", intent.getStringExtra(EXTRA_WALL) ?: "")
         logEnvironment()
@@ -142,11 +145,13 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             return
         }
         glView.onResume()
+        imu.start()
     }
 
     override fun onPause() {
         super.onPause()
         glView.onPause()
+        imu.stop()
         renderer.endSegment()
         session?.pause()
         pausedAtMs = SystemClock.elapsedRealtime()
@@ -431,6 +436,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
                 reference = merged.snapshot()
             }
             processor.awaitKeyframes()
+            log.log("keyframes taken: ${processor.keyframeStats()}")
             val keyframes = processor.keyframes?.resolve(segmentTransforms) ?: 0
             log.log("keyframes: $keyframes resolved to world poses (${CaptureStore.FRAMES_RESOLVED})")
             val cloud = reference

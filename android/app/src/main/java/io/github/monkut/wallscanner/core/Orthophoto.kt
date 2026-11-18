@@ -5,8 +5,17 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.sqrt
 
-/** A saved keyframe: world-from-camera pose and the intrinsics of the image as stored. */
-class Keyframe(val file: String, val worldFromCamera: Rigid, val fx: Float, val fy: Float, val cx: Float, val cy: Float, val width: Int, val height: Int)
+/**
+ * A saved keyframe: world-from-camera pose and the intrinsics of the image as stored. [blurPx] is the gyro's motion-blur
+ * estimate ([Blur.px], #59), NaN for keyframes saved before it was recorded.
+ */
+class Keyframe(
+    val file: String, val worldFromCamera: Rigid, val fx: Float, val fy: Float, val cx: Float, val cy: Float, val width: Int, val height: Int,
+    val blurPx: Float = Float.NaN,
+) {
+    /** Weight of this view in the orthophoto: 1 when sharp or unknown, ½ at [Tuning.ORTHO_BLUR_REF_PX] of blur. */
+    val sharpness: Float get() = if (blurPx.isNaN()) 1f else 1f / (1f + (blurPx / Tuning.ORTHO_BLUR_REF_PX).let { it * it })
+}
 
 /**
  * Front view of the wall assembled from keyframes: [px] metres per pixel, top row at [maxV]. [relief] is the
@@ -88,6 +97,7 @@ object OrthophotoBuilder {
             val fx = k.fx * sx; val fy = k.fy * sy; val cx = k.cx * sx; val cy = k.cy * sy
             val edgeX = img.width * EDGE_PX_FRACTION; val edgeY = img.height * EDGE_PX_FRACTION
             val r = k.worldFromCamera.r; val t = k.worldFromCamera.t
+            val sharpness = k.sharpness
             var hits = 0
             for (i in 0 until n) {
                 // Camera-space point: R^T (P - t); ARCore camera looks down -Z with +Y up.
@@ -103,7 +113,8 @@ object OrthophotoBuilder {
                 val dist = sqrt(dx * dx + dy * dy + dz * dz)
                 val p = faces[faceOf[i].toInt()].plane
                 val cos = abs((dx * p.nx + dy * p.ny + dz * p.nz) / dist)
-                val score = (cos * cos / max(dist, 0.5)).toFloat()
+                // A sharper view beats a slightly more frontal, blurred one (#59).
+                val score = (cos * cos / max(dist, 0.5)).toFloat() * sharpness
                 if (score <= best[i]) {
                     // Only a comparable view can become the second; best only grows, so a lesser one never will.
                     if (score > second[i] && score >= SECOND_VIEW_MIN * best[i]) { second[i] = score; other[i] = bilinear(img, ix, iy) }
