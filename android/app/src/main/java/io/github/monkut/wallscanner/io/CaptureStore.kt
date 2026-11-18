@@ -53,6 +53,7 @@ object CaptureStore {
     const val FRAMES_DIR = "frames"
     const val FRAMES_INDEX = "frames.jsonl"
     const val FRAMES_RESOLVED = "frames.json"
+    const val IMU_FILE = "imu.csv.gz"
     private val JST: ZoneId = ZoneId.of("Asia/Tokyo")
     private val DIR_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
 
@@ -194,6 +195,7 @@ object CaptureStore {
                     Rigid(DoubleArray(9) { r.getDouble(it) }, DoubleArray(3) { t.getDouble(it) }),
                     k.getDouble("fx").toFloat(), k.getDouble("fy").toFloat(), k.getDouble("cx").toFloat(), k.getDouble("cy").toFloat(),
                     k.getInt("width"), k.getInt("height"),
+                    f.optJSONObject("exposure")?.optDouble("blurPx", Double.NaN)?.toFloat() ?: Float.NaN,
                 )
             }
         }.getOrDefault(emptyList())

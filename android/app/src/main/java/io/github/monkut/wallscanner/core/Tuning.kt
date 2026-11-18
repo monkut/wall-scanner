@@ -119,4 +119,9 @@ object Tuning {
     // cells where its orthophoto repeats itself
     const val MIN_ROUTE_HOLDS = 2
     const val MAX_ROUTE_HOLD_GAP = 1.4f // circuit walls: holds of one colour further apart than this are different problems
+
+    // Sharp keyframes from the gyro (#59). Untuned guesses: the scan.log `keyframes taken:` line gives real blur numbers.
+    const val KEYFRAME_MAX_BLUR_PX = 4f // a due keyframe this sharp (1080p pixels; ~1 orthophoto pixel at 2 m) is taken at once …
+    const val KEYFRAME_MAX_WAIT_MS = 600L // … else the sharpest frame within this wait (about five depth frames)
+    const val ORTHO_BLUR_REF_PX = 6f // a keyframe with this much blur counts half in the orthophoto's view score
 }

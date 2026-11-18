@@ -27,19 +27,18 @@ class KeyframeWriter(private val captureDir: File) {
     private var nv21: ByteArray? = null
 
     /**
-     * Claims the next keyframe index when the camera moved far enough (or a new segment started) since the
-     * last claim, else returns -1. Call from one thread (the depth integration thread); the JPEG itself can
-     * then be written from another with [write].
+     * Claims the next keyframe index for a frame [due] chose (directly or after waiting for a sharper one). Call
+     * from one thread (the depth integration thread); the JPEG itself can then be written from another with [write].
      */
     fun claim(segmentId: Int, localFromCamera: FloatArray, nowMs: Long): Int {
-        if (!wants(segmentId, localFromCamera, nowMs)) return -1
         lastSegment = segmentId
         lastMatrix = localFromCamera.copyOf()
         lastTimeMs = nowMs
         return count++
     }
 
-    private fun wants(segmentId: Int, localFromCamera: FloatArray, nowMs: Long): Boolean {
+    /** A keyframe is due: the camera moved or turned far enough (or a new segment started) since the last claim. */
+    fun due(segmentId: Int, localFromCamera: FloatArray, nowMs: Long): Boolean {
         if (nowMs - lastTimeMs < MIN_INTERVAL_MS) return false
         if (segmentId != lastSegment) return true
         val last = lastMatrix ?: return true
@@ -50,11 +49,15 @@ class KeyframeWriter(private val captureDir: File) {
         return Math.toDegrees(acos(dot).toDouble()) >= MIN_TURN_DEG
     }
 
-    /** Writes the JPEG and index line for a claimed [index]. Call on one thread (the keyframe thread). */
+    /**
+     * Writes the JPEG and index line for a claimed [index]. Call on one thread (the keyframe thread). [gyro] is the mean
+     * rate over the exposure (rad/s, device axes) and [blurPx] its blur estimate; both may be missing (#59).
+     */
     fun write(
         index: Int, segmentId: Int, localFromCamera: FloatArray, timestampNs: Long,
         y: ByteArray, yRowStride: Int, u: ByteArray, v: ByteArray, uvRowStride: Int, uvPixelStride: Int, width: Int, height: Int,
         fx: Float, fy: Float, cx: Float, cy: Float,
+        imageTimestampNs: Long, exposure: Exposure, gyro: FloatArray?, blurPx: Float,
     ) {
         val name = "frame-${"%04d".format(index)}.jpg"
         FileOutputStream(File(dir, name)).use { out ->
@@ -67,6 +70,7 @@ class KeyframeWriter(private val captureDir: File) {
             .put("timestampNs", timestampNs)
             .put("localFromCamera", JSONArray(localFromCamera.map { it.toDouble() }))
             .put("intrinsics", JSONObject().put("fx", fx).put("fy", fy).put("cx", cx).put("cy", cy).put("width", width).put("height", height))
+            .put("exposure", exposureJson(imageTimestampNs, exposure, gyro, blurPx))
         this.index.appendText(line.toString() + "\n")
     }
 
@@ -88,6 +92,17 @@ class KeyframeWriter(private val captureDir: File) {
         }
         File(captureDir, CaptureStore.FRAMES_RESOLVED).writeText(JSONObject().put("frames", frames).toString())
         return frames.length()
+    }
+
+    /** Values the camera or gyro did not give are left out (JSON has no NaN). */
+    private fun exposureJson(imageTimestampNs: Long, e: Exposure, gyro: FloatArray?, blurPx: Float): JSONObject {
+        val o = JSONObject().put("imageTimestampNs", imageTimestampNs)
+        if (e.exposureNs > 0) o.put("exposureNs", e.exposureNs)
+        if (e.rollingShutterSkewNs > 0) o.put("rollingShutterSkewNs", e.rollingShutterSkewNs)
+        if (e.iso > 0) o.put("iso", e.iso)
+        if (gyro != null) o.put("gyro", JSONArray(gyro.map { it.toDouble() }))
+        if (!blurPx.isNaN()) o.put("blurPx", blurPx.toDouble())
+        return o
     }
 
     private fun toNv21(y: ByteArray, yRowStride: Int, u: ByteArray, v: ByteArray, uvRowStride: Int, uvPixelStride: Int, w: Int, h: Int): ByteArray {

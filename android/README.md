@@ -213,6 +213,15 @@ segment-local pose, intrinsics): one every ≥ 0.7 s when the camera moved ≥ 0
 segment started. At Finish they are resolved to world poses in `frames.json` for image-based tape and placard
 detection (`tools/tape.py`). Keyframes are never face-masked (the face masks are for climb video).
 
+Sharp keyframes (#59): the gyro is recorded while the scan screen is open (`scan/ImuRecorder.kt`, 200 Hz, gyro and
+accelerometer to `imu.csv.gz`; the sensor clock is the clock of the camera image timestamps). When a keyframe is due,
+its motion blur is estimated from the mean gyro rate over the image's exposure (`core/SharpKeyframes.kt`: exposure ×
+(pan/tilt rate × focal length + roll rate × half the width)). A frame within `KEYFRAME_MAX_BLUR_PX` is taken at once;
+otherwise the sharpest frame within `KEYFRAME_MAX_WAIT_MS` is taken. Each keyframe records an `exposure` object
+(image timestamp, exposure, rolling-shutter skew, ISO, gyro rate, blur estimate), and the orthophoto weights each
+view's score by its sharpness (half at `ORTHO_BLUR_REF_PX`). scan.log's `keyframes taken:` line counts how keyframes
+were taken and gives the blur and exposure median and p90, for tuning the limits.
+
 ### Diagnostics and sharing
 
 Each capture has a `scan.log`. Key lines, all with JST timestamps:
@@ -251,6 +260,7 @@ files/captures/<JST timestamp>/
   segments/segment-NN.ply                 per-segment points, world coordinates before snapping
   frames/frame-NNNN.jpg, frames.jsonl     keyframes and segment-local poses
   frames.json                             keyframes with world poses (after snapping)
+  imu.csv.gz                              raw gyro (g, rad/s) and accelerometer (a, m/s²) at 200 Hz: t_ns,sensor,x,y,z (device axes, sensor clock)
   points.ply                              merged cloud (binary little-endian: float x y z, uchar r g b)
   scene.json                              wall frame (plus faces when the wall bends), holds, routes (schema: ARCHITECTURE.md §9)
   sends.json                              { version: 2, sends: [{ id, routeId, at, result, attempts, note, clips?: [...] }], ratings: { "<routeId>": 0..5 }, comments: { "<routeId>": text } }

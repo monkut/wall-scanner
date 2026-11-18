@@ -101,6 +101,7 @@ class RealCaptureHarness {
                 Keyframe(
                     g[1].replace("\\/", "/"), Rigid(g[8].split(',').map { it.trim().toDouble() }.toDoubleArray(), g[9].split(',').map { it.trim().toDouble() }.toDoubleArray()),
                     g[2].toFloat(), g[3].toFloat(), g[4].toFloat(), g[5].toFloat(), g[6].toInt(), g[7].toInt(),
+                    Regex(""""blurPx":([-\d.eE]+)""").find(m.value)?.groupValues?.get(1)?.toFloat() ?: Float.NaN,
                 )
             }.toList()
 
