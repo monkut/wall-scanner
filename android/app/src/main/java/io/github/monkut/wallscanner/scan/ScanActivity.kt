@@ -169,13 +169,28 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
         session?.close()
         session = null
         gps?.stop()
-        processor.shutdown()
+        if (processing) {
+            // The scene-builder thread still needs the log and the keyframe writer; it releases both when it ends.
+            log.log("scan screen left during processing · processing continues, the viewer will not open")
+            return
+        }
         if (!finished) {
             log.log("scan abandoned · segments=${segments.size} voxels=${segments.totalVoxels()}")
             if (segments.totalVoxels() == 0) CaptureStore.delete(captureDir)
         }
+        release()
+    }
+
+    private fun release() {
+        processor.shutdown()
         ScanLog.active = null
         log.close()
+    }
+
+    /** Main thread, when the scene-builder thread ends; releases the log and processor if the screen is already gone. */
+    private fun handleProcessingEnd() {
+        processing = false
+        if (isDestroyed) release() else if (!isFinishing) processingOverlay.visibility = View.GONE
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -449,9 +464,8 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             if (result == null) {
                 log.log("RESULT: no wall plane (${elapsed} ms)")
                 runOnUiThread {
-                    processing = false
-                    processingOverlay.visibility = View.GONE
-                    toast(getString(R.string.points_saved_no_wall))
+                    if (!isDestroyed) toast(getString(R.string.points_saved_no_wall))
+                    handleProcessingEnd()
                 }
                 return@thread
             }
@@ -470,11 +484,15 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             val thin = result.thinCoverage
             val quality = result.quality
             runOnUiThread {
-                if (thin.isNotEmpty()) toast(getString(R.string.coverage_thin, thin.joinToString { Labels.coverageCell(this, it) }))
-                if (quality != null && quality.ghosted) toast(getString(R.string.scan_ghosted, quality.ghostCells.joinToString { Labels.coverageCell(this, it) }, Math.round(quality.ghostShare * 100)))
-                else if (quality != null && quality.smeared) toast(getString(R.string.scan_drifted, Math.round(quality.planeShare * 100)))
-                startActivity(ViewerActivity.intent(this, captureDir.name))
-                finish()
+                // A screen left during processing opens no viewer: it would cover whatever the user went to (a new scan).
+                if (!isDestroyed && !isFinishing) {
+                    if (thin.isNotEmpty()) toast(getString(R.string.coverage_thin, thin.joinToString { Labels.coverageCell(this, it) }))
+                    if (quality != null && quality.ghosted) toast(getString(R.string.scan_ghosted, quality.ghostCells.joinToString { Labels.coverageCell(this, it) }, Math.round(quality.ghostShare * 100)))
+                    else if (quality != null && quality.smeared) toast(getString(R.string.scan_drifted, Math.round(quality.planeShare * 100)))
+                    startActivity(ViewerActivity.intent(this, captureDir.name))
+                    finish()
+                }
+                handleProcessingEnd()
             }
         }
     }
