@@ -39,7 +39,9 @@ class Orthophoto(
 /**
  * Projects every wall pixel, placed at its depth-measured relief, through each keyframe and keeps the most
  * frontal, closest view: a sharp orthophoto of the wall from the photos the scan already took. Hold shapes
- * are then read from it ([HoldShapes]) and the route image draws it.
+ * are then read from it ([HoldShapes]) and the route image draws it. A pixel with no depth point within
+ * [NO_DEPTH_RADIUS] stays unseen (black, no source): the wall there is not known to lie on the face's plane, and
+ * painting it from the photos lays the scanned holds down a second time (a corner the sweep jumped across, #65).
  */
 object OrthophotoBuilder {
     const val MM_PER_PX = 5f
@@ -49,6 +51,7 @@ object OrthophotoBuilder {
     private const val RELIEF_CELL = 0.02f
     private const val MAX_RELIEF = 0.8f // volumes included, as for hold detection
     private const val SECOND_VIEW_MIN = 0.5f // a second keyframe scoring this much of the best is a comparable view of the pixel
+    const val NO_DEPTH_RADIUS = 0.25f // a thin area keeps its photo: it has some points this close
 
     /**
      * [extent] is the scanned wall area [minU, minV, maxU, maxV]; [decode] returns a keyframe's pixels (ARGB,
@@ -68,6 +71,7 @@ object OrthophotoBuilder {
         val wx = FloatArray(n); val wy = FloatArray(n); val wz = FloatArray(n)
         val reliefPx = FloatArray(n)
         val faceOf = ByteArray(n) // which face each pixel lies on, for the view-angle score
+        val known = BooleanArray(n) // a depth point lies within NO_DEPTH_RADIUS
         val faces = surface.faces
         for (y in 0 until h) {
             val v = maxV - (y + 0.5f) * px
@@ -76,6 +80,7 @@ object OrthophotoBuilder {
                 val d = relief.at(u, v)
                 val i = y * w + x
                 reliefPx[i] = d
+                known[i] = relief.known(u, v)
                 val face = surface.faceAt(u, v)
                 faceOf[i] = faces.indexOf(face).toByte()
                 val lu = face.toLocalU(u, v); val lv = face.toLocalV(u, v)
@@ -100,6 +105,7 @@ object OrthophotoBuilder {
             val sharpness = k.sharpness
             var hits = 0
             for (i in 0 until n) {
+                if (!known[i]) continue
                 // Camera-space point: R^T (P - t); ARCore camera looks down -Z with +Y up.
                 val dx = wx[i] - t[0]; val dy = wy[i] - t[1]; val dz = wz[i] - t[2]
                 val xc = r[0] * dx + r[3] * dy + r[6] * dz
@@ -150,8 +156,13 @@ object OrthophotoBuilder {
         return (0xff shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
     }
 
-    /** Smoothed per-cell median relief (clamped to 0..[MAX_RELIEF]) with bilinear lookup. */
-    private class ReliefMap(val w: Int, val h: Int, val minU: Float, val minV: Float, val cell: Float, val values: FloatArray) {
+    /** Smoothed per-cell median relief (clamped to 0..[MAX_RELIEF]) with bilinear lookup; [near] marks cells within [NO_DEPTH_RADIUS] of a point. */
+    private class ReliefMap(val w: Int, val h: Int, val minU: Float, val minV: Float, val cell: Float, val values: FloatArray, val near: BooleanArray) {
+        fun known(u: Float, v: Float): Boolean {
+            val x = ((u - minU) / cell).toInt(); val y = ((v - minV) / cell).toInt()
+            return x in 0 until w && y in 0 until h && near[y * w + x]
+        }
+
         fun at(u: Float, v: Float): Float {
             val fx = ((u - minU) / cell - 0.5f).coerceIn(0f, (w - 1).toFloat())
             val fy = ((v - minV) / cell - 0.5f).coerceIn(0f, (h - 1).toFloat())
@@ -204,6 +215,7 @@ object OrthophotoBuilder {
             }
             smooth[y * cw + x] = s / k
         }
-        return ReliefMap(cw, ch, minU, minV, RELIEF_CELL, smooth)
+        val near = SamRefine.dilateSquare(BooleanArray(cw * ch) { count[it] > 0 }, cw, ch, (NO_DEPTH_RADIUS / RELIEF_CELL + 0.5f).toInt())
+        return ReliefMap(cw, ch, minU, minV, RELIEF_CELL, smooth, near)
     }
 }
