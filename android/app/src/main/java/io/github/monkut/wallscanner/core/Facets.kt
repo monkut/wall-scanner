@@ -4,6 +4,7 @@ import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.floor
 import kotlin.math.sqrt
+import kotlin.random.Random
 
 /**
  * Splits a wall into planar faces (#8 phase 2): the top of a wall that kicks back into a slab or over into a
@@ -12,6 +13,7 @@ import kotlin.math.sqrt
  * while their normals stay within [JOIN_DEG] of the region's seed; regions of at least [MIN_FACE_AREA] whose
  * plane turns at least [MIN_FACE_ANGLE] from the largest one are faces of their own. Walls that are one plane
  * (within those thresholds) come back as the single frame they went in with, so nothing changes for them.
+ * A side wall that turns far from the fitted plane (a corner, #63) lies beyond [BAND]: [cornerFace] finds it.
  */
 object Facets {
     const val CELL = 0.10f
@@ -24,13 +26,22 @@ object Facets {
     const val MIN_FACE_AREA = 1.0f
     const val MIN_FACE_ANGLE = 10f
     const val MAX_FACES = 3
+    /**
+     * A corner face turns this far from the primary (normals both toward the cameras): from where the near-band
+     * search leaves off to past square, never the wall behind the climber. 2026-11 Main wall: 48°, 69°, 103°.
+     */
+    const val CORNER_MIN_ANGLE = 30f
+    const val CORNER_MAX_ANGLE = 120f
+    /** A corner face covers at least this much (10 cm cells with [MIN_CELL_POINTS] on its plane): a wall, not a door or a box. The Main wall corner faces: 4.4–5.4 m²; the largest far plane of every other scan: ≤ 1.0 m² (or turned < 25°). */
+    const val CORNER_MIN_AREA = 2.0f
 
     /** [areas] of the faces kept; [regions] every region over 0.2 m² as (area, degrees from the fitted plane), for logs. */
     class Found(val surface: WallSurface, val areas: List<Float>, val regions: List<Pair<Float, Float>> = emptyList()) {
         val summary: String get() = regions.joinToString(prefix = "[", postfix = "]") { "%.1f m² @ %.1f°".format(java.util.Locale.US, it.first, it.second) }
     }
 
-    fun find(cloud: VoxelCloud, frame: WallFrame): Found {
+    /** [viewer] (the cameras' centroid) enables the corner search: it orients a far plane and says which side faces the climber. */
+    fun find(cloud: VoxelCloud, frame: WallFrame, viewer: FloatArray? = null, random: Random = Random(42)): Found {
         val n = cloud.count
         val xyz = cloud.xyz
         // 1. Bin the near-plane points into cells.
@@ -144,14 +155,13 @@ object Facets {
             r.size * CELL * CELL to degrees(nx / len, ny / len, nz / len, frame.plane.nx, frame.plane.ny, frame.plane.nz)
         }
         val big = regions.filter { it.size * CELL * CELL >= MIN_FACE_AREA }.sortedByDescending { it.size }
-        if (big.size < 2) return Found(WallSurface.single(frame), big.map { it.size * CELL * CELL }, report)
         // The primary face keeps the fitted plane it came in with, so (u, v) on it stay what every single-plane scene,
         // reference and confirmed route already use; only the other faces unfold about their seams with it.
         val primaryPlane = frame.plane
         val primaryFace = Face(primaryPlane)
         val secondaries = ArrayList<Plane>()
         val areas = ArrayList<Float>()
-        areas.add(big[0].size * CELL * CELL)
+        if (big.isNotEmpty()) areas.add(big[0].size * CELL * CELL)
         for (region in big.drop(1)) {
             if (secondaries.size >= MAX_FACES - 1) break
             val plane = fitPlane(region, order, start, median, d, xyz, frame) ?: continue
@@ -159,8 +169,41 @@ object Facets {
             secondaries.add(plane)
             areas.add(region.size * CELL * CELL)
         }
+        if (viewer != null && secondaries.size < MAX_FACES - 1) {
+            cornerFace(cloud, d, viewer, random, primaryFace)
+                ?.takeIf { (plane, _) -> secondaries.none { Face(plane).angleTo(Face(it)) < JOIN_DEG } }
+                ?.let { (plane, area) -> secondaries.add(plane); areas.add(area) }
+        }
         if (secondaries.isEmpty()) return Found(WallSurface.single(frame), areas, report)
         return Found(WallSurface.unfold(primaryPlane, secondaries), areas, report)
+    }
+
+    /**
+     * A side wall around a corner (#63) and its area: the dominant near-vertical plane among the points farther than
+     * [BAND] from the primary ([dist] per point), oriented toward [viewer], turned [CORNER_MIN_ANGLE]..[CORNER_MAX_ANGLE]
+     * from [primary] and covering [CORNER_MIN_AREA]. A wall at 76° lies 1.9–4.6 m off the primary plane and projects
+     * onto a near line of its (u, v), so the cell regions above never see it.
+     */
+    private fun cornerFace(cloud: VoxelCloud, dist: FloatArray, viewer: FloatArray, random: Random, primary: Face): Pair<Plane, Float>? {
+        val m = (0 until cloud.count).count { abs(dist[it]) > BAND }
+        if (m < CORNER_MIN_AREA / (CELL * CELL) * MIN_CELL_POINTS) return null
+        val xyz = FloatArray(m * 3)
+        var j = 0
+        for (i in 0 until cloud.count) if (abs(dist[i]) > BAND) { System.arraycopy(cloud.xyz, i * 3, xyz, j * 3, 3); j++ }
+        val farCloud = VoxelCloud(m, xyz, ByteArray(m * 3), IntArray(m))
+        val plane = PlaneFitter.fit(farCloud, random, viewer[0], viewer[1], viewer[2])?.plane ?: return null
+        val angle = Face(plane).angleTo(primary)
+        if (angle < CORNER_MIN_ANGLE || angle > CORNER_MAX_ANGLE) return null
+        val f = WallFrame(plane)
+        val cells = HashMap<Long, Int>()
+        for (k in 0 until m) {
+            val x = xyz[k * 3]; val y = xyz[k * 3 + 1]; val z = xyz[k * 3 + 2]
+            if (abs(plane.signedDistance(x, y, z)) > Tuning.PLANE_INLIER_DIST) continue
+            val key = floor(f.u(x, y, z) / CELL).toLong() shl 32 or (floor(f.v(x, y, z) / CELL).toLong() and 0xffffffffL)
+            cells.merge(key, 1, Int::plus)
+        }
+        val area = cells.values.count { it >= MIN_CELL_POINTS } * CELL * CELL
+        return if (area >= CORNER_MIN_AREA) plane to area else null
     }
 
     private val NEIGHBOURS = listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)

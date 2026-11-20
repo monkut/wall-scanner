@@ -11,13 +11,19 @@ import kotlin.math.sqrt
  * [frame] (right, up, normal); the rigid 2D map ([cos], [sin], [tu], [tv]) turns its local (u, v) into the
  * unfolded (U, V) shared by every face, as if the wall were laid flat along its seams. A secondary face owns
  * the side of its [seam] line (in unfolded coordinates: a point and a direction) given by [side]; the primary
- * face has no seam and owns the rest.
+ * face has no seam and owns the rest. A [concave] secondary (an inside corner: it rises in front of the primary)
+ * holds the points nearer it than the primary, a convex one (a top kicking back) the points in front of the primary's
+ * extension: the bisector of the two planes. The seam side alone gives every point of a sharp corner (#63: 76°) to the
+ * secondary, because the primary wall projected onto the side wall lands past the seam.
  */
 class Face(
     val plane: Plane,
     val cos: Float = 1f, val sin: Float = 0f, val tu: Float = 0f, val tv: Float = 0f,
-    val seam: FloatArray? = null, val side: Float = 0f,
+    val seam: FloatArray? = null, val side: Float = 0f, val concave: Boolean = true,
 ) {
+    /** Whether a point [d] in front of this face and [primaryD] in front of the primary is on this face's side of their bisector. */
+    fun nearer(d: Float, primaryD: Float): Boolean = if (concave) d < primaryD else d > primaryD
+
     val frame = WallFrame(plane)
 
     fun toUnfolded(u: Float, v: Float, out: FloatArray) {
@@ -66,6 +72,7 @@ class WallSurface(val faces: List<Face>) {
         }
         var bestD = Float.MAX_VALUE
         var found = false
+        val primaryD = primary.frame.d(x, y, z)
         for (i in 1 until faces.size) {
             val face = faces[i]
             val f = face.frame
@@ -74,6 +81,7 @@ class WallSurface(val faces: List<Face>) {
             val bv = face.sin * lu + face.cos * lv + face.tv
             if (!face.owns(bu, bv)) continue
             val d = f.d(x, y, z)
+            if (!face.nearer(d, primaryD)) continue
             if (abs(d) < abs(bestD)) { bestD = d; out[0] = bu; out[1] = bv; out[2] = d; found = true }
         }
         if (!found) {
@@ -153,7 +161,9 @@ class WallSurface(val faces: List<Face>) {
                     tu = au - (c * au2 - sn * av2); tv = av - (sn * au2 + c * av2)
                 }
                 val side = if (primarySide > 0f) -1f else 1f
-                faces.add(Face(plane, c, sn, tu, tv, floatArrayOf(au, av, dirU, dirV), side))
+                // The secondary's origin (its points' centroid) in front of the primary: it rises toward the climber, an inside corner.
+                val concave = pf.d(plane.ox, plane.oy, plane.oz) > 0f
+                faces.add(Face(plane, c, sn, tu, tv, floatArrayOf(au, av, dirU, dirV), side, concave))
             }
             return WallSurface(faces)
         }

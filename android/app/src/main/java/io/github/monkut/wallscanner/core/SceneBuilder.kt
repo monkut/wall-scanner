@@ -59,7 +59,8 @@ object SceneBuilder {
         progress(0.3f)
         val frame = WallFrame(fit.plane)
         // A gym wall may be several faces (a top that kicks back, a corner); outdoor rock keeps its one coarse plane and local relief.
-        val surface = if (type.outdoor) WallSurface.single(frame) else Facets.find(cloud, frame).surface
+        val viewer = if (cameraPositions.isEmpty()) null else floatArrayOf(tx, ty, tz)
+        val surface = if (type.outdoor) WallSurface.single(frame) else Facets.find(cloud, frame, viewer, random).surface
         val wall = if (type.outdoor) null else WallColor.of(cloud, surface)
         val extent = extent(cloud, surface)
         progress(0.45f)
