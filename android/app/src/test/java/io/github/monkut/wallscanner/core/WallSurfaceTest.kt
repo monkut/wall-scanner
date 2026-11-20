@@ -75,6 +75,53 @@ class WallSurfaceTest {
         assertEquals(0.5f, s.u(0.5f, 0.2f, 0f), 1e-3f)
     }
 
+    private val rad76 = Math.toRadians(76.0)
+
+    /**
+     * Front wall z = 0 (x -1.5..1.5, facing +z) and the floor in front of it (y = 0, z 0.5..3); with [side], a side
+     * wall meeting it at x = -3.2 at 76° (a sharp inside corner), scanned only from 1.9 to 4.5 m out from the
+     * corner (Main wall 2026-11-19, #63).
+     */
+    private fun cornerScan(side: Boolean): VoxelCloud {
+        val pts = ArrayList<Float>()
+        val step = 0.01f // the 1 cm voxel grid: a 10 cm cell holds 100 points
+        var a = -1.5f
+        while (a <= 1.5f) { var y = 0f; while (y <= 3f) { pts += a; pts += y; pts += 0f; y += step }; a += step }
+        a = -1.5f
+        while (a <= 1.5f) { var z = 0.5f; while (z <= 3f) { pts += a; pts += 0f; pts += z; z += step }; a += step }
+        if (side) {
+            var t = 1.9f
+            while (t <= 4.5f) {
+                var y = 0f
+                while (y <= 2.7f) { pts += (-3.2f + t * cos(rad76)).toFloat(); pts += y; pts += (t * sin(rad76)).toFloat(); y += step }
+                t += step
+            }
+        }
+        val count = pts.size / 3
+        return VoxelCloud(count, pts.toFloatArray(), ByteArray(count * 3) { 120.toByte() }, IntArray(count) { 3 })
+    }
+
+    @Test
+    fun facetsFindASideWallAroundACornerFarFromThePlane() {
+        val frame = WallFrame(Plane(0f, 1.5f, 0f, 0f, 0f, 1f))
+        val viewer = floatArrayOf(-1f, 1.2f, 2.5f)
+        val found = Facets.find(cornerScan(side = true), frame, viewer)
+        assertEquals("faces: ${found.areas}", 2, found.surface.faces.size)
+        assertEquals(104f, found.surface.faces[1].angleTo(found.surface.faces[0]), 2f) // normals both toward the climber
+        // A point on the side wall 3 m out from the corner: on the side face (zero relief), unfolded 3 m past the seam at U = -3.2.
+        val s = found.surface
+        val sx = (-3.2f + 3f * cos(rad76)).toFloat(); val sz = (3f * sin(rad76)).toFloat()
+        assertEquals(0f, s.d(sx, 1f, sz), 0.01f)
+        assertEquals(-6.2f, s.u(sx, 1f, sz), 0.02f)
+        // The front wall keeps its own frame: projected onto the side wall it lands past the seam, but it is nearer the front.
+        assertEquals(0.5f, s.u(0.5f, 1f, 0f), 1e-3f)
+        assertEquals(0f, s.d(0.5f, 1f, 0f), 1e-3f)
+        assertEquals(0.1f, s.d(-1.2f, 1f, 0.1f), 1e-3f) // a hold 10 cm proud of the front wall's left edge
+        // No viewer: no corner search. The floor alone is never a corner face.
+        assertEquals(1, Facets.find(cornerScan(side = true), frame).surface.faces.size)
+        assertEquals(1, Facets.find(cornerScan(side = false), frame, viewer).surface.faces.size)
+    }
+
     @Test
     fun facetsFindTheKickedTopAndLeaveAFlatWallAlone() {
         val cloud = kickedWall(noise = 0.005f)
