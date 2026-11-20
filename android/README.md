@@ -128,12 +128,36 @@ with too few points, and if no wall plane is found it still saves the points for
 The wall is shown as photographed: the orthophoto (`wall.png`) lies on the wall plane and each hold is drawn
 as its outline, edged in its route's colour (chalk when unassigned) and lit when its route is selected; the
 point cloud is behind it, one tap away (**Points**). Captures without a photo show the cloud with holds as
-boxes, as before. Orbit, pan and pinch. The **Routes** panel lists the routes with a colour swatch, name,
-grade dropdown, hold count, **Confirm** and delete.
+boxes, as before. Orbit, pan and pinch; the view opens square on to the wall, fitted to the screen above the panel.
 
-- Tap a swatch (or the hold count) to select a route, then tap holds on the wall to add or remove them. A hold
-  may belong to several routes (tape, free walls). Where outlines overlap, the smallest hold under the finger
-  is the one tapped (a foothold inside a volume's outline).
+Route confirmation (#67). The panel shows, top to bottom: a hint for what a tap does now, the **route picker**
+(one chip per route with its swatch, name and hold count; **All**; **+ New route**), the **review bar** of the
+selected route, and the toolbar (**Gray**, **#**, **Points**, **Save**, **Share**).
+
+- **Gray** (on by default) draws the photo in gray and leaves the holds of the selected route in their own
+  colour, with a bold yellow edge on a dark casing; with **All** selected every hold that is in a route keeps its
+  colour, and holds in no route get a dashed edge. The gray adapts to the selected route (`wallWash`): washed
+  light behind a dark route (luminance under 80, a black route), dark behind a light one (over 150, a white
+  route), so black and white holds, which have no colour to keep, still differ from the wall. Off, the photo is
+  in full colour and the selected route's holds keep the yellow edge.
+- **Start** and **Finish** in the review bar show how many of the route's holds are marked (dashed while none
+  is). Tap one, then tap holds on the wall to mark or clear them; tap it again to stop. On the wall the selected
+  route's start and finish holds carry a bold ring and a badge (START, FINISH) above them, a fixed size on screen.
+- Tap a chip (or, with **All** selected, one of the route's holds) to select a route, then tap holds on the wall
+  to add or remove them. A hold may belong to several routes (tape, free walls). Where outlines overlap, the
+  smallest hold under the finger is the one tapped (a foothold inside a volume's outline).
+- **Confirm** marks the route confirmed (green chip, ✓); **Incomplete** marks a route only partly inside this
+  scan (`routes[].incomplete` in `scene.json`; dashed chip, count shown as "4+"). An incomplete route is not
+  confirmed, so it stays out of the logbook. Either mark moves on to the next route still to review; the same
+  button again takes the mark back.
+- **Down climb** holds are in no route. With **All** selected they stay gray with a dotted edge; select the
+  **Down climb** chip to see them in colour. The scan can mislabel them either way: a hold added to a route leaves
+  the down-climb holds, and a hold added to the down-climb holds leaves its routes (`leaveOtherKind`), so one tap
+  with the right chip selected corrects it.
+- **+ New route** defines a route the scan did not find: it is selected empty and takes the colour of the first
+  hold added.
+- **Edit** opens the selected route's name, grade, the hand / foot / zone marks, **Mark as down climb** and
+  **Delete route**.
 - The wall is shown in 3D: the photo pushed out by `relief.png` (each pixel's height off the wall from the point
   cloud, 2 cm cells, written at Finish and Reprocess; older captures stay flat until reprocessed), one vertex per
   1 cm. Holds are drawn on a transparent copy of that surface (fill, edge in the route colour, role ring) and a tap
