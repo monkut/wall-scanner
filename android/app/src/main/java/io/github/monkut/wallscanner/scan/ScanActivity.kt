@@ -22,6 +22,7 @@ import com.google.ar.core.Config
 import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingFailureReason
+import com.google.ar.core.TrackingState
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.UnavailableException
 import com.google.ar.core.exceptions.UnsupportedConfigurationException
@@ -422,7 +423,10 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
             val cameras = ArrayList<FloatArray>()
             val segmentTransforms = HashMap<Int, Rigid>()
             var reference = merged.snapshot()
-            for (seg in all) {
+            val onMain = SegmentSnapper.onMainMap(all.map { it.anchorState == TrackingState.TRACKING }, all.map { it.map.size })
+            val main = all.filterIndexed { i, _ -> onMain[i] }.map { it.id }.toSet()
+            // The main map's segments first, so a segment from another map snaps onto them or is left out.
+            for (seg in all.sortedBy { it.id !in main }) {
                 val matrix = FloatArray(16)
                 seg.anchorPose.toMatrix(matrix, 0)
                 val anchorT = Rigid.fromColumnMajor(matrix)
@@ -431,6 +435,7 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
                 CaptureStore.writeSegmentPly(captureDir, seg.id, world)
                 var snap = "skipped(first segment)"
                 var fix = Rigid.IDENTITY
+                var joined = seg.id in main
                 if (reference.count > 0 && cameras.isNotEmpty()) {
                     val toward = mean(cameras)
                     val result = SegmentSnapper.snap(reference, world, toward)
@@ -438,13 +443,17 @@ class ScanActivity : AppCompatActivity(), ArRenderer.Listener {
                     if (result != null && result.accepted) {
                         fix = result.transform
                         world = fix.apply(world)
+                        joined = true
                     }
                 }
                 log.log(
                     "SEGMENT ${seg.id}: voxels=${local.count} (of ${seg.map.size}, ${seg.map.size - local.count} under " +
                         "${Tuning.MIN_VOXEL_HITS} hits dropped, ${seg.map.evictions} evicted during scan) " +
-                        "anchor=${seg.anchorState} anchorPose=${fmt(seg.anchorPose)} snap=$snap"
+                        "anchor=${seg.anchorState} anchorPose=${fmt(seg.anchorPose)} snap=$snap" +
+                        if (joined) "" else " · left out with its keyframes: on another ARCore map (tracking reset) and not snapped"
                 )
+                // No transform places it on the main map: its points and keyframes would land on the wrong part of the wall.
+                if (!joined) continue
                 merged.addAll(world.xyz, world.rgb, world.count)
                 for (c in seg.cameraPositions()) cameras.add(fix.apply(anchorT.apply(c)))
                 segmentTransforms[seg.id] = fix.compose(anchorT)

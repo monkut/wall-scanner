@@ -42,6 +42,19 @@ class SnapResult(
  * of the wall (e.g. the mean camera position) used to orient both planes consistently.
  */
 object SegmentSnapper {
+    /**
+     * Which segments lie on the scan's main ARCore map: true for each segment of the group (anchor tracking at
+     * Finish, or not) that holds more voxels. A tracking reset drops ARCore's map, so the anchors of the segments
+     * before it stop tracking while the later ones track, and no transform joins the two groups except a snap.
+     * One group (the usual case) is all main.
+     */
+    fun onMainMap(tracking: List<Boolean>, voxels: List<Int>): List<Boolean> {
+        if (tracking.distinct().size < 2) return tracking.map { true }
+        val current = voxels.filterIndexed { i, _ -> tracking[i] }.sum()
+        val mainTracks = current >= voxels.sum() - current
+        return tracking.map { it == mainTracks }
+    }
+
     private class Relief(val w: Int, val h: Int, val u0: Double, val v0: Double, val cell: Double) {
         val value = DoubleArray(w * h)
         val filled = BooleanArray(w * h)
