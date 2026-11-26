@@ -20,6 +20,21 @@ class SegmentSnapperTest {
     }
 
     @Test
+    fun aTrackingResetLeavesTheSmallerMapOut() {
+        // Segment 1 lost its map (anchor no longer tracking); segment 2 tracks on the new map with few voxels.
+        assertEquals(listOf(true, false), SegmentSnapper.onMainMap(listOf(false, true), listOf(950_000, 0)))
+        // The larger group wins whichever side tracks.
+        assertEquals(listOf(false, true, true), SegmentSnapper.onMainMap(listOf(false, true, true), listOf(1_000, 600, 600)))
+    }
+
+    @Test
+    fun oneMapIsAllMain() {
+        assertEquals(listOf(true, true), SegmentSnapper.onMainMap(listOf(true, true), listOf(500, 0)))
+        // Finish during a tracking loss: every anchor is paused, all on one map.
+        assertEquals(listOf(true, true), SegmentSnapper.onMainMap(listOf(false, false), listOf(0, 0)))
+    }
+
+    @Test
     fun rigidComposeAndInverseRoundTrip() {
         val p = floatArrayOf(0.3f, -1.2f, 2.5f)
         val back = disturbance.inverse().apply(disturbance.apply(p))
